@@ -1,0 +1,17 @@
+filters:
+  and:
+    - status == "frontier"
+    - space == "Economics"
+views:
+  - type: table
+    name: Ready-ish frontier (sorted by importance, then interest)
+    order:
+      - file.name
+      - importance
+      - interest
+      - prerequisites
+    sort:
+      - property: importance
+        direction: DESC
+      - property: interest
+        direction: DESC

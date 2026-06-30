@@ -1,0 +1,35 @@
+.properties {
+  margin: 0 0 1.4em;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.prop-row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 3px 6px;
+  border-radius: var(--radius-s);
+}
+.prop-row:hover { background: rgba(255, 255, 255, 0.02); }
+.prop-key {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding-top: 2px;
+  text-transform: capitalize;
+}
+.prop-val { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.prop-array { display: flex; flex-wrap: wrap; gap: 5px; }
+.prop-pill {
+  display: inline-block;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-s);
+  padding: 1px 8px;
+  font-size: 13px;
+}
+a.prop-pill { cursor: pointer; }
+a.prop-pill.internal-link { background: var(--accent-soft); color: var(--accent); }
+.prop-empty { color: var(--text-faint); }

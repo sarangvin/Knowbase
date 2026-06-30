@@ -1,0 +1,28 @@
+.editor-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.editor-banner {
+  background: var(--accent-soft);
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 6px 16px;
+  text-align: center;
+}
+.editor-cm {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.editor-cm .cm-editor { height: 100%; }
+.editor-status {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--text-faint);
+  border-top: 1px solid var(--divider);
+}
+.editor-err { color: var(--text-error); }
