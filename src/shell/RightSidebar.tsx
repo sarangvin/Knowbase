@@ -4,9 +4,10 @@ import { BacklinksPanel } from '../features/backlinks/BacklinksPanel'
 import { OutlinePanel } from '../features/backlinks/OutlinePanel'
 import { SearchPanel } from '../features/search/SearchPanel'
 import { GraphView } from '../features/graph/GraphView'
-import { LinkIcon, List, Search, Network } from '../ui/icons'
+import { AskPanel } from '../features/ask-ai/AskPanel'
+import { LinkIcon, List, Search, Network, Sparkles } from '../ui/icons'
 
-type RTab = 'backlinks' | 'outline' | 'search' | 'graph'
+type RTab = 'backlinks' | 'outline' | 'search' | 'graph' | 'ask'
 
 export function RightSidebar() {
   const view = useVault((s) => s.activeView())
@@ -23,6 +24,7 @@ export function RightSidebar() {
     { id: 'outline', icon: <List />, title: 'Outline' },
     { id: 'graph', icon: <Network />, title: 'Local graph' },
     { id: 'search', icon: <Search />, title: 'Search' },
+    { id: 'ask', icon: <Sparkles />, title: 'Ask AI' },
   ]
 
   return (
@@ -40,7 +42,9 @@ export function RightSidebar() {
         ))}
       </div>
       <div className="right-content">
-        {tab === 'search' ? (
+        {tab === 'ask' ? (
+          <AskPanel />
+        ) : tab === 'search' ? (
           <SearchPanel />
         ) : !notePath ? (
           <div className="empty-state">Open a note to see {tab}.</div>

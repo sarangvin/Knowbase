@@ -95,6 +95,12 @@ export const RotateCw = (p: P) => (
 export const Home = (p: P) => (
   <svg {...base(p)}><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" /></svg>
 )
+export const Sparkles = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z" />
+    <path d="M19 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8Z" />
+  </svg>
+)
 export const GraduationCap = (p: P) => (
   <svg {...base(p)}>
     <path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c0 1 2.5 3 6 3s6-2 6-3v-5" />
