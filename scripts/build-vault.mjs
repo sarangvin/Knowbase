@@ -15,6 +15,17 @@ const MD_EXT = new Set(['.md'])
 const ASSET_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.pdf', '.base'])
 const IGNORE = new Set(['.obsidian', '.git', '.DS_Store', '.trash'])
 
+// This bundled vault ships in the public build and repo history — never include
+// personal folders/notes here. Only the Economics learning graph + scaffolding
+// (Welcome, Templates, Automated Graph dashboards) are meant to be public.
+const EXCLUDE_REL = new Set(['Claude Projects', "Sarang's Instagram.md", 'Saru Inst Review.md', 'Rage on Twitter.md'])
+const EXCLUDE_PREFIX = ['Screenshot ']
+
+function isExcluded(rel) {
+  const top = rel.split('/')[0]
+  return EXCLUDE_REL.has(top) || EXCLUDE_PREFIX.some((p) => top.startsWith(p))
+}
+
 async function walk(dir, base = '') {
   const out = []
   const entries = await fs.readdir(dir, { withFileTypes: true })
@@ -22,6 +33,7 @@ async function walk(dir, base = '') {
     if (IGNORE.has(e.name) || e.name.startsWith('._')) continue
     const abs = path.join(dir, e.name)
     const rel = base ? `${base}/${e.name}` : e.name
+    if (isExcluded(rel)) continue
     if (e.isDirectory()) {
       out.push(...(await walk(abs, rel)))
     } else {
