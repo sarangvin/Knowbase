@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import type { TreeNode } from '../../vault/types'
-import { ChevronRight, FileText, Hash } from '../../ui/icons'
+import { ChevronRight, FileText, Hash, Plus } from '../../ui/icons'
+import { NewNoteModal } from './NewNoteModal'
 import './explorer.css'
 
 function collectFolderPaths(node: TreeNode, acc: Set<string>) {
@@ -70,6 +71,7 @@ export function FileExplorer() {
   const tree = useVault((s) => s.tree)
   const view = useVault((s) => s.activeView())
   const activePath = view?.kind === 'note' ? view.path : null
+  const [creating, setCreating] = useState(false)
 
   // Expand top two levels by default for an inviting first view.
   const allFolders = useMemo(() => {
@@ -99,10 +101,14 @@ export function FileExplorer() {
         <span className="panel-header" style={{ padding: '0 4px', flex: 1 }}>
           Files
         </span>
+        <button className="icon-btn" title="New note" onClick={() => setCreating(true)}>
+          <Plus />
+        </button>
         <button className="icon-btn" title="Expand all" onClick={() => setExpanded(new Set(allFolders))}>
           <ChevronRight className="tree-chevron open" />
         </button>
       </div>
+      {creating && <NewNoteModal onClose={() => setCreating(false)} />}
       <div className="tree-scroll">
         {tree.children?.map((child) => (
           <TreeItem

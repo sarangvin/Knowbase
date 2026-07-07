@@ -71,6 +71,12 @@ export function AskPanel() {
             Start it with <code>ollama serve</code> and pull a model (e.g. <code>ollama pull llama3.2</code>).
             Everything runs on your machine — no API key, no data leaves your device.
           </p>
+          {!/^(localhost|127\.)/.test(location.hostname) && (
+            <p className="ask-dim">
+              This site is hosted, so Ollama must allow it as an origin — start it with:{' '}
+              <code>OLLAMA_ORIGINS="{location.origin}" ollama serve</code>
+            </p>
+          )}
           <button className="ask-btn primary" onClick={checkConn}>Retry connection</button>
         </div>
       </div>

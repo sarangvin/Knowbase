@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import { useVault } from '../vault/vaultStore'
+import { SyncModal } from '../features/sync/SyncModal'
 import {
-  ArrowLeft, ArrowRight, PanelLeft, PanelRight, Search, Network, Pencil, Eye, Command,
+  ArrowLeft, ArrowRight, PanelLeft, PanelRight, Search, Network, Pencil, Eye, Command, RotateCw,
 } from '../ui/icons'
 
 export function TopBar() {
   const s = useVault()
+  const [syncOpen, setSyncOpen] = useState(false)
   const view = s.activeView()
   const note = view?.kind === 'note' ? s.getNote(view.path) : null
   const crumbs = note ? note.path.replace(/\.md$/i, '').split('/') : []
@@ -39,6 +42,13 @@ export function TopBar() {
       </div>
 
       <div className="topbar-right">
+        <button
+          className="icon-btn"
+          title="AI Sync — answer open questions & fold My Notes into AI Notes (Ollama)"
+          onClick={() => setSyncOpen(true)}
+        >
+          <RotateCw />
+        </button>
         <button className="icon-btn" title="Command palette (⌘P)" onClick={() => s.setPaletteOpen(true)}>
           <Command />
         </button>
@@ -61,6 +71,7 @@ export function TopBar() {
           <PanelRight />
         </button>
       </div>
+      {syncOpen && <SyncModal onClose={() => setSyncOpen(false)} />}
     </div>
   )
 }

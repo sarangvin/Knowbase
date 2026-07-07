@@ -46,3 +46,45 @@
   color: var(--text-faint);
 }
 .tree-row.file.active .tree-fileicon { color: var(--accent); }
+
+/* ── New note modal ─────────────────────────────────────────────────────── */
+.newnote-modal { padding: 16px 18px; width: min(440px, 92vw); }
+.newnote-title { font-size: 16px; font-weight: 650; margin-bottom: 12px; }
+.newnote-input {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  outline: none;
+  font-size: 14px;
+}
+.newnote-input:focus { border-color: var(--accent); }
+.newnote-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.newnote-field select {
+  flex: 1;
+  background: var(--bg-elevated);
+  color: var(--text-normal);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: 5px 6px;
+  font-size: 12.5px;
+}
+.newnote-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.newnote-check input { accent-color: var(--accent); }
+.newnote-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

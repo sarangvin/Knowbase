@@ -39,12 +39,26 @@ export async function answerQuestion(
   note: Note,
   question: string,
   model: string,
-  onDelta: (text: string) => void,
+  onDelta?: (text: string) => void,
 ): Promise<string> {
   const context =
     `Note title: ${note.title}\nTags: ${note.tags.join(', ') || '(none)'}\n\n` +
     `--- NOTE CONTENT ---\n${note.body.slice(0, 12000)}\n--- END NOTE ---`
+  return chat(
+    SYSTEM,
+    `Here is the note I'm studying, for context:\n\n${context}\n\nMy question: ${question}`,
+    model,
+    onDelta,
+  )
+}
 
+/** Generic streaming chat call against the local Ollama server. */
+export async function chat(
+  system: string,
+  user: string,
+  model: string,
+  onDelta?: (text: string) => void,
+): Promise<string> {
   const res = await fetch(`${getBaseUrl()}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -53,11 +67,8 @@ export async function answerQuestion(
       stream: true,
       think: false,
       messages: [
-        { role: 'system', content: SYSTEM },
-        {
-          role: 'user',
-          content: `Here is the note I'm studying, for context:\n\n${context}\n\nMy question: ${question}`,
-        },
+        { role: 'system', content: system },
+        { role: 'user', content: user },
       ],
     }),
   })
@@ -85,7 +96,7 @@ export async function answerQuestion(
       const chunk = obj.message?.content
       if (chunk) {
         full += chunk
-        onDelta(chunk)
+        onDelta?.(chunk)
       }
     }
   }
