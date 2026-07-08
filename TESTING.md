@@ -102,12 +102,37 @@ OLLAMA_ORIGINS="https://sarangvin.github.io" ollama serve
 | 7.8 | Running Sync answers each question in place and rewrites `## AI Notes` folding in `## My Notes` content, without dropping existing correct content or existing `[[wikilinks]]` | ✅ | ✅ |
 | 7.9 | Sync modal shows live per-task status (pending → running → done/error) and a final `N/M updated` summary | ✅ | ✅ |
 
-## 8. Console / network hygiene
+## 8. Mobile / responsive
+
+**Regression to watch for:** both sidebars used to be fixed-width flex columns
+(250px + 290px) — on a narrow viewport those two alone exceed the screen
+width, squeezing the main content to nothing and pushing the right sidebar
+off-screen entirely.
 
 | # | Check | Local | Hosted |
 |---|---|:---:|:---:|
-| 8.1 | Zero console errors across a full pass of sections 1–7 | ✅ | ✅ |
-| 8.2 | Zero failed (4xx/5xx) network requests | ✅ | ✅ |
+| 8.1 | Below ~768px, both sidebars render as full-height overlay drawers (not flex columns) — the main note pane always gets full width | ✅ | ✅ |
+| 8.2 | Both start collapsed on first load at mobile width | ✅ | ✅ |
+| 8.3 | Opening a drawer shows a tap-to-close backdrop; tapping it closes the drawer | ✅ | ✅ |
+| 8.4 | Selecting a note auto-closes the file drawer (Obsidian mobile behavior) | ✅ | ✅ |
+| 8.5 | **Resizing an already-loaded page live** (not just at initial load) — desktop → mobile collapses both drawers; mobile → desktop reopens both. Tested via a real OS-level window resize, not just a devtools viewport override. | ✅ | ✅ |
+| 8.6 | Top bar icons remain usable (no overflow/clipping) at ~375px width | ✅ | ✅ |
+| 8.7 | Note reading view and editor keep reasonable padding at ~375px width (not the desktop 48px gutters) | ✅ | ✅ |
+
+**Implementation note:** the resize-responsiveness in `App.tsx` deliberately
+uses three redundant signals — `matchMedia('change')`, `window.resize`, and a
+500ms poll. During this session's testing, this app's own `preview_*` viewport
+tool changed the layout via a mechanism that fired **neither** of the first
+two events, only detectable via polling. Real browsers fire both reliably for
+genuine user resizes/rotations, but the poll is kept as a low-cost guarantee
+against any embedding/tool that doesn't.
+
+## 9. Console / network hygiene
+
+| # | Check | Local | Hosted |
+|---|---|:---:|:---:|
+| 9.1 | Zero console errors across a full pass of sections 1–8 | ✅ | ✅ |
+| 9.2 | Zero failed (4xx/5xx) network requests | ✅ | ✅ |
 
 ---
 
