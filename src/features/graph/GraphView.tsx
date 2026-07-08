@@ -62,9 +62,19 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
     return () => ro.disconnect()
   }, [])
 
+  // Configure physics + frame once per actual DATA change (guarded by ref, not
+  // just the dependency array — size.w starts at 0 and ForceGraph2D doesn't
+  // mount until it's nonzero, so on first mount this effect must still fire once
+  // fg becomes available even though `data`/`compact` haven't changed since the
+  // no-op run at size.w===0). A container resize (sidebar toggle, window resize)
+  // must NOT go through this path: restarting the simulation re-seeds every node
+  // at a new random position and can re-converge to a worse (clumped) layout
+  // than the one already on screen. Resizing only needs a re-frame — see below.
+  const configuredForRef = useRef<typeof data | null>(null)
   useEffect(() => {
     const fg = fgRef.current
-    if (!fg) return
+    if (!fg || size.w === 0 || configuredForRef.current === data) return
+    configuredForRef.current = data
     // Spread nodes out so labels don't overlap. Scale repulsion with node count —
     // a fixed charge leaves larger graphs (20+ nodes) clumped in the center.
     const charge = fg.d3Force('charge')
@@ -72,12 +82,19 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
     const link = fg.d3Force('link')
     if (link) link.distance(compact ? 30 : 55)
     // warmupTicks (below) runs the layout to completion synchronously before the
-    // first paint, so positions are already final here — a short delay is enough
-    // to let the canvas render once before framing it (duration=0: no animated
-    // zoom, since one isn't needed and would just fight the settled layout).
+    // first paint, so a short delay is enough to let the canvas render once
+    // before framing it (duration=0: no animated zoom needed).
     const t = setTimeout(() => fg.zoomToFit(0, compact ? 24 : 70), 150)
     return () => clearTimeout(t)
-  }, [data, size.w, compact])
+  }, [data, compact, size.w])
+
+  // On resize, just re-frame the EXISTING (already-settled) layout — never restart
+  // the physics. size.w is checked so this doesn't fire before the graph exists.
+  useEffect(() => {
+    if (size.w === 0) return
+    const t = setTimeout(() => fgRef.current?.zoomToFit(200, compact ? 24 : 70), 50)
+    return () => clearTimeout(t)
+  }, [size.w, size.h, compact])
 
   const accent = cssVar('--accent') || '#9b7ed6'
   const faint = cssVar('--text-faint') || '#666'
