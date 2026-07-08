@@ -1,4 +1,4 @@
-.sync-modal { padding: 16px 18px; }
+.sync-modal { padding: 16px 18px; max-width: min(560px, 92vw); }
 .sync-head { display: flex; align-items: center; gap: 10px; }
 .sync-title { font-size: 16px; font-weight: 650; }
 .sync-head .ask-model { margin-left: auto; }
@@ -8,7 +8,9 @@
   padding: 1px 5px;
   border-radius: var(--radius-s);
   font-family: var(--font-mono);
-  font-size: 0.9em;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .sync-empty {
   color: var(--text-muted);
@@ -17,6 +19,7 @@
   padding: 14px;
   background: var(--bg-elevated);
   border-radius: var(--radius-m);
+  overflow-wrap: anywhere;
 }
 .sync-dim { color: var(--text-faint); margin: 6px 0 0; }
 .sync-empty p { margin: 0 0 4px; }

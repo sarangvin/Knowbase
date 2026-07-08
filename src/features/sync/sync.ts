@@ -122,7 +122,9 @@ personal knowledge base. The user has written their own rough understanding unde
 Rewrite the AI Notes so they incorporate and refine the user's points: keep existing correct
 content, integrate what the user got right, gently correct any misconceptions, and keep
 [[wikilinks]] that already appear. Return ONLY the markdown body for the AI Notes section —
-no "## AI Notes" heading, no preamble, no commentary.`
+no "## AI Notes" heading, no preamble, no commentary.
+Do not use LaTeX or math notation (no $, \\text{}, \\frac{}) — this renders as plain Markdown,
+so write formulas and variables in plain text instead, e.g. "MSC = MPC + external cost".`
 
 export function aiNotesPrompt(note: Note): string {
   const ai = extractSection(note.raw, 'AI Notes')?.text.trim() ?? '(empty)'

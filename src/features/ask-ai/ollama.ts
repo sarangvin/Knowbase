@@ -32,7 +32,9 @@ const SYSTEM = `You are a knowledgeable, concise tutor inside a personal knowled
 Obsidian-style learning vault). The user is studying a topic and asks a question about it.
 Answer directly and accurately, like a sharp study companion: explain the concept, use a
 concrete example when it helps, and connect it to related ideas in the note when relevant.
-Use Markdown. Do not restate the question. Keep it focused — a few tight paragraphs.`
+Use Markdown. Do not restate the question. Keep it focused — a few tight paragraphs.
+Do not use LaTeX or math notation (no $, \\text{}, \\frac{}) — this renders as plain Markdown,
+so write formulas and variables in plain text instead, e.g. "MSC = MPC + external cost".`
 
 /** Stream an answer to a question about a note via Ollama. */
 export async function answerQuestion(

@@ -44,10 +44,12 @@
   padding: 1px 5px;
   border-radius: var(--radius-s);
   font-family: var(--font-mono);
-  font-size: 0.9em;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
-.ask-keysetup { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-.ask-keysetup p { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin: 0; }
+.ask-keysetup { padding: 10px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ask-keysetup p { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
 .ask-key-input {
   padding: 8px 10px;
   background: var(--bg-elevated);

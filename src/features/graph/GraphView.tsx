@@ -65,14 +65,19 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
   useEffect(() => {
     const fg = fgRef.current
     if (!fg) return
-    // Spread nodes out so labels don't overlap.
+    // Spread nodes out so labels don't overlap. Scale repulsion with node count —
+    // a fixed charge leaves larger graphs (20+ nodes) clumped in the center.
     const charge = fg.d3Force('charge')
-    if (charge) charge.strength(compact ? -70 : -160)
+    if (charge) charge.strength(-(compact ? 70 : 140) - data.nodes.length * (compact ? 0.6 : 1.2))
     const link = fg.d3Force('link')
     if (link) link.distance(compact ? 30 : 55)
     fg.d3ReheatSimulation?.()
-    // Wait for the simulation to settle before framing the whole graph.
-    const t = setTimeout(() => fg.zoomToFit(500, compact ? 24 : 70), 1100)
+    // A single delayed zoomToFit, with duration=0 (instant, no animation). An
+    // animated zoom races the still-settling simulation — nodes keep drifting
+    // during the pan/zoom tween, so the final frame no longer matches their
+    // positions. Snapping instantly after the layout has had time to settle
+    // avoids that race entirely.
+    const t = setTimeout(() => fg.zoomToFit(0, compact ? 24 : 70), 2200)
     return () => clearTimeout(t)
   }, [data, size.w, compact])
 
@@ -93,7 +98,7 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
           graphData={data}
           backgroundColor={bg}
           cooldownTicks={120}
-          d3VelocityDecay={0.3}
+          d3VelocityDecay={0.45}
           nodeRelSize={compact ? 3 : 4}
           linkColor={(l) => {
             const s = typeof l.source === 'string' ? l.source : (l.source as GNode).id
