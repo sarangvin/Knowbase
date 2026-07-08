@@ -31,7 +31,7 @@
 .crumb-sep { margin: 0 5px; color: var(--text-faint); opacity: 0.5; }
 
 /* ── Body / columns ──────────────────────────────────────────────────────── */
-.app-body { display: flex; min-height: 0; }
+.app-body { display: flex; min-height: 0; position: relative; }
 .left-sidebar {
   width: var(--sidebar-w);
   flex: 0 0 var(--sidebar-w);
@@ -53,6 +53,40 @@
 
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .main-content { flex: 1; min-height: 0; overflow: hidden; }
+
+.drawer-backdrop { display: none; }
+
+/* ── Mobile: sidebars become full-height overlay drawers, not flex columns.
+   Two fixed-width columns (250px + 290px) would otherwise squeeze the main
+   content to nothing and push the right sidebar off-screen entirely. ──────── */
+@media (max-width: 768px) {
+  .left-sidebar,
+  .right-sidebar-wrap {
+    position: fixed;
+    top: var(--topbar-h);
+    bottom: var(--statusbar-h);
+    z-index: 40;
+    width: min(84vw, 320px);
+    flex-basis: 0; /* fixed-position children exit flex flow; kept for clarity */
+    transition: transform 0.2s ease;
+    box-shadow: var(--shadow-pop);
+  }
+  .left-sidebar { left: 0; transform: translateX(0); border-right: 1px solid var(--border); }
+  .left-sidebar.collapsed { transform: translateX(-100%); border-right: none; }
+  .right-sidebar-wrap { right: 0; transform: translateX(0); border-left: 1px solid var(--border); }
+  .right-sidebar-wrap.collapsed { transform: translateX(100%); border-left: none; }
+
+  .drawer-backdrop {
+    display: block;
+    position: fixed;
+    top: var(--topbar-h);
+    bottom: var(--statusbar-h);
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 30;
+  }
+}
 
 /* ── Tab bar ─────────────────────────────────────────────────────────────── */
 .tabbar {
