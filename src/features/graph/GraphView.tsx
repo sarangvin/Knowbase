@@ -71,13 +71,11 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
     if (charge) charge.strength(-(compact ? 70 : 140) - data.nodes.length * (compact ? 0.6 : 1.2))
     const link = fg.d3Force('link')
     if (link) link.distance(compact ? 30 : 55)
-    fg.d3ReheatSimulation?.()
-    // A single delayed zoomToFit, with duration=0 (instant, no animation). An
-    // animated zoom races the still-settling simulation — nodes keep drifting
-    // during the pan/zoom tween, so the final frame no longer matches their
-    // positions. Snapping instantly after the layout has had time to settle
-    // avoids that race entirely.
-    const t = setTimeout(() => fg.zoomToFit(0, compact ? 24 : 70), 2200)
+    // warmupTicks (below) runs the layout to completion synchronously before the
+    // first paint, so positions are already final here — a short delay is enough
+    // to let the canvas render once before framing it (duration=0: no animated
+    // zoom, since one isn't needed and would just fight the settled layout).
+    const t = setTimeout(() => fg.zoomToFit(0, compact ? 24 : 70), 150)
     return () => clearTimeout(t)
   }, [data, size.w, compact])
 
@@ -97,7 +95,14 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
           height={size.h}
           graphData={data}
           backgroundColor={bg}
-          cooldownTicks={120}
+          // Run the layout to completion before the first paint (no visible
+          // clump-then-freeze), then allow a modest amount of live settling
+          // for drag interactivity. cooldownTicks alone (no warmup) permanently
+          // stops the simulation ~2s after mount regardless of whether nodes
+          // have actually finished spreading — on larger graphs (20+ notes)
+          // that froze them mid-clump forever, since no more ticks ever run.
+          warmupTicks={Math.min(120, 40 + data.nodes.length * 3)}
+          cooldownTicks={90}
           d3VelocityDecay={0.45}
           nodeRelSize={compact ? 3 : 4}
           linkColor={(l) => {
