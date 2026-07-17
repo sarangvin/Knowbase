@@ -1,6 +1,6 @@
 import { useVault } from '../../vault/vaultStore'
 import { FsAccessVaultSource } from '../../vault/source'
-import { GraduationCap, Folder, Eye } from '../../ui/icons'
+import { GraduationCap, Folder, Eye, Cloud, Pencil } from '../../ui/icons'
 import './onboarding.css'
 
 export function Onboarding() {
@@ -8,6 +8,11 @@ export function Onboarding() {
   const error = useVault((s) => s.error)
   const loadSeed = useVault((s) => s.loadSeed)
   const pickFolder = useVault((s) => s.pickFolder)
+  const loadRemote = useVault((s) => s.loadRemote)
+  const loadGlobalVault = useVault((s) => s.loadGlobalVault)
+  const loginWithGoogle = useVault((s) => s.loginWithGoogle)
+  const logout = useVault((s) => s.logout)
+  const user = useVault((s) => s.user)
   const fsSupported = FsAccessVaultSource.isSupported()
 
   if (status === 'loading') {
@@ -37,6 +42,20 @@ export function Onboarding() {
           <button className="ob-btn primary" onClick={() => void loadSeed()}>
             <Eye /> Explore the demo vault
           </button>
+          {user ? (
+            <button className="ob-btn" onClick={() => void loadRemote()}>
+              <Cloud /> Open my cloud vault
+            </button>
+          ) : (
+            <button className="ob-btn" onClick={loginWithGoogle}>
+              <Cloud /> Sign in with Google
+            </button>
+          )}
+          {user?.role === 'owner' && (
+            <button className="ob-btn" onClick={() => void loadGlobalVault()}>
+              <Pencil /> Edit the global vault
+            </button>
+          )}
           {fsSupported ? (
             <button className="ob-btn" onClick={() => void pickFolder()}>
               <Folder /> Open my own folder
@@ -47,9 +66,17 @@ export function Onboarding() {
             </div>
           )}
         </div>
+        {user && (
+          <p className="ob-note">
+            Signed in as {user.email} ·{' '}
+            <button className="ob-linklike" onClick={() => void logout()}>
+              sign out
+            </button>
+          </p>
+        )}
         <p className="ob-fineprint">
-          Your notes never leave your device. Demo edits save in this browser; your own folder
-          writes to disk.
+          Demo edits save in this browser; your own folder writes to disk; your cloud vault syncs
+          to your account and is only visible to you.
         </p>
       </div>
     </div>

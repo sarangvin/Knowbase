@@ -13,6 +13,10 @@ export interface VaultFileMeta {
   size: number
   /** epoch millis; 0 if unknown. */
   mtime: number
+  /** Set by RemoteVaultSource: which vault this file came from once a personal
+   *  vault can overlay the read-only global vault (added in M2). Absent for
+   *  local sources, which have only one vault to speak of. */
+  origin?: 'personal' | 'global'
 }
 
 /** A wikilink or embed occurrence found in note body or frontmatter. */

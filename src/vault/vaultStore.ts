@@ -8,6 +8,7 @@ import MiniSearch from 'minisearch'
 import type { Note, TreeNode, VaultFileMeta, VaultIndex } from './types'
 import type { VaultSource } from './source'
 import { SeedVaultSource, FsAccessVaultSource } from './source'
+import { RemoteVaultSource, fetchCurrentUser, signInWithGoogle, signOut, type RemoteUser } from './remoteSource'
 import { parseNote } from './parse'
 import { buildIndex, resolveTarget } from './graph'
 import { buildTree } from './tree'
@@ -42,6 +43,10 @@ interface VaultState {
   sourceName: string
   writable: boolean
 
+  // ── auth (cloud accounts only — local-first sources need none of this) ──
+  user: RemoteUser | null
+  authChecked: boolean
+
   // ── data ──
   index: VaultIndex | null
   files: VaultFileMeta[]
@@ -66,6 +71,13 @@ interface VaultState {
   tryRestoreFolder: () => Promise<boolean>
   reload: () => Promise<void>
 
+  // ── actions: auth + cloud vault ──
+  checkAuth: () => Promise<void>
+  loginWithGoogle: () => void
+  logout: () => Promise<void>
+  loadRemote: () => Promise<void>
+  loadGlobalVault: () => Promise<void>
+
   // ── actions: navigation ──
   openNote: (path: string, opts?: { newTab?: boolean; replace?: boolean; heading?: string }) => void
   openView: (view: View, opts?: { newTab?: boolean; replace?: boolean }) => void
@@ -79,6 +91,7 @@ interface VaultState {
   // ── actions: editing ──
   saveNote: (path: string, text: string) => Promise<void>
   createNote: (path: string, content?: string) => Promise<void>
+  createNotes: (entries: { path: string; content: string }[], openPath?: string) => Promise<void>
 
   // ── actions: ui ──
   toggleLeft: () => void
@@ -198,6 +211,8 @@ export const useVault = create<VaultState>((set, get) => {
     source: null,
     sourceName: '',
     writable: false,
+    user: null,
+    authChecked: false,
     index: null,
     files: [],
     tree: null,
@@ -236,6 +251,27 @@ export const useVault = create<VaultState>((set, get) => {
       const src = get().source
       if (src) await loadFromSource(src)
     },
+
+    checkAuth: async () => {
+      try {
+        const user = await fetchCurrentUser()
+        set({ user, authChecked: true })
+      } catch {
+        // Backend unreachable or not yet configured — treat as signed-out
+        // rather than blocking the local-first onboarding paths.
+        set({ user: null, authChecked: true })
+      }
+    },
+    loginWithGoogle: () => signInWithGoogle('/'),
+    logout: async () => {
+      await signOut().catch(() => {})
+      set({ user: null })
+      if (get().source?.kind === 'remote') {
+        set({ status: 'idle', source: null, sourceName: '', index: null, files: [], tree: null, tabs: [], activeTabId: null })
+      }
+    },
+    loadRemote: async () => loadFromSource(new RemoteVaultSource('personal')),
+    loadGlobalVault: async () => loadFromSource(new RemoteVaultSource('global')),
 
     openNote: (path, opts) =>
       pushView({ kind: 'note', path, heading: opts?.heading }, opts),
@@ -282,6 +318,40 @@ export const useVault = create<VaultState>((set, get) => {
       await source.writeText(full, content)
       await get().reload()
       get().openNote(full)
+    },
+    // Batch variant for writing several new notes at once (e.g. onboarding's
+    // generated topic graph) — unlike createNote, does ONE local re-index
+    // instead of N full reload() cycles (each a re-list + re-read + re-parse
+    // of the ENTIRE vault). Mirrors saveNote's cheap local-reindex, but also
+    // extends `files`/`tree` since these are brand-new paths, not edits to
+    // existing ones — otherwise the new notes stay invisible in FileExplorer/
+    // QuickSwitcher/search until an unrelated reload happens to fire.
+    createNotes: async (entries, openPath) => {
+      const { source, index, files } = get()
+      if (!source?.writable || !source.writeText) throw new Error('This vault is read-only')
+      const normalized = entries.map((e) => ({
+        path: e.path.endsWith('.md') ? e.path : `${e.path}.md`,
+        content: e.content,
+      }))
+      for (const e of normalized) {
+        await source.writeText(e.path, e.content)
+      }
+      const now = Date.now()
+      const newPaths = new Set(normalized.map((e) => e.path))
+      const newNotes = normalized.map((e) => parseNote(e.path, e.content, now))
+      const newMetas: VaultFileMeta[] = normalized.map((e) => ({
+        path: e.path,
+        type: 'note',
+        ext: 'md',
+        size: e.content.length,
+        mtime: now,
+        origin: 'personal',
+      }))
+      const allNotes = [...(index ? [...index.notes.values()].filter((n) => !newPaths.has(n.path)) : []), ...newNotes]
+      const allFiles = [...files.filter((f) => !newPaths.has(f.path)), ...newMetas]
+      _searchIndex = buildSearch(allNotes)
+      set({ index: buildIndex(allNotes), files: allFiles, tree: buildTree(allFiles) })
+      if (openPath) get().openNote(openPath, { replace: true })
     },
 
     toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),

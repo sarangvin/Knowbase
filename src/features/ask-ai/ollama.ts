@@ -1,6 +1,8 @@
 // Local LLM tutor via Ollama (http://localhost:11434). No API key, fully on-device.
 // Uses the native /api/chat streaming endpoint (newline-delimited JSON).
-import type { Note } from '../../vault/types'
+// Always client-direct — unlike the BYO/free tiers, this can't be proxied
+// through the backend since it talks to a server on the user's own machine.
+import type { LlmProvider } from './llmProvider'
 
 const BASE_STORAGE = 'knowbase:ollamaBaseUrl'
 const MODEL_STORAGE = 'knowbase:ollamaModel'
@@ -26,32 +28,6 @@ export async function listModels(): Promise<string[]> {
   if (!res.ok) throw new Error(`Ollama responded ${res.status}`)
   const data = (await res.json()) as { models?: { name: string }[] }
   return (data.models ?? []).map((m) => m.name)
-}
-
-const SYSTEM = `You are a knowledgeable, concise tutor inside a personal knowledge base (an
-Obsidian-style learning vault). The user is studying a topic and asks a question about it.
-Answer directly and accurately, like a sharp study companion: explain the concept, use a
-concrete example when it helps, and connect it to related ideas in the note when relevant.
-Use Markdown. Do not restate the question. Keep it focused — a few tight paragraphs.
-Do not use LaTeX or math notation (no $, \\text{}, \\frac{}) — this renders as plain Markdown,
-so write formulas and variables in plain text instead, e.g. "MSC = MPC + external cost".`
-
-/** Stream an answer to a question about a note via Ollama. */
-export async function answerQuestion(
-  note: Note,
-  question: string,
-  model: string,
-  onDelta?: (text: string) => void,
-): Promise<string> {
-  const context =
-    `Note title: ${note.title}\nTags: ${note.tags.join(', ') || '(none)'}\n\n` +
-    `--- NOTE CONTENT ---\n${note.body.slice(0, 12000)}\n--- END NOTE ---`
-  return chat(
-    SYSTEM,
-    `Here is the note I'm studying, for context:\n\n${context}\n\nMy question: ${question}`,
-    model,
-    onDelta,
-  )
 }
 
 /** Generic streaming chat call against the local Ollama server. */
@@ -103,4 +79,28 @@ export async function chat(
     }
   }
   return full
+}
+
+export const ollamaProvider: LlmProvider = {
+  id: 'ollama',
+  label: 'Ollama (local)',
+  listModels,
+  async checkReady() {
+    try {
+      await listModels()
+      return { ready: true }
+    } catch {
+      const hosted = !/^(localhost|127\.)/.test(location.hostname)
+      const hint = hosted
+        ? ` Since this site is hosted, also allow it as an origin: OLLAMA_ORIGINS="${location.origin}" ollama serve`
+        : ''
+      return {
+        ready: false,
+        message: `Can't reach a local Ollama server at ${getBaseUrl()}. Start it with "ollama serve" and pull a model.${hint}`,
+      }
+    }
+  },
+  async streamChat(system, user, opts) {
+    return chat(system, user, opts.model ?? getModel(), opts.onDelta)
+  },
 }

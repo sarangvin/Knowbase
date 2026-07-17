@@ -1,65 +1,29 @@
-// Browser-side Claude integration for the in-app tutor. The user supplies their
-// own API key (stored only in this browser's localStorage); we never ship a key.
-// Direct browser calls require dangerouslyAllowBrowser — acceptable for a
-// local-first personal tool, but it does expose the key to client-side code.
-import Anthropic from '@anthropic-ai/sdk'
-import type { Note } from '../../vault/types'
+// BYO Claude tier. The key is saved once via Settings (POST /api/settings/keys,
+// encrypted at rest, plaintext discarded server-side) and every call proxies
+// through the backend (POST /api/llm/anthropic/chat) — no API key of any kind
+// touches this module or any browser JS after the initial save, unlike the
+// old dangerouslyAllowBrowser + direct-SDK approach this replaces.
+import type { LlmProvider } from './llmProvider'
+import { streamFromBackend } from './backendProxy'
+import { listSavedKeys } from './keys'
 
-const KEY_STORAGE = 'knowbase:anthropicKey'
+export const anthropicProvider: LlmProvider = {
+  id: 'anthropic',
+  label: 'Claude (your key)',
 
-export function getApiKey(): string {
-  return localStorage.getItem(KEY_STORAGE) ?? ''
-}
-export function setApiKey(key: string): void {
-  if (key) localStorage.setItem(KEY_STORAGE, key)
-  else localStorage.removeItem(KEY_STORAGE)
-}
-export function hasApiKey(): boolean {
-  return !!getApiKey()
-}
-
-const MODEL = 'claude-opus-4-8'
-
-const SYSTEM = `You are a knowledgeable, concise tutor inside a personal knowledge base
-(an Obsidian-style "Automated Graph" learning vault). The user is studying a topic and asks
-a question about it. Answer directly and accurately, at the level of a sharp study companion:
-explain the concept, use a concrete example when it helps, and connect it to related ideas in
-the note when relevant. Use Markdown. Do not restate the question. Keep it focused — a few
-tight paragraphs, not an essay.`
-
-/** Stream an answer to a question about a note. Calls onDelta with text chunks. */
-export async function answerQuestion(
-  note: Note,
-  question: string,
-  onDelta: (text: string) => void,
-): Promise<string> {
-  const apiKey = getApiKey()
-  if (!apiKey) throw new Error('No API key set')
-
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
-
-  const context = `Note title: ${note.title}\nTags: ${note.tags.join(', ') || '(none)'}\n\n` +
-    `--- NOTE CONTENT ---\n${note.body.slice(0, 12000)}\n--- END NOTE ---`
-
-  const stream = client.messages.stream({
-    model: MODEL,
-    max_tokens: 2048,
-    system: SYSTEM,
-    messages: [
-      {
-        role: 'user',
-        content: `Here is the note I'm studying, for context:\n\n${context}\n\nMy question: ${question}`,
-      },
-    ],
-  })
-
-  let full = ''
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      full += event.delta.text
-      onDelta(event.delta.text)
+  async checkReady() {
+    try {
+      const keys = await listSavedKeys()
+      const saved = keys.find((k) => k.provider === 'anthropic')
+      return saved
+        ? { ready: true }
+        : { ready: false, message: 'Add your Anthropic API key in Settings to use Claude.' }
+    } catch {
+      return { ready: false, message: 'Could not reach the server to check your saved key.' }
     }
-  }
-  await stream.finalMessage()
-  return full
+  },
+
+  async streamChat(system, user, opts) {
+    return streamFromBackend('/api/llm/anthropic/chat', { system, user }, opts.onDelta)
+  },
 }

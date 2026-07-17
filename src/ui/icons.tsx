@@ -101,6 +101,10 @@ export const Sparkles = (p: P) => (
     <path d="M19 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8Z" />
   </svg>
 )
+export const Cloud = (p: P) => (
+  <svg {...base(p)}><path d="M17.5 19a4.5 4.5 0 0 0 0-9h-1.1a7 7 0 1 0-12.53 5.63" /><path d="M4 19h13.5" /></svg>
+)
+
 export const GraduationCap = (p: P) => (
   <svg {...base(p)}>
     <path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c0 1 2.5 3 6 3s6-2 6-3v-5" />

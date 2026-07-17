@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { MarkdownView } from '../reader/MarkdownView'
-import { answerQuestion, listModels, getModel, setModel } from './ollama'
+import { answerQuestion, type LlmProvider } from './llmProvider'
+import { PROVIDERS, getActiveProviderId, setActiveProviderId, getProvider } from './providerRegistry'
+import { getModel, setModel as persistOllamaModel } from './ollama'
 import { insertQA, bumpLastReviewed } from './askInsert'
 import './ask.css'
 
@@ -14,9 +16,14 @@ export function AskPanel() {
   const saveNote = useVault((s) => s.saveNote)
   const openNote = useVault((s) => s.openNote)
 
-  const [conn, setConn] = useState<'checking' | 'ready' | 'down'>('checking')
+  const [providerId, setProviderId] = useState<LlmProvider['id']>(getActiveProviderId())
+  const provider = getProvider(providerId)
+
+  const [readiness, setReadiness] = useState<'checking' | 'ready' | 'not-ready'>('checking')
+  const [readyMessage, setReadyMessage] = useState<string | null>(null)
   const [models, setModels] = useState<string[]>([])
-  const [model, setModelState] = useState(getModel())
+  const [model, setModel] = useState(getModel())
+
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
   const [status, setStatus] = useState<'idle' | 'thinking' | 'done' | 'error'>('idle')
@@ -24,22 +31,37 @@ export function AskPanel() {
   const [saved, setSaved] = useState(false)
   const answerRef = useRef<HTMLDivElement>(null)
 
-  const checkConn = () => {
-    setConn('checking')
-    listModels()
-      .then((names) => {
-        setModels(names)
-        setConn('ready')
-        setModelState((m) => {
-          const next = m && names.includes(m) ? m : (names[0] ?? '')
-          if (next) setModel(next)
-          return next
-        })
-      })
-      .catch(() => setConn('down'))
+  const checkReadiness = () => {
+    setReadiness('checking')
+    const p = getProvider(providerId)
+    const check = p.checkReady ? p.checkReady() : Promise.resolve<{ ready: boolean; message?: string }>({ ready: true })
+    check.then(({ ready, message }) => {
+      setReadiness(ready ? 'ready' : 'not-ready')
+      setReadyMessage(message ?? null)
+      if (ready && p.listModels) {
+        p.listModels()
+          .then((names) => {
+            setModels(names)
+            setModel((m) => {
+              const next = m && names.includes(m) ? m : (names[0] ?? '')
+              if (next) persistOllamaModel(next)
+              return next
+            })
+          })
+          .catch(() => setModels([]))
+      } else {
+        setModels([])
+      }
+    })
   }
 
-  useEffect(checkConn, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(checkReadiness, [providerId])
+
+  const selectProvider = (id: string) => {
+    setActiveProviderId(id as LlmProvider['id'])
+    setProviderId(id as LlmProvider['id'])
+  }
 
   useEffect(() => {
     setAnswer('')
@@ -52,32 +74,30 @@ export function AskPanel() {
     answerRef.current?.scrollTo({ top: answerRef.current.scrollHeight })
   }, [answer])
 
-  if (conn === 'checking') {
+  const providerPicker = (
+    <select className="ask-model" value={providerId} onChange={(e) => selectProvider(e.target.value)} title="AI provider">
+      {PROVIDERS.map((p) => (
+        <option key={p.id} value={p.id}>{p.label}</option>
+      ))}
+    </select>
+  )
+
+  if (readiness === 'checking') {
     return (
       <div className="ask-panel">
-        <div className="panel-header">Ask AI</div>
-        <div className="ask-status-msg"><span className="spinner ask-spin" /> Connecting to Ollama…</div>
+        <div className="panel-header">Ask AI {providerPicker}</div>
+        <div className="ask-status-msg"><span className="spinner ask-spin" /> Connecting…</div>
       </div>
     )
   }
 
-  if (conn === 'down') {
+  if (readiness === 'not-ready') {
     return (
       <div className="ask-panel">
-        <div className="panel-header">Ask AI</div>
+        <div className="panel-header">Ask AI {providerPicker}</div>
         <div className="ask-keysetup">
-          <p>Can't reach a local Ollama server at <code>localhost:11434</code>.</p>
-          <p className="ask-dim">
-            Start it with <code>ollama serve</code> and pull a model (e.g. <code>ollama pull llama3.2</code>).
-            Everything runs on your machine — no API key, no data leaves your device.
-          </p>
-          {!/^(localhost|127\.)/.test(location.hostname) && (
-            <p className="ask-dim">
-              This site is hosted, so Ollama must allow it as an origin — start it with:{' '}
-              <code>OLLAMA_ORIGINS="{location.origin}" ollama serve</code>
-            </p>
-          )}
-          <button className="ask-btn primary" onClick={checkConn}>Retry connection</button>
+          <p>{readyMessage ?? 'This provider is not available right now.'}</p>
+          <button className="ask-btn primary" onClick={checkReadiness}>Retry</button>
         </div>
       </div>
     )
@@ -86,7 +106,7 @@ export function AskPanel() {
   if (!notePath) {
     return (
       <div className="ask-panel">
-        <div className="panel-header">Ask AI</div>
+        <div className="panel-header">Ask AI {providerPicker}</div>
         <div className="empty-state">Open a note to ask about it.</div>
       </div>
     )
@@ -96,13 +116,13 @@ export function AskPanel() {
 
   const ask = async () => {
     const n = getNote(notePath)
-    if (!n || !question.trim() || !model || status === 'thinking') return
+    if (!n || !question.trim() || status === 'thinking') return
     setStatus('thinking')
     setAnswer('')
     setSaved(false)
     setError(null)
     try {
-      await answerQuestion(n, question, model, (chunk) => setAnswer((a) => a + chunk))
+      await answerQuestion(provider, n, question, model, (chunk) => setAnswer((a) => a + chunk))
       setStatus('done')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -128,16 +148,19 @@ export function AskPanel() {
     <div className="ask-panel">
       <div className="panel-header">
         Ask AI
-        <select
-          className="ask-model"
-          value={model}
-          onChange={(e) => { setModelState(e.target.value); setModel(e.target.value) }}
-          title="Ollama model"
-        >
-          {models.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
+        {providerPicker}
+        {models.length > 0 && (
+          <select
+            className="ask-model"
+            value={model}
+            onChange={(e) => { setModel(e.target.value); persistOllamaModel(e.target.value) }}
+            title="Model"
+          >
+            {models.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        )}
       </div>
       <div className="ask-input-row">
         <textarea

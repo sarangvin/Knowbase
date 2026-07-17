@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useVault } from './vault/vaultStore'
+import { RemoteVaultSource } from './vault/remoteSource'
 import { useKeybindings } from './ui/useKeybindings'
 import { registerAutomatedGraph } from './features/automated-graph/register'
 import { Onboarding } from './features/onboarding/Onboarding'
+import { TopicOnboarding } from './features/onboarding/TopicOnboarding'
 import { FileExplorer } from './features/explorer/FileExplorer'
 import { TopBar } from './shell/TopBar'
 import { TabBar } from './shell/TabBar'
@@ -23,13 +25,19 @@ export default function App() {
   const leftOpen = useVault((s) => s.leftOpen)
   const rightOpen = useVault((s) => s.rightOpen)
   const tryRestoreFolder = useVault((s) => s.tryRestoreFolder)
+  const checkAuth = useVault((s) => s.checkAuth)
   const activeView = useVault((s) => s.activeView())
+  const source = useVault((s) => s.source)
+  const files = useVault((s) => s.files)
+  const [topicOnboardingSkipped, setTopicOnboardingSkipped] = useState(false)
   useKeybindings()
 
-  // On boot: try to restore a previously-opened folder; otherwise the
-  // onboarding screen lets the user pick the demo vault or their own folder.
+  // On boot: try to restore a previously-opened folder and check for a signed-in
+  // Google session; otherwise the onboarding screen lets the user pick the demo
+  // vault, sign in for their cloud vault, or open their own local folder.
   useEffect(() => {
     void tryRestoreFolder()
+    void checkAuth()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -80,6 +88,19 @@ export default function App() {
   }, [activeView?.kind === 'note' ? activeView.path : null])
 
   if (status !== 'ready') return <Onboarding />
+
+  // A brand-new cloud user (personal vault has zero notes of its own, distinct
+  // from the owner's global-edit mode which also returns origin: 'global' for
+  // every file) gets a topic prompt instead of landing in a bare empty vault.
+  // Not persisted across reloads if skipped — the gate naturally stops firing
+  // once they have any personal note.
+  const isBrandNewPersonalVault =
+    source instanceof RemoteVaultSource &&
+    source.mode === 'personal' &&
+    files.filter((f) => f.origin === 'personal').length === 0
+  if (isBrandNewPersonalVault && !topicOnboardingSkipped) {
+    return <TopicOnboarding onSkip={() => setTopicOnboardingSkipped(true)} />
+  }
 
   const closeDrawers = () => useVault.setState({ leftOpen: false, rightOpen: false })
 

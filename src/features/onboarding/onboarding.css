@@ -45,6 +45,13 @@
 .ob-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 .ob-btn.primary:hover { background: var(--accent-hover); }
 .ob-note { color: var(--text-faint); font-size: 13px; max-width: 280px; line-height: 1.5; }
+.ob-linklike {
+  color: var(--text-muted);
+  text-decoration: underline;
+  font-size: inherit;
+  padding: 0;
+}
+.ob-linklike:hover { color: var(--accent); }
 .ob-fineprint { color: var(--text-faint); font-size: 12px; margin-top: 24px; }
 .ob-error {
   background: rgba(224, 102, 107, 0.12);
@@ -55,3 +62,16 @@
   font-size: 13px;
   margin-bottom: 18px;
 }
+.ob-topic-input {
+  width: 100%;
+  min-width: 240px;
+  padding: 11px 16px;
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-normal);
+  font-size: 14.5px;
+}
+.ob-topic-input:focus { outline: none; border-color: var(--accent); }
+.ob-topic-input:disabled { opacity: 0.6; }
+.ob-actions .ob-note { display: flex; align-items: center; justify-content: center; gap: 8px; }

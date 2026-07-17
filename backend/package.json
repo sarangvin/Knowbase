@@ -1,0 +1,32 @@
+{
+  "name": "knowbase-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc -b",
+    "start": "node --env-file=.env dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "db:seed-global": "tsx --env-file=.env src/db/seedGlobalVault.ts"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "drizzle-orm": "^0.44.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "razorpay": "^2.9.6"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.21",
+    "@types/node": "^24.13.2",
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.31.6",
+    "tsx": "^4.19.2",
+    "typescript": "~6.0.2"
+  }
+}

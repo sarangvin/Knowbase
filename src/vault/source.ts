@@ -8,7 +8,7 @@ import { get as idbGet, set as idbSet, del as idbDel, keys as idbKeys, createSto
 import type { VaultFileMeta } from './types'
 
 export interface VaultSource {
-  readonly kind: 'seed' | 'fs'
+  readonly kind: 'seed' | 'fs' | 'remote'
   readonly name: string
   /** Whether writes are supported (saving edits back to disk / local overlay). */
   readonly writable: boolean
@@ -17,6 +17,13 @@ export interface VaultSource {
   /** Returns an object URL for an asset (image/pdf). Caller may revoke it. */
   assetUrl(path: string): Promise<string>
   writeText?(path: string, text: string): Promise<void>
+  /**
+   * Finer-grained than `writable` — lets a source mark individual files
+   * read-only (e.g. RemoteVaultSource's global-vault overlay) while the vault
+   * as a whole still accepts writes. Sources that don't implement this treat
+   * every file as writable, same as today.
+   */
+  isPathWritable?(path: string): boolean
 }
 
 // Browser-local overlay so the static demo vault is still editable: edits and

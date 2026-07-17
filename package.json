@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.109.0",
     "@codemirror/lang-markdown": "^6.5.0",
     "@uiw/react-codemirror": "^4.25.10",
     "clsx": "^2.1.1",
