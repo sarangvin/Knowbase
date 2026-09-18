@@ -8,7 +8,7 @@
 .admin-shell h1 { font-size: 22px; margin: 0 0 4px; }
 .admin-dim { color: var(--text-faint); font-size: 13px; }
 .admin-error {
-  background: rgba(224, 102, 107, 0.12);
+  background: hsl(354 72% 60% / 0.12);
   border: 1px solid var(--text-error);
   color: var(--text-error);
   border-radius: var(--radius-m);
@@ -115,7 +115,7 @@
 .admin-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: hsl(var(--soil-h) 30% 3% / 0.55);
   display: flex;
   justify-content: center;
   align-items: flex-start;

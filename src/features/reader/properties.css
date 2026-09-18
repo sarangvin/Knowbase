@@ -14,7 +14,7 @@
   padding: 3px 6px;
   border-radius: var(--radius-s);
 }
-.prop-row:hover { background: rgba(255, 255, 255, 0.02); }
+.prop-row:hover { background: hsl(var(--soil-h) 20% 60% / 0.04); }
 .prop-key {
   color: var(--text-muted);
   font-size: 13px;
@@ -31,5 +31,5 @@
   font-size: 13px;
 }
 a.prop-pill { cursor: pointer; }
-a.prop-pill.internal-link { background: var(--accent-soft); color: var(--accent); }
+a.prop-pill.internal-link { background: hsl(34 55% 60% / 0.14); color: var(--link); }
 .prop-empty { color: var(--text-faint); }

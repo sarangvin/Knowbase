@@ -23,6 +23,11 @@
   --accent-line: hsl(var(--accent-h) 70% 50% / 0.55);
   /* The glow under an active tab / the burrow mouth on the landing page. */
   --accent-glow: hsl(var(--accent-h) 90% 55% / 0.28);
+  /* Links are sand, not carrot. A dense note or a dashboard table is mostly
+     wikilinks, and at full accent strength every one of them competed with
+     the actual buttons — the carrot has to stay the colour of "do this". */
+  --link: hsl(34 62% 71%);
+  --link-hover: hsl(30 80% 76%);
 
   --bg-primary: hsl(var(--soil-h) 12% 10%);
   --bg-secondary: hsl(var(--soil-h) 13% 8%);
@@ -109,8 +114,8 @@ input, textarea {
   color: var(--text-normal);
 }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color: var(--link); text-decoration: none; }
+a:hover { color: var(--link-hover); text-decoration: underline; }
 
 /* Selection picks up the carrot rather than the browser's default blue, which
    is the one colour that would otherwise break the warm palette. */
@@ -219,6 +224,24 @@ a:hover { text-decoration: underline; }
   text-align: center;
   padding: 28px 16px;
 }
+/* A paw print over every empty panel — the one place the theme can show up
+   without competing with content, because by definition there is none.
+   Masked rather than an <img> so it inherits the text colour and needs no
+   dark/light variant. */
+.empty-state::before {
+  content: '';
+  display: block;
+  width: 26px;
+  height: 26px;
+  margin: 0 auto 10px;
+  opacity: 0.35;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cellipse cx='6.6' cy='10.2' rx='1.8' ry='2.4' transform='rotate(-24 6.6 10.2)'/%3E%3Cellipse cx='10' cy='6.9' rx='1.8' ry='2.4' transform='rotate(-8 10 6.9)'/%3E%3Cellipse cx='14' cy='6.9' rx='1.8' ry='2.4' transform='rotate(8 14 6.9)'/%3E%3Cellipse cx='17.4' cy='10.2' rx='1.8' ry='2.4' transform='rotate(24 17.4 10.2)'/%3E%3Cpath d='M12 12.5c3.3 0 5.5 2.2 5.5 4.6 0 2-1.6 3.4-3.4 3.4-1 0-1.5-.4-2.1-.4s-1.1.4-2.1.4c-1.8 0-3.4-1.4-3.4-3.4 0-2.4 2.2-4.6 5.5-4.6Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cellipse cx='6.6' cy='10.2' rx='1.8' ry='2.4' transform='rotate(-24 6.6 10.2)'/%3E%3Cellipse cx='10' cy='6.9' rx='1.8' ry='2.4' transform='rotate(-8 10 6.9)'/%3E%3Cellipse cx='14' cy='6.9' rx='1.8' ry='2.4' transform='rotate(8 14 6.9)'/%3E%3Cellipse cx='17.4' cy='10.2' rx='1.8' ry='2.4' transform='rotate(24 17.4 10.2)'/%3E%3Cpath d='M12 12.5c3.3 0 5.5 2.2 5.5 4.6 0 2-1.6 3.4-3.4 3.4-1 0-1.5-.4-2.1-.4s-1.1.4-2.1.4c-1.8 0-3.4-1.4-3.4-3.4 0-2.4 2.2-4.6 5.5-4.6Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* Not inside the command palette or quick switcher: those are transient
+   overlays where "No matches." should be a line of text and nothing more. */
+.modal .empty-state::before { display: none; }
 
 /* spinner — a burrow mouth: a ring being dug open, warm at the leading edge */
 .spinner {
@@ -232,8 +255,8 @@ a:hover { text-decoration: underline; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Rabbit-hole flourishes ─────────────────────────────────────────────────
-   Shared decorative pieces. Both are pure CSS on purpose: they sit behind
-   real content, so they must never cost a request or block paint. ───────── */
+   Shared decorative pieces, pure CSS on purpose: they sit behind real
+   content, so they must never cost a request or block paint. ───────────── */
 
 /* The burrow: concentric rings receding into the dark, lit from the rim.
    Used as a backdrop wherever the app wants to say "you are going down".
@@ -243,26 +266,15 @@ a:hover { text-decoration: underline; }
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(closest-side, transparent 58%, var(--accent-glow) 60%, transparent 62%),
-    radial-gradient(closest-side, transparent 40%, hsl(var(--accent-h) 80% 50% / 0.16) 42%, transparent 44%),
-    radial-gradient(closest-side, transparent 24%, hsl(var(--accent-h) 70% 45% / 0.1) 26%, transparent 28%),
-    radial-gradient(closest-side, var(--bg-deep) 0%, transparent 70%);
+    /* Painted first = painted on top: the dark of the hole itself, which
+       keeps the rings off whatever content sits in the middle. Without it
+       a ring runs straight through the headline. */
+    radial-gradient(closest-side,
+      var(--bg-deep) 0%, hsl(var(--soil-h) 16% 5% / 0.82) 26%, transparent 46%),
+    /* Rings, brightest at the rim — light falls on the lip of a burrow, not
+       down inside it — and each one a little wider than the last. */
+    radial-gradient(closest-side, transparent 67%, hsl(var(--accent-h) 85% 52% / 0.11) 70%, transparent 73%),
+    radial-gradient(closest-side, transparent 51%, hsl(var(--accent-h) 80% 50% / 0.07) 53%, transparent 56%),
+    radial-gradient(closest-side, transparent 37%, hsl(var(--accent-h) 70% 48% / 0.05) 39%, transparent 41%),
+    radial-gradient(closest-side, hsl(var(--accent-h) 60% 30% / 0.12) 0%, transparent 72%);
 }
-
-/* Ears. Drawn on the ::before of whatever they crown, so any element can
-   sprout them without extra markup — the two pseudo-element "leaves" are one
-   box each, rotated apart and rounded into ear shapes. */
-.has-ears { position: relative; }
-.has-ears::before,
-.has-ears::after {
-  content: '';
-  position: absolute;
-  top: -9px;
-  width: 6px;
-  height: 13px;
-  border-radius: 60% 60% 30% 30%;
-  background: currentColor;
-  opacity: 0.9;
-}
-.has-ears::before { left: calc(50% - 8px); transform: rotate(-16deg); }
-.has-ears::after { left: calc(50% + 2px); transform: rotate(16deg); }

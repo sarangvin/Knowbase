@@ -12,7 +12,7 @@
   font-weight: 700;
   margin: 0 0 0.2em;
   line-height: 1.2;
-  color: #e8e9ea;
+  color: var(--text-normal);
 }
 .note-tags {
   display: flex;

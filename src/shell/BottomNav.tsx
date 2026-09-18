@@ -12,7 +12,7 @@
 // earn permanent space in the chrome.
 import { useVault } from '../vault/vaultStore'
 import { spaceOfPath } from '../features/automated-graph/engine'
-import { Sparkles, Folder, Layers, HelpCircle, Settings } from '../ui/icons'
+import { Rabbit, Folder, Layers, Carrot, Settings } from '../ui/icons'
 
 type TabId = 'next' | 'files' | 'flashcards' | 'quiz' | 'settings'
 
@@ -63,7 +63,7 @@ export function BottomNav() {
     {
       id: 'next',
       label: 'Learn',
-      icon: <Sparkles />,
+      icon: <Rabbit />,
       onClick: () => nextPath && openNote(nextPath),
       disabled: !nextPath,
     },
@@ -75,7 +75,7 @@ export function BottomNav() {
       onClick: () => cardsPath && openNote(cardsPath),
       disabled: !cardsPath,
     },
-    { id: 'quiz', label: 'Quiz', icon: <HelpCircle />, onClick: () => openView({ kind: 'quiz' }) },
+    { id: 'quiz', label: 'Quiz', icon: <Carrot />, onClick: () => openView({ kind: 'quiz' }) },
     { id: 'settings', label: 'Settings', icon: <Settings />, onClick: () => openView({ kind: 'settings' }) },
   ]
 

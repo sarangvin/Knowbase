@@ -16,7 +16,7 @@
   font-weight: 650;
   line-height: 1.3;
   margin: 1.4em 0 0.5em;
-  color: #e6e7e8;
+  color: var(--text-normal);
   scroll-margin-top: 16px;
 }
 .markdown-rendered h1 { font-size: 1.9em; margin-top: 0.2em; }
@@ -35,7 +35,7 @@
   padding: 0.1em 1em;
   border-left: 3px solid var(--accent);
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.02);
+  background: hsl(var(--accent-h) 40% 60% / 0.035);
 }
 
 .markdown-rendered hr {
@@ -52,7 +52,7 @@
   border-radius: var(--radius-s);
 }
 .markdown-rendered pre {
-  background: #161616;
+  background: var(--bg-deep);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   padding: 14px 16px;
@@ -64,7 +64,7 @@
   padding: 0;
   font-size: 0.85em;
   line-height: 1.5;
-  color: #c8c8c8;
+  color: var(--text-muted);
 }
 
 .markdown-rendered table {
@@ -81,7 +81,7 @@
   text-align: left;
 }
 .markdown-rendered th { background: var(--bg-elevated); font-weight: 600; }
-.markdown-rendered tr:nth-child(even) td { background: rgba(255, 255, 255, 0.015); }
+.markdown-rendered tr:nth-child(even) td { background: hsl(var(--soil-h) 20% 60% / 0.03); }
 
 /* GFM task list checkboxes */
 .markdown-rendered input[type='checkbox'] {
@@ -105,14 +105,14 @@
 }
 .embed-missing { color: var(--text-error); font-family: var(--font-mono); font-size: 0.9em; }
 
-/* Internal wikilinks */
+/* Internal wikilinks — the tunnels out of this note. */
 .internal-link {
-  color: var(--accent);
+  color: var(--link);
   cursor: pointer;
   text-decoration: none;
   border-bottom: 1px solid transparent;
 }
-.internal-link:hover { text-decoration: none; border-bottom-color: var(--accent); }
+.internal-link:hover { color: var(--link-hover); text-decoration: none; border-bottom-color: var(--link-hover); }
 .internal-link.is-unresolved { color: var(--text-error); opacity: 0.8; }
 
 /* Transcluded note embeds */
@@ -120,14 +120,14 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-m);
   margin: 1em 0;
-  background: rgba(255, 255, 255, 0.015);
+  background: hsl(var(--soil-h) 20% 60% / 0.03);
 }
 .note-embed-title {
   font-weight: 600;
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
-  color: var(--accent);
+  color: var(--link);
 }
 .note-embed-body { padding: 4px 14px; font-size: 0.95em; }
 

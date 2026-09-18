@@ -96,10 +96,10 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
     return () => clearTimeout(t)
   }, [size.w, size.h, compact])
 
-  const accent = cssVar('--accent') || '#9b7ed6'
-  const faint = cssVar('--text-faint') || '#666'
-  const muted = cssVar('--text-muted') || '#999'
-  const bg = cssVar('--bg-primary') || '#1e1e1e'
+  const accent = cssVar('--accent') || '#f28136'
+  const faint = cssVar('--text-faint') || '#7a6f66'
+  const muted = cssVar('--text-muted') || '#ada097'
+  const bg = cssVar('--bg-primary') || '#1c1917'
 
   if (!index) return null
 
@@ -126,7 +126,7 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
             const s = typeof l.source === 'string' ? l.source : (l.source as GNode).id
             const t = typeof l.target === 'string' ? l.target : (l.target as GNode).id
             if (hover && (s === hover || t === hover)) return accent
-            return 'rgba(255,255,255,0.08)'
+            return 'hsl(26 20% 70% / 0.1)'
           }}
           linkWidth={(l) => {
             const s = typeof l.source === 'string' ? l.source : (l.source as GNode).id
@@ -143,7 +143,7 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
             ctx.globalAlpha = dim ? 0.18 : 1
             ctx.beginPath()
             ctx.arc(n.x!, n.y!, r, 0, 2 * Math.PI)
-            ctx.fillStyle = !n.resolved ? faint : isFocus ? '#fff' : accent
+            ctx.fillStyle = !n.resolved ? faint : isFocus ? '#fff5ec' : accent
             ctx.fill()
             if (isFocus) {
               ctx.lineWidth = 1.5

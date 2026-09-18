@@ -7,22 +7,61 @@
   align-items: center;
   justify-content: center;
   gap: 14px;
-  background: radial-gradient(1200px 600px at 50% -10%, hsl(var(--accent-h) 40% 20% / 0.35), var(--bg-primary));
+  position: relative;
+  overflow: hidden;
+  /* Soil, lit from above: the surface you are standing on before you go down. */
+  background:
+    radial-gradient(900px 520px at 50% -18%, hsl(var(--accent-h) 45% 22% / 0.30), transparent 70%),
+    var(--bg-primary);
 }
+
+/* The burrow rings, centred on the card and sized off the viewport so they
+   stay a backdrop rather than a shape competing with the content. Square via
+   aspect-ratio so the rings are circles at every window size. */
+.ob-burrow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(140vh, 130vw);
+  aspect-ratio: 1;
+  pointer-events: none;
+  /* Behind the card, above the page background. */
+  z-index: 0;
+}
+.ob-burrow .burrow { animation: burrow-breathe 9s ease-in-out infinite; }
+
+/* Barely-there drift: enough that the hole feels like it has depth, slow
+   enough that it never pulls the eye off the input. */
+@keyframes burrow-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.045); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-burrow .burrow { animation: none; }
+}
+
 .ob-card {
   width: min(460px, 90vw);
   text-align: center;
   padding: 8px;
+  position: relative;
+  z-index: 1;
 }
 .ob-logo {
-  width: 64px;
-  height: 64px;
+  width: 68px;
+  height: 68px;
   margin: 0 auto 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 18px;
-  background: var(--accent-soft);
+  /* A circle, not a rounded square: the mark is a rabbit coming up out of a
+     hole, and a hole is round. */
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, hsl(var(--accent-h) 80% 50% / 0.22), var(--bg-deep) 96%);
+  border: 1px solid var(--accent-line);
+  box-shadow: 0 0 0 7px hsl(var(--accent-h) 70% 45% / 0.07), 0 10px 30px hsl(var(--soil-h) 40% 2% / 0.5);
   color: var(--accent);
 }
 .ob-title { font-size: 34px; font-weight: 750; margin: 0 0 10px; letter-spacing: -0.02em; }
@@ -44,8 +83,17 @@
   transition: background 0.12s, border-color 0.12s;
 }
 .ob-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
-.ob-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
-.ob-btn.primary:hover { background: var(--accent-hover); }
+.ob-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+  box-shadow: 0 6px 22px hsl(var(--accent-h) 85% 45% / 0.28);
+}
+.ob-btn.primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 8px 26px hsl(var(--accent-h) 85% 45% / 0.38);
+}
 /* margin inline auto, not just max-width: these are now direct children of
    the centred card as well as of flex containers, and a capped block without
    auto margins sits left of centre. */
@@ -98,7 +146,7 @@
 .ob-linklike.inline { display: inline; }
 .ob-fineprint { color: var(--text-faint); font-size: 12px; margin-top: 24px; }
 .ob-error {
-  background: rgba(224, 102, 107, 0.12);
+  background: hsl(354 72% 60% / 0.12);
   border: 1px solid var(--text-error);
   color: var(--text-error);
   border-radius: var(--radius-m);
@@ -127,11 +175,15 @@
   min-width: 240px;
   padding: 11px 16px;
   border-radius: var(--radius-m);
-  background: var(--bg-elevated);
+  background: hsl(var(--soil-h) 14% 12% / 0.9);
   border: 1px solid var(--border-strong);
   color: var(--text-normal);
   font-size: 14.5px;
 }
-.ob-topic-input:focus { outline: none; border-color: var(--accent); }
+.ob-topic-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 .ob-topic-input:disabled { opacity: 0.6; }
 .ob-actions .ob-note { display: flex; align-items: center; justify-content: center; gap: 8px; }

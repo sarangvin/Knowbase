@@ -4,25 +4,28 @@ import { markdown } from '@codemirror/lang-markdown'
 import { useVault } from '../../vault/vaultStore'
 import './editor.css'
 
-// Dark theme matching the app's design tokens (CodeMirror needs concrete colors).
-const knowbaseTheme = EditorView.theme(
+// Dark theme driven by the app's design tokens. EditorView.theme injects a real
+// stylesheet, so var() references resolve against the editor's inherited custom
+// properties — which means retinting the app in index.css retints the editor
+// too, instead of leaving a hardcoded slab of the old palette behind.
+const rabbitholeTheme = EditorView.theme(
   {
-    '&': { backgroundColor: '#1e1e1e', color: '#dcddde', height: '100%' },
+    '&': { backgroundColor: 'var(--bg-primary)', color: 'var(--text-normal)', height: '100%' },
     '.cm-content': {
-      fontFamily: "'SF Mono', ui-monospace, Menlo, monospace",
+      fontFamily: 'var(--font-mono)',
       fontSize: '14.5px',
       lineHeight: '1.7',
-      caretColor: '#9b7ed6',
+      caretColor: 'var(--accent)',
       maxWidth: '820px',
       margin: '0 auto',
       padding: '28px 24px 40vh',
     },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#9b7ed6' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
-      backgroundColor: 'rgba(155, 126, 214, 0.25)',
+      backgroundColor: 'hsl(var(--accent-h) 80% 50% / 0.28)',
     },
     '.cm-gutters': { display: 'none' },
-    '.cm-activeLine': { backgroundColor: 'rgba(255,255,255,0.02)' },
+    '.cm-activeLine': { backgroundColor: 'hsl(var(--soil-h) 20% 60% / 0.04)' },
     '.cm-scroller': { overflow: 'auto' },
     '&.cm-editor.cm-focused': { outline: 'none' },
   },
@@ -89,7 +92,7 @@ export function Editor({ notePath }: { notePath: string }) {
         className="editor-cm"
         value={text}
         height="100%"
-        theme={knowbaseTheme}
+        theme={rabbitholeTheme}
         extensions={extensions}
         basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLineGutter: false }}
         onChange={(v) => {

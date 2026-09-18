@@ -172,8 +172,13 @@ export const RabbitSolid = (p: P) => (
 
 export const Carrot = (p: P) => (
   <svg {...base(p)}>
-    <path d="M4.5 19.5 12.7 9.9l3.6 3.6z" />
-    <path d="M14.5 11.7 18.8 7.4M14.5 11.7 15.3 6.3M14.5 11.7 20 12.4" />
+    {/* Upright and only slightly tilted. Drawn on the diagonal — the way most
+        carrot glyphs are — the body and its leaves kept crossing each other
+        and the whole thing read as an arrow at 16px. */}
+    <g transform="rotate(-14 12 13)">
+      <path d="M7.6 9.8h8.8L12 20.6z" />
+      <path d="M12 9.8V4.4M12 9.8 8.5 5.7M12 9.8 15.5 5.7" />
+    </g>
   </svg>
 )
 
@@ -187,6 +192,8 @@ export const Burrow = (p: P) => (
   </svg>
 )
 
+/* NOTE: index.css carries a filled copy of this path as a mask data-URI for
+   the empty-state watermark. Change one, change the other. */
 export const Paw = (p: P) => (
   <svg {...base(p)}>
     <ellipse cx="6.6" cy="10.2" rx="1.8" ry="2.4" transform="rotate(-24 6.6 10.2)" />

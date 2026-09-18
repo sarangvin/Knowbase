@@ -79,7 +79,7 @@ export function Onboarding() {
     }
   }
 
-  const startLabel = user == null ? 'Sign in and build it' : awaitingApproval ? 'Request early access' : 'Dig my warren'
+  const startLabel = user == null ? 'Sign in and start digging' : awaitingApproval ? 'Request early access' : 'Start digging'
 
   return (
     <div className="onboarding">
@@ -96,7 +96,7 @@ export function Onboarding() {
         </div>
         <h1 className="ob-title">What do you want to learn?</h1>
         <p className="ob-sub">
-          Name a topic and Rabbithole digs you a warren — the subtopics worth knowing,
+          Name a topic and Rabbithole digs the tunnels — the subtopics worth knowing,
           what to study in what order, and a first draft of notes for each.
         </p>
 

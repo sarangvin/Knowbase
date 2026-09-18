@@ -111,7 +111,7 @@
     bottom: var(--bottomnav-h);
     left: 0;
     right: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: hsl(var(--soil-h) 30% 3% / 0.6);
     z-index: 30;
   }
 }
@@ -178,6 +178,7 @@
   padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
+  box-shadow: 0 -1px 0 hsl(var(--accent-h) 60% 40% / 0.08);
   font-size: 12px;
   color: var(--text-faint);
   /* The account menu pops upward out of this bar; without its own stacking
@@ -203,10 +204,25 @@
   font-size: 11px;
   line-height: 1;
   transition: color 0.12s, background 0.12s;
+  /* Anchors the active destination's rim (::after below). */
+  position: relative;
 }
 .navtab:hover:not(:disabled) { color: var(--text-normal); background: var(--bg-hover); }
-.navtab-active { color: var(--accent); }
-.navtab-active:hover { color: var(--accent); }
+.navtab-active { color: var(--accent); background: var(--accent-soft); }
+.navtab-active:hover { color: var(--accent); background: var(--accent-soft); }
+/* The lit rim of the tunnel you're currently in — a hairline of carrot along
+   the top of the active destination, matching the burrow rings elsewhere. */
+.navtab-active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 22%;
+  right: 22%;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
 .navtab:disabled { opacity: 0.35; cursor: default; }
 .navtab-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
@@ -238,9 +254,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 60px; height: 60px;
-  border-radius: 18px;
-  background: var(--accent-soft);
+  width: 62px; height: 62px;
+  /* Same circular burrow treatment as the landing mark, so the two hero
+     icons in the product read as one family. */
+  border-radius: 50%;
+  background: radial-gradient(closest-side, hsl(var(--accent-h) 80% 50% / 0.2), var(--bg-deep) 96%);
+  border: 1px solid var(--accent-line);
+  box-shadow: 0 0 0 7px hsl(var(--accent-h) 70% 45% / 0.06);
   color: var(--accent);
   margin: 0 auto 18px;
 }

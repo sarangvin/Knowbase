@@ -3,7 +3,7 @@
 // lands next; this exists so the tab is never a dead click and so the nav
 // bar's shape is settled before the view is built behind it.
 import { useVault } from '../../vault/vaultStore'
-import { HelpCircle } from '../../ui/icons'
+import { Carrot } from '../../ui/icons'
 
 export function QuizView() {
   const index = useVault((s) => s.index)
@@ -16,7 +16,7 @@ export function QuizView() {
     <div className="note-scroll">
       <div className="note-container">
         <div className="quiz-soon">
-          <div className="quiz-soon-icon"><HelpCircle width={30} height={30} /></div>
+          <div className="quiz-soon-icon"><Carrot width={30} height={30} /></div>
           <span className="quiz-soon-badge">Coming soon</span>
           <h1 className="quiz-soon-title">Quiz yourself</h1>
           <p className="quiz-soon-lede">

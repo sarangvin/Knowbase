@@ -110,7 +110,7 @@
 .ask-error {
   margin: 0 8px;
   padding: 8px 10px;
-  background: rgba(224, 102, 107, 0.12);
+  background: hsl(354 72% 60% / 0.12);
   border: 1px solid var(--text-error);
   color: var(--text-error);
   border-radius: var(--radius-m);

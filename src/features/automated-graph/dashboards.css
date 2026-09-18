@@ -42,7 +42,7 @@
   font-weight: 600;
   font-size: 12.5px;
 }
-.dv-table tr:nth-child(even) td { background: rgba(255, 255, 255, 0.015); }
+.dv-table tr:nth-child(even) td { background: hsl(var(--soil-h) 20% 60% / 0.03); }
 .dv-table td .internal-link { cursor: pointer; }
 .dv-generic {
   border: 1px solid var(--border-strong);

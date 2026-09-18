@@ -72,7 +72,7 @@ export async function openCheckout(opts: {
     subscription_id: opts.subscriptionId,
     name: 'KnowBase Pro',
     description: 'Monthly subscription — better AI model',
-    theme: { color: '#6366f1' },
+    theme: { color: '#f28136' },
     handler: opts.onSuccess,
     modal: { ondismiss: opts.onDismiss },
   })
