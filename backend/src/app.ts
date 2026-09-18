@@ -15,14 +15,36 @@ const allowedOrigins = (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.
 export function createApp() {
   const app = express()
 
+  // A missing Origin header does NOT mean same-origin — that was the original
+  // assumption here and it was wrong in the one case that matters. Browsers
+  // omit Origin on same-origin GETs but DO send it on same-origin POSTs, so
+  // with CORS_ORIGINS empty (correct for this single-origin deployment) every
+  // POST from our own frontend was rejected. Reads worked, writes and LLM
+  // calls 500'd with "Internal server error" and no mention of CORS.
+  //
+  // Same-origin is decided by comparing the Origin's host to the request's
+  // own Host, which needs the request — hence the delegate form.
   app.use(
-    cors({
-      origin(origin, callback) {
-        // Same-origin requests (no Origin header, e.g. curl/server-to-server) are allowed.
-        if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
-        callback(new Error('Not allowed by CORS'))
-      },
-      credentials: true,
+    cors((req: express.Request, callback: (err: Error | null, options?: cors.CorsOptions) => void) => {
+      const origin = req.headers.origin
+      if (!origin) return callback(null, { origin: true, credentials: true })
+
+      let sameOrigin = false
+      try {
+        sameOrigin = new URL(origin).host === req.headers.host
+      } catch {
+        sameOrigin = false // unparseable Origin — treat as untrusted
+      }
+
+      if (sameOrigin || allowedOrigins.includes(origin)) {
+        return callback(null, { origin: true, credentials: true })
+      }
+      // Reply without CORS headers rather than throwing. Throwing surfaced as
+      // a 500 "Internal server error", which says nothing about the actual
+      // cause; withholding the headers is what the browser expects and lets
+      // it report a real CORS failure in the console. Cross-site requests
+      // can't carry the session cookie anyway — it's SameSite=Lax.
+      callback(null, { origin: false })
     }),
   )
   app.use(cookieParser())
