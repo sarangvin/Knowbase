@@ -1,7 +1,14 @@
 .app {
   display: grid;
   grid-template-rows: var(--topbar-h) 1fr auto;
+  /* 100vh on a phone means the viewport with the browser's URL bar HIDDEN,
+     so the shell renders taller than what you can actually see and the
+     bottom nav ends up underneath the browser chrome — invisible, with
+     body{overflow:hidden} preventing any scroll to reach it. dvh tracks the
+     visible viewport instead, and shrinks/grows as the URL bar does. vh
+     stays first as the fallback for anything that lacks dvh. */
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-primary);
 }
 
