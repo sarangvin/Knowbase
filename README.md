@@ -41,6 +41,12 @@ actively restricting.
 - `npm run vercel-build` builds the backend (`tsc`) then the frontend (`vite build`).
   The backend must build first — `api/index.ts` imports `backend/dist/app.js`.
 - `vercel.json` rewrites `/api/*`, `/auth/*` and `/health` to the single function.
+  The catch-all groups are named `:vercelRest*`, and that name matters: Vercel
+  appends any capture group the destination doesn't consume to the rewritten
+  request **as a query parameter**. Naming the group `:path*` silently
+  overwrote the app's own `?path=` on every request, so `/api/vaults/mine/note`
+  looked up a note literally called `vaults/mine/note` and 404'd for every
+  path. Never name a capture group after a query param the API reads.
   One function, not one per route, so middleware order (notably the raw-body
   Razorpay webhook mounted before `express.json`) and the error handler stay in
   one place.
