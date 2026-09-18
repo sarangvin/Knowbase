@@ -132,21 +132,35 @@ export async function generateLearningPlan(topic: string): Promise<ValidatedPlan
   // model observed to fail transiently a meaningful fraction of the time, not
   // just theoretically) must fall through to the retry exactly like a
   // validation failure does, not abort immediately.
-  try {
-    const first = await freeProvider.streamChat(TOPIC_SYSTEM_PROMPT, buildUserPrompt(topic), {})
-    const validated = parseAndValidate(first)
-    if (validated) return validated
-  } catch {
-    /* fall through to retry */
+  //
+  // But it must not be *discarded*. Both attempts used to be wrapped in bare
+  // `catch {}`, so a server-side failure — no API key configured, a 429, a
+  // 502 from the upstream model — surfaced as "try a different topic
+  // phrasing", pointing the user at their own input when nothing they typed
+  // could possibly help. Keep the last real error and let it through.
+  let lastError: unknown = null
+
+  for (const buildPrompt of [buildUserPrompt, buildRetryUserPrompt]) {
+    try {
+      const raw = await freeProvider.streamChat(TOPIC_SYSTEM_PROMPT, buildPrompt(topic), {})
+      const validated = parseAndValidate(raw)
+      if (validated) return validated
+      // Reached the model fine, but the response didn't satisfy the schema.
+      // Log the raw text: this is the only place it exists, and without it a
+      // validation failure is indistinguishable from a transport failure.
+      console.warn('[learning-plan] response failed validation:', raw.slice(0, 2000))
+      lastError = new Error(
+        "The model's reply didn't match the expected format — try again, or try a different topic phrasing.",
+      )
+    } catch (err) {
+      console.warn('[learning-plan] request failed:', err)
+      lastError = err
+    }
   }
 
-  try {
-    const second = await freeProvider.streamChat(TOPIC_SYSTEM_PROMPT, buildRetryUserPrompt(topic), {})
-    const revalidated = parseAndValidate(second)
-    if (revalidated) return revalidated
-  } catch {
-    /* fall through to the error below */
-  }
-
+  // A real error from the backend (it carries the server's own message, e.g.
+  // the missing-key or rate-limit text) is far more useful than a generic
+  // line, so prefer it.
+  if (lastError instanceof Error) throw lastError
   throw new Error("Couldn't generate a valid learning plan — try again, or try a different topic phrasing.")
 }
