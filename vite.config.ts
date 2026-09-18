@@ -5,12 +5,10 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // GitHub Pages serves this repo at https://<user>.github.io/Knowbase/,
-  // so all asset URLs must be prefixed with the repo name. NOTE: per the
-  // multi-tenant plan, production hosting moves off GitHub Pages onto a
-  // same-site subdomain alongside the backend (so session cookies aren't
-  // cross-site) — this `base` goes back to '/' once that migration happens.
-  base: '/Knowbase/',
+  // Frontend and API are served from one Vercel origin, so assets sit at the
+  // root and session cookies stay same-site. (This was '/Knowbase/' while the
+  // app was on GitHub Pages, which served it from a repo-name subpath.)
+  base: '/',
   build: {
     rollupOptions: {
       // admin.html is a deliberately separate bundle from the main app (own
