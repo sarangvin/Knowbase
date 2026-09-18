@@ -135,7 +135,11 @@ adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {
     .where(eq(users.id, req.params.id))
     .returning({ accessApproved: users.accessApproved, accessApprovedAt: users.accessApprovedAt })
 
-  res.json(row)
+  // snake_case to match GET /signins, which is raw SQL and therefore returns
+  // column names. Two casings for the same two fields across one resource is
+  // exactly the kind of mismatch that reads fine in curl and silently yields
+  // `undefined` in the client.
+  res.json({ access_approved: row.accessApproved, access_approved_at: row.accessApprovedAt })
 }))
 
 adminRouter.get('/users/:id', asyncHandler(async (req, res) => {

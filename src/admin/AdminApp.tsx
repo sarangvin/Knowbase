@@ -41,6 +41,10 @@ function VerifiedCell({ value }: { value: boolean | null }) {
  * but never asked. "Waiting" is the one that needs the owner's attention, so
  * it's the only one that gets a colour. */
 function AccessCell({ row }: { row: AdminSigninRow }) {
+  // The stored column is false for owners — resolveSession grants them access
+  // at request time rather than persisting it, so the raw row would render
+  // "No access" for the one account that always has it.
+  if (row.role === 'owner') return <span className="admin-pill admin-pill-yes">Always</span>
   if (row.access_approved) {
     return (
       <span className="admin-pill admin-pill-yes" title={row.access_approved_at ? `Approved ${new Date(row.access_approved_at).toLocaleString()}` : undefined}>
