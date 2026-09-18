@@ -151,7 +151,12 @@ export interface TopicNoteBody {
  *
  * `body` is the LLM-drafted first pass; omit or pass null to fall back to the
  * one-line summary. */
-export function buildTopicNote(title: string, s: Subtopic, body?: TopicNoteBody | null): string {
+export function buildTopicNote(
+  title: string,
+  s: Subtopic,
+  body?: TopicNoteBody | null,
+  opts?: { pending?: boolean },
+): string {
   const prereqLine =
     s.prerequisites.length === 0
       ? 'prerequisites: []'
@@ -168,7 +173,14 @@ export function buildTopicNote(title: string, s: Subtopic, body?: TopicNoteBody 
       ]
         .filter(Boolean)
         .join('\n')
-    : s.summary.trim()
+    : opts?.pending
+      // Written into the note itself rather than surfaced as app chrome: the
+      // reader finds out a fuller draft is coming at the moment they open the
+      // note and see only a sentence, which is exactly when the question
+      // occurs to them. It is replaced wholesale when the draft lands, and
+      // rewritten without this line if drafting fails.
+      ? `${s.summary.trim()}\n\n_Writing a fuller draft of this note…_`
+      : s.summary.trim()
 
   // Left empty deliberately: a model asked for "useful links" produces
   // confident, plausible URLs that frequently 404 or point somewhere

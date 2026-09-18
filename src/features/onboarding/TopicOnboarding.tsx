@@ -7,7 +7,8 @@ import { useVault } from '../../vault/vaultStore'
 import { generateLearningPlan, generateTopicNote, type ValidatedPlan } from './topicGeneration'
 import { disambiguateSpace, dedupeSegments, buildTopicNote, buildNextUpNote } from './notePlan'
 import { takePendingTopic } from './pendingTopic'
-import { fetchLibrarySpaces, adoptSpace, contributeToLibrary } from '../../vault/remoteSource'
+import { fetchLibrarySpaces, adoptSpace } from '../../vault/remoteSource'
+import { draftRemainingInBackground, type PendingDraft } from './backgroundDrafts'
 import { Sparkles } from '../../ui/icons'
 import './onboarding.css'
 
@@ -28,11 +29,16 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
   const [stage, setStage] = useState<Stage>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [pending, setPending] = useState<PendingWrite | null>(null)
-  const [drafted, setDrafted] = useState(0)
-  const [totalTopics, setTotalTopics] = useState(0)
   // Guards the auto-start below against StrictMode's double-invoked effects
   // and against any later re-render: a pending topic must generate once.
   const autoStarted = useRef(false)
+  // Handed to the background pass once the notes are on disk.
+  const pendingRef = useRef<{
+    space: string
+    siblings: string[]
+    drafts: PendingDraft[]
+    done: { path: string; content: string }[]
+  } | null>(null)
 
   // Drafts a first-pass body for every subtopic, then assembles the writes.
   // The drafts run in parallel: they're independent, and five sequential
@@ -42,27 +48,50 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
   // whose draft fails simply keeps the summary-only body — a partial set of
   // drafted notes is strictly better than failing the whole setup, which is
   // already written and validated by this point.
+  // Drafts ONLY the note the user will land on, then hands the rest to
+  // draftRemainingInBackground. Waiting on all five meant holding someone on
+  // a spinner for the slowest of five model calls before they had seen
+  // anything at all.
   const buildEntries = async (plan: ValidatedPlan): Promise<PendingWrite> => {
     const space = disambiguateSpace(plan.space, index)
     const segments = dedupeSegments(plan.subtopics.map((s) => s.title))
     const titles = plan.subtopics.map((s) => s.title)
+    const pathOf = (i: number) => `Automated Graph/${space}/Topics/${segments[i]}.md`
 
-    setDrafted(0)
-    const bodies = await Promise.all(
-      plan.subtopics.map((s) =>
-        generateTopicNote(space, s, titles).then((body) => {
-          setDrafted((n) => n + 1)
-          return body
-        }),
-      ),
-    )
+    // A topic with no prerequisites — that is where the plan says to begin,
+    // and it is what Next Up will surface first.
+    const firstIdx = Math.max(0, plan.subtopics.findIndex((s) => s.prerequisites.length === 0))
+
+    const firstBody = await generateTopicNote(space, plan.subtopics[firstIdx], titles)
 
     const entries = plan.subtopics.map((s, i) => ({
-      path: `Automated Graph/${space}/Topics/${segments[i]}.md`,
-      content: buildTopicNote(s.title, s, bodies[i]),
+      path: pathOf(i),
+      content:
+        i === firstIdx
+          ? buildTopicNote(s.title, s, firstBody)
+          : buildTopicNote(s.title, s, null, { pending: true }),
     }))
     const openPath = `Automated Graph/${space}/Next Up.md`
     entries.push({ path: openPath, content: buildNextUpNote(space) })
+
+    // Captured before the write so the background pass can tell an untouched
+    // note from one the user has since edited.
+    pendingRef.current = {
+      space,
+      siblings: titles,
+      drafts: plan.subtopics
+        .map((s, i): PendingDraft | null =>
+          i === firstIdx
+            ? null
+            : { path: pathOf(i), title: s.title, subtopic: s, placeholder: entries[i].content },
+        )
+        .filter((d): d is PendingDraft => d !== null),
+      done: [
+        { path: pathOf(firstIdx), content: entries[firstIdx].content },
+        { path: openPath, content: buildNextUpNote(space) },
+      ],
+    }
+
     return { entries, openPath }
   }
 
@@ -121,15 +150,15 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
 
       setStage('generating')
       const plan = await generateLearningPlan(t)
-      setTotalTopics(plan.subtopics.length)
       setStage('drafting')
       const write = await buildEntries(plan)
       setPending(write)
       await runWrite(write)
-      // Contribute the drafts as created, before the user edits anything, so
-      // only AI-written content ever leaves their vault. Deliberately not
-      // awaited ahead of the user seeing their notes.
-      void contributeToLibrary(write.entries)
+      // The user is in their vault by now. Finish the other notes behind
+      // them; this deliberately outlives this component, which unmounts as
+      // soon as the vault stops being empty.
+      const pend = pendingRef.current
+      if (pend) draftRemainingInBackground(pend.space, pend.drafts, pend.siblings, pend.done)
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : String(e))
       setStage('error')
@@ -183,7 +212,7 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
         {stage === 'drafting' && (
           <div className="ob-actions">
             <p className="ob-note">
-              <span className="spinner" /> Drafting notes… {drafted}/{totalTopics}
+              <span className="spinner" /> Writing your first note…
             </p>
           </div>
         )}
