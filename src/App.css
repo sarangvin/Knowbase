@@ -1,6 +1,15 @@
 .app {
   display: grid;
   grid-template-rows: var(--topbar-h) 1fr auto;
+  /* minmax(0, 1fr), not the implicit `auto` column. An auto-sized grid track
+     refuses to shrink below its items' min-content width, so one child with
+     a wide min-content (a nowrap row, a table) grows the whole grid past the
+     viewport — and because body hides overflow, the result is the entire
+     shell, nav and top bar included, cropped by the same amount on the right
+     with no way to scroll to it. This is the grid counterpart of min-width:0
+     on a flex item. */
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
   /* 100vh on a phone means the viewport with the browser's URL bar HIDDEN,
      so the shell renders taller than what you can actually see and the
      bottom nav ends up underneath the browser chrome — invisible, with
@@ -44,7 +53,7 @@
 .crumb-sep { margin: 0 5px; color: var(--text-faint); opacity: 0.5; }
 
 /* ── Body / columns ──────────────────────────────────────────────────────── */
-.app-body { display: flex; min-height: 0; position: relative; }
+.app-body { display: flex; min-height: 0; min-width: 0; position: relative; overflow: hidden; }
 /* The file tree is a bottom-nav destination now, not a docked column. */
 .files-pane { height: 100%; overflow: auto; background: var(--bg-sidebar); }
 .right-sidebar-wrap {
@@ -58,7 +67,7 @@
 .right-sidebar-wrap.collapsed { width: 0; flex-basis: 0; border-left: none; }
 
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.main-content { flex: 1; min-height: 0; overflow: hidden; }
+.main-content { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
 
 .drawer-backdrop { display: none; }
 
@@ -177,6 +186,7 @@
   z-index: 20;
 }
 .bottomnav-side { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.bottomnav, .bottomnav-tabs { min-width: 0; max-width: 100%; }
 .bottomnav-right { justify-content: flex-end; white-space: nowrap; }
 .bottomnav-tabs { display: flex; align-items: center; gap: 2px; }
 
@@ -185,8 +195,9 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  min-width: 68px;
+  min-width: 0;
   padding: 5px 10px 4px;
+  overflow: hidden;
   border-radius: var(--radius-m);
   color: var(--text-faint);
   font-size: 11px;
@@ -197,7 +208,7 @@
 .navtab-active { color: var(--accent); }
 .navtab-active:hover { color: var(--accent); }
 .navtab:disabled { opacity: 0.35; cursor: default; }
-.navtab-label { white-space: nowrap; }
+.navtab-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
 /* Phones: the five destinations take the full width and the supporting
    columns step aside. Account stays reachable through the Settings tab. */
