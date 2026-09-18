@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react'
 import {
   fetchUsers,
   fetchSignins,
+  fetchSpaces,
   setApproved,
   fetchUserDetail,
   fetchCurrentUser,
   type AdminUserRow,
   type AdminSigninRow,
+  type AdminSpaceRow,
   type AdminUserDetail,
 } from './api'
 import './admin.css'
 
-type Tab = 'users' | 'signins'
+type Tab = 'users' | 'signins' | 'spaces'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -72,6 +74,8 @@ export function AdminApp() {
   // Ids with an approve/revoke request in flight — disables just that row's
   // button rather than blocking the whole table.
   const [busy, setBusy] = useState<Set<string>>(new Set())
+  const [spaces, setSpaces] = useState<AdminSpaceRow[]>([])
+  const [library, setLibrary] = useState({ spaces: 0, notes: 0 })
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -104,6 +108,12 @@ export function AdminApp() {
         ? fetchUsers(page).then((data) => {
             setRows(data.users)
             setTotal(data.total)
+          })
+        : tab === 'spaces'
+        ? fetchSpaces().then((data) => {
+            setSpaces(data.rows)
+            setLibrary(data.library)
+            setTotal(data.rows.length)
           })
         : fetchSignins(page).then((data) => {
             setSignins(data.signins)
@@ -202,11 +212,66 @@ export function AdminApp() {
         >
           Sign-ins
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'spaces'}
+          className={`admin-tab${tab === 'spaces' ? ' admin-tab-active' : ''}`}
+          onClick={() => setTab('spaces')}
+        >
+          Vault concepts
+        </button>
       </div>
 
       {error && <div className="admin-error">{error}</div>}
 
-      {tab === 'signins' ? (
+      {tab === 'spaces' ? (
+        <>
+          <p className="admin-dim">
+            One row per space in a user's vault. A user with none has signed up but never
+            generated anything. Reuse corpus: <strong>{library.spaces}</strong> space
+            {library.spaces === 1 ? '' : 's'}, <strong>{library.notes}</strong> notes.
+          </p>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Live vault</th>
+                <th>Notes</th>
+                <th>Vault created</th>
+                <th>First seen</th>
+                <th>Last updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spaces.map((r, i) => (
+                <tr key={`${r.user_id}:${r.space ?? i}`} onClick={() => openDetail(r.user_id)} className="admin-row">
+                  <td>
+                    {r.email}
+                    {r.role === 'owner' && <span className="admin-badge">owner</span>}
+                    {!r.access_approved && r.role !== 'owner' && (
+                      <div className="admin-subtle">not approved</div>
+                    )}
+                  </td>
+                  <td>
+                    {r.space ? (
+                      r.space
+                    ) : (
+                      <span className="admin-pill admin-pill-unknown">no vault yet</span>
+                    )}
+                  </td>
+                  <td>{r.space ? r.note_count : '—'}</td>
+                  <td>{formatDate(r.vault_created)}</td>
+                  <td title="Oldest surviving note timestamp — notes have no creation date, so editing every note moves this forward.">
+                    {formatDate(r.first_seen)}
+                  </td>
+                  <td>{formatDate(r.last_updated)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!loading && spaces.length === 0 && <p className="admin-dim">No users yet.</p>}
+        </>
+      ) : tab === 'signins' ? (
         <>
           <p className="admin-dim">
             {total} account{total === 1 ? '' : 's'} have signed in ·{' '}
@@ -297,11 +362,16 @@ export function AdminApp() {
       )}
       {loading && <p className="admin-dim">Loading…</p>}
 
-      <div className="admin-pager">
-        <button className="admin-btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-        <span className="admin-dim">Page {page} / {pageCount}</span>
-        <button className="admin-btn" disabled={page >= pageCount} onClick={() => setPage((p) => p + 1)}>Next</button>
-      </div>
+      {/* /spaces returns every row at once — it is one row per space, not per
+          note, so it stays small. Showing a pager there would imply pages
+          that do not exist. */}
+      {tab !== 'spaces' && (
+        <div className="admin-pager">
+          <button className="admin-btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+          <span className="admin-dim">Page {page} / {pageCount}</span>
+          <button className="admin-btn" disabled={page >= pageCount} onClick={() => setPage((p) => p + 1)}>Next</button>
+        </div>
+      )}
 
       {selected && (
         <div className="admin-overlay" onClick={() => setSelected(null)}>

@@ -105,6 +105,62 @@ adminRouter.get('/signins', asyncHandler(async (req, res) => {
 // An owner's own row is refused rather than silently ignored: resolveSession
 // forces accessApproved true for owners, so a "revoked" owner would still
 // have full access and the admin table would show a state that isn't real.
+// Vault concepts: what each user actually has in their vault, one row per
+// space ("Automated Graph/<Space>/…"). A user with several spaces gets
+// several rows; a signed-up user with an empty vault still gets one, because
+// "signed up and never generated anything" is the single most useful thing
+// this table can tell you.
+//
+// Two different notions of "first used", deliberately kept apart:
+//   • vault_created  — exact. When their personal vault row was created.
+//   • first_seen     — approximate. notes has only mtime, no created_at, so
+//     this is the oldest surviving note timestamp for that space. Editing
+//     every note in a space drags it forward. Labelled as such in the UI
+//     rather than presented as a creation date it cannot be.
+adminRouter.get('/spaces', asyncHandler(async (_req, res) => {
+  const result = await db.execute(sql`
+    SELECT
+      u.id            AS user_id,
+      u.email,
+      u.role,
+      u.access_approved,
+      v.created_at    AS vault_created,
+      sp.space,
+      COALESCE(sp.n, 0)::int AS note_count,
+      sp.first_seen,
+      sp.last_updated
+    FROM users u
+    LEFT JOIN vaults v
+      ON v.owner_user_id = u.id AND v.kind = 'personal'
+    LEFT JOIN LATERAL (
+      SELECT
+        split_part(substring(n.path FROM char_length('Automated Graph/') + 1), '/', 1) AS space,
+        count(*)                AS n,
+        min(n.mtime)            AS first_seen,
+        max(n.mtime)            AS last_updated
+      FROM notes n
+      -- Two slashes after the root: a file sitting directly under
+      -- "Automated Graph/" is not a space, matching spaceOf().
+      WHERE n.vault_id = v.id AND n.path LIKE 'Automated Graph/%/%'
+      GROUP BY 1
+    ) sp ON TRUE
+    ORDER BY sp.last_updated DESC NULLS LAST, u.email
+  `)
+
+  // The corpus is not any one user's, so it is reported separately rather
+  // than as a row that would imply somebody owns it.
+  const [library] = (await db.execute(sql`
+    SELECT
+      count(DISTINCT split_part(substring(n.path FROM char_length('Automated Graph/') + 1), '/', 1))::int AS spaces,
+      count(*)::int AS notes
+    FROM notes n
+    JOIN vaults v ON v.id = n.vault_id
+    WHERE v.kind = 'global' AND n.path LIKE 'Automated Graph/%/%'
+  `)).rows as { spaces: number; notes: number }[]
+
+  res.json({ rows: result.rows, library })
+}))
+
 adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {
   const approved = req.body?.approved
   if (typeof approved !== 'boolean') {

@@ -46,6 +46,26 @@ export interface AdminSigninsResponse {
   pending: number
 }
 
+export interface AdminSpaceRow {
+  user_id: string
+  email: string
+  role: string
+  access_approved: boolean
+  /** Exact: when their personal vault row was created. Null if they have none. */
+  vault_created: string | null
+  /** Null when the user has signed up but generated nothing. */
+  space: string | null
+  note_count: number
+  /** Approximate — oldest surviving note mtime, since notes have no created_at. */
+  first_seen: string | null
+  last_updated: string | null
+}
+
+export interface AdminSpacesResponse {
+  rows: AdminSpaceRow[]
+  library: { spaces: number; notes: number }
+}
+
 export interface UsageEventRow {
   id: number
   event_type: string
@@ -89,6 +109,10 @@ export function fetchUsers(page: number, pageSize = 20): Promise<AdminUsersRespo
 
 export function fetchSignins(page: number, pageSize = 20): Promise<AdminSigninsResponse> {
   return api(`/api/admin/signins?page=${page}&pageSize=${pageSize}`)
+}
+
+export function fetchSpaces(): Promise<AdminSpacesResponse> {
+  return api('/api/admin/spaces')
 }
 
 export function setApproved(id: string, approved: boolean): Promise<{ access_approved: boolean; access_approved_at: string | null }> {
