@@ -4,12 +4,12 @@
 // vault, and land them on the new space's Next Up dashboard.
 import { useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { generateLearningPlan, type ValidatedPlan } from './topicGeneration'
+import { generateLearningPlan, generateTopicNote, type ValidatedPlan } from './topicGeneration'
 import { disambiguateSpace, dedupeSegments, buildTopicNote, buildNextUpNote } from './notePlan'
 import { Sparkles } from '../../ui/icons'
 import './onboarding.css'
 
-type Stage = 'idle' | 'generating' | 'writing' | 'error'
+type Stage = 'idle' | 'generating' | 'drafting' | 'writing' | 'error'
 
 interface PendingWrite {
   entries: { path: string; content: string }[]
@@ -24,13 +24,35 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
   const [stage, setStage] = useState<Stage>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [pending, setPending] = useState<PendingWrite | null>(null)
+  const [drafted, setDrafted] = useState(0)
+  const [totalTopics, setTotalTopics] = useState(0)
 
-  const buildEntries = (plan: ValidatedPlan): PendingWrite => {
+  // Drafts a first-pass body for every subtopic, then assembles the writes.
+  // The drafts run in parallel: they're independent, and five sequential
+  // round-trips would dominate the wall-clock time of onboarding.
+  //
+  // generateTopicNote resolves to null instead of rejecting, so a subtopic
+  // whose draft fails simply keeps the summary-only body — a partial set of
+  // drafted notes is strictly better than failing the whole setup, which is
+  // already written and validated by this point.
+  const buildEntries = async (plan: ValidatedPlan): Promise<PendingWrite> => {
     const space = disambiguateSpace(plan.space, index)
     const segments = dedupeSegments(plan.subtopics.map((s) => s.title))
+    const titles = plan.subtopics.map((s) => s.title)
+
+    setDrafted(0)
+    const bodies = await Promise.all(
+      plan.subtopics.map((s) =>
+        generateTopicNote(space, s, titles).then((body) => {
+          setDrafted((n) => n + 1)
+          return body
+        }),
+      ),
+    )
+
     const entries = plan.subtopics.map((s, i) => ({
       path: `Automated Graph/${space}/Topics/${segments[i]}.md`,
-      content: buildTopicNote(s.title, s),
+      content: buildTopicNote(s.title, s, bodies[i]),
     }))
     const openPath = `Automated Graph/${space}/Next Up.md`
     entries.push({ path: openPath, content: buildNextUpNote(space) })
@@ -50,13 +72,17 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
   }
 
   const runGeneration = async () => {
-    if (!topic.trim() || stage === 'generating' || stage === 'writing') return
+    // Every in-flight stage must be listed here, not just the first one —
+    // Enter is still bound while a run is in progress.
+    if (!topic.trim() || stage === 'generating' || stage === 'drafting' || stage === 'writing') return
     setStage('generating')
     setErrorMsg('')
     setPending(null)
     try {
       const plan = await generateLearningPlan(topic.trim())
-      const write = buildEntries(plan)
+      setTotalTopics(plan.subtopics.length)
+      setStage('drafting')
+      const write = await buildEntries(plan)
       setPending(write)
       await runWrite(write)
     } catch (e) {
@@ -65,7 +91,7 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
     }
   }
 
-  const isBusy = stage === 'generating' || stage === 'writing'
+  const isBusy = stage === 'generating' || stage === 'drafting' || stage === 'writing'
 
   return (
     <div className="onboarding">
@@ -84,6 +110,13 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
         {stage === 'generating' && (
           <div className="ob-actions">
             <p className="ob-note"><span className="spinner" /> Generating your learning plan…</p>
+          </div>
+        )}
+        {stage === 'drafting' && (
+          <div className="ob-actions">
+            <p className="ob-note">
+              <span className="spinner" /> Drafting notes… {drafted}/{totalTopics}
+            </p>
           </div>
         )}
         {stage === 'writing' && (

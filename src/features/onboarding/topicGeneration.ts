@@ -35,6 +35,83 @@ Rules:
   subtopic as its own prerequisite.
 - Keep titles short (a few words) and free of colons, slashes, brackets, or quotation marks.`
 
+const NOTE_SYSTEM_PROMPT = `You are writing the first draft of a study note for someone who is about to learn a
+subtopic for the first time. You will be given the overall subject, the subtopic, and the
+other subtopics in their learning plan.
+
+Rules:
+- Respond with ONLY a single JSON object. No markdown code fences, no prose before or after.
+- The JSON object must exactly match this shape:
+{
+  "overview": string,     // 2-3 short paragraphs of plain prose explaining what this subtopic
+                          // is and why it matters. Markdown emphasis is fine; no headings.
+  "key_points": string[], // 4-6 concrete, specific things worth knowing. Each one sentence.
+  "questions": string[]   // 3 questions the learner should be able to answer once they know
+                          // this. Real comprehension questions, not "what is X?".
+}
+- Write for a beginner: define jargon the first time you use it.
+- Be concrete. Prefer a specific example or number over a general claim.
+- Do NOT invent URLs, citations, book titles or paper references of any kind.
+- Do not mention that you are an AI or describe what you are doing.`
+
+function buildNotePrompt(space: string, s: Subtopic, siblings: string[]): string {
+  const others = siblings.filter((t) => t !== s.title)
+  return `Overall subject: "${space}"
+Subtopic to write about: "${s.title}"
+What it should cover: ${s.summary}
+${others.length ? `Other subtopics in the same plan (for context; don't duplicate them): ${others.join(', ')}` : ''}
+
+Write the first-draft study note for "${s.title}" as specified.`
+}
+
+export interface TopicNoteContent {
+  overview: string
+  keyPoints: string[]
+  questions: string[]
+}
+
+/** Exported for testing. Returns null unless there's at least an overview —
+ * a note with empty prose is worse than the plain summary fallback. */
+export function parseNoteContent(raw: string): TopicNoteContent | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stripFence(raw))
+  } catch {
+    return null
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+  const o = parsed as { overview?: unknown; key_points?: unknown; questions?: unknown }
+
+  const overview = typeof o.overview === 'string' ? o.overview.trim() : ''
+  if (!overview) return null
+
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(Boolean) : []
+
+  return { overview, keyPoints: strings(o.key_points), questions: strings(o.questions) }
+}
+
+/** First-draft note body for one subtopic. Resolves to null rather than
+ * throwing: a failed note must degrade that one note to the summary-only
+ * fallback, never fail the whole onboarding. One retry, same as the plan. */
+export async function generateTopicNote(
+  space: string,
+  s: Subtopic,
+  siblings: string[],
+): Promise<TopicNoteContent | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const raw = await freeProvider.streamChat(NOTE_SYSTEM_PROMPT, buildNotePrompt(space, s, siblings), {})
+      const parsed = parseNoteContent(raw)
+      if (parsed) return parsed
+      console.warn(`[topic-note] "${s.title}" failed validation:`, raw.slice(0, 500))
+    } catch (err) {
+      console.warn(`[topic-note] "${s.title}" request failed:`, err)
+    }
+  }
+  return null
+}
+
 function buildUserPrompt(topic: string): string {
   return `I want to learn about: "${topic}". Generate my starter learning plan as specified.`
 }

@@ -106,14 +106,77 @@ export function ensureFoundational(subtopics: Subtopic[]): Subtopic[] {
   return subtopics.map((s) => (s === weakest ? { ...s, prerequisites: [] } : s))
 }
 
+/** Generated prose is untrusted markdown dropped into a structured note. Two
+ * things would actually corrupt the file rather than merely look wrong:
+ * a line of `---` (parsed as frontmatter by Obsidian and by this app's own
+ * reader when it lands near the top), and an `h1`/`h2` heading, which would
+ * invent a section alongside the fixed AI Notes / My Notes / Questions
+ * skeleton the rest of the app relies on. Demote rather than strip, so the
+ * author's structure survives in a form that can't collide. */
+function sanitizeGeneratedMarkdown(md: string): string {
+  return md
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) return '' // horizontal rule / frontmatter fence
+      return line.replace(/^(\s*)(#{1,2})\s+/, '$1### ') // h1/h2 → h3, below our own sections
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** For values rendered as a single list item. Block-level demotion is wrong
+ * here: "### x" inside "- ### x" still reads as markup, and a newline would
+ * break out of the bullet entirely. Strip leading block markers and flatten
+ * to one line instead. */
+function sanitizeInline(text: string): string {
+  return text
+    .replace(/\s+/g, ' ')
+    // Rule first: "---" would otherwise lose a single dash to the bullet
+    // pattern below and survive as "--".
+    .replace(/^\s*(?:-{3,}|\*{3,}|_{3,})\s*/, '')
+    .replace(/^\s*(?:[#>]+|[-*+]|\d+\.)\s*/, '')
+    .trim()
+}
+
+export interface TopicNoteBody {
+  overview: string
+  keyPoints: string[]
+  questions: string[]
+}
+
 /** Matches the topicTemplate shape from features/explorer/NewNoteModal.tsx —
  * confidence/status/last_reviewed are always hardcoded here, never trusted
- * from generated data, since "brand new" is a product invariant. */
-export function buildTopicNote(title: string, s: Subtopic): string {
+ * from generated data, since "brand new" is a product invariant.
+ *
+ * `body` is the LLM-drafted first pass; omit or pass null to fall back to the
+ * one-line summary. */
+export function buildTopicNote(title: string, s: Subtopic, body?: TopicNoteBody | null): string {
   const prereqLine =
     s.prerequisites.length === 0
       ? 'prerequisites: []'
       : `prerequisites:\n${s.prerequisites.map((p) => `  - "[[${p}]]"`).join('\n')}`
+  // Falls back to the bare summary when note generation failed or was
+  // skipped, so a note is never empty and onboarding never depends on the
+  // second round of LLM calls succeeding.
+  const aiNotes = body
+    ? [
+        sanitizeGeneratedMarkdown(body.overview),
+        body.keyPoints.length
+          ? '\n**Key points**\n\n' + body.keyPoints.map((p) => `- ${sanitizeInline(p)}`).join('\n')
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : s.summary.trim()
+
+  // Left empty deliberately: a model asked for "useful links" produces
+  // confident, plausible URLs that frequently 404 or point somewhere
+  // unrelated. An empty section the reader fills in beats fabricated sources.
+  const questions = body?.questions.length
+    ? body.questions.map((q) => `- ${sanitizeInline(q)}`).join('\n') + '\n'
+    : ''
+
   return `---
 space:
 status: frontier
@@ -128,7 +191,7 @@ last_reviewed:
 
 ## AI Notes
 
-${s.summary.trim()}
+${aiNotes}
 
 ## Useful Links
 
@@ -138,7 +201,7 @@ ${s.summary.trim()}
 
 ## Questions
 
-`
+${questions}`
 }
 
 /** Adapted from the reference public/vault/Automated Graph/Economics/Next Up.md
