@@ -19,12 +19,19 @@ interface GeminiChunk {
 // (gemma-4-31b-it, gemma-4-26b-a4b-it), not Gemma 3 — model generations
 // change faster than this comment will, which is the whole point of keeping
 // this overridable via env var instead of trusting any hardcoded name.
-// gemma-4-31b-it was the default and is still listed as available, but every
-// generateContent call to it returns 500 INTERNAL — reproduced directly
-// against the API with curl, independent of this code, with and without a
-// systemInstruction. gemma-4-26b-a4b-it works and keeps the free tier on
-// Gemma as intended. Override with GEMINI_MODEL if this one goes the same way.
-export const DEFAULT_GEMINI_MODEL = 'gemma-4-26b-a4b-it'
+// Model history, because both previous choices failed in non-obvious ways:
+//   gemma-4-31b-it    — still listed by the API, but every generateContent
+//                       call returns 500 INTERNAL. Reproduced with plain curl.
+//   gemma-4-26b-a4b-it — works, but it is a "thinking" variant: on the
+//                       onboarding plan prompt it spends ~53s emitting ~8,000
+//                       characters of reasoning traces that this code then
+//                       discards, against a 60s Vercel function limit. Any
+//                       variance tipped it over and the user watched a
+//                       spinner until the request died.
+// gemini-3.5-flash-lite answers the same prompt in ~1.7s with no thinking
+// traces and identical schema-valid JSON — measured, not assumed. Override
+// with GEMINI_MODEL; note a change there needs a redeploy to take effect.
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite'
 
 export async function* streamGeminiChat(
   apiKey: string,
