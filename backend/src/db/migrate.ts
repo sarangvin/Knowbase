@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Pool } from 'pg'
+import { withStrictSsl } from './connectionString.js'
 
 // Migrations deliberately do NOT reuse db/client.ts. That one points at the
 // pooled URL, and DDL through PgBouncer's transaction pooling misbehaves
@@ -15,7 +16,7 @@ const connectionString =
 
 if (!connectionString) throw new Error('No database URL set for migrations')
 
-const pool = new Pool({ connectionString, max: 1 })
+const pool = new Pool({ connectionString: withStrictSsl(connectionString), max: 1 })
 await migrate(drizzle(pool), { migrationsFolder: './drizzle' })
 await pool.end()
 console.log('Migrations applied.')
