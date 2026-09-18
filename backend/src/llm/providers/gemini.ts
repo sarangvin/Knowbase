@@ -19,7 +19,12 @@ interface GeminiChunk {
 // (gemma-4-31b-it, gemma-4-26b-a4b-it), not Gemma 3 — model generations
 // change faster than this comment will, which is the whole point of keeping
 // this overridable via env var instead of trusting any hardcoded name.
-export const DEFAULT_GEMINI_MODEL = 'gemma-4-31b-it'
+// gemma-4-31b-it was the default and is still listed as available, but every
+// generateContent call to it returns 500 INTERNAL — reproduced directly
+// against the API with curl, independent of this code, with and without a
+// systemInstruction. gemma-4-26b-a4b-it works and keeps the free tier on
+// Gemma as intended. Override with GEMINI_MODEL if this one goes the same way.
+export const DEFAULT_GEMINI_MODEL = 'gemma-4-26b-a4b-it'
 
 export async function* streamGeminiChat(
   apiKey: string,
