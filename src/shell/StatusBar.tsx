@@ -1,4 +1,5 @@
 import { useVault } from '../vault/vaultStore'
+import { AccountButton } from './AccountButton'
 
 export function StatusBar() {
   const index = useVault((s) => s.index)
@@ -13,6 +14,7 @@ export function StatusBar() {
 
   return (
     <div className="statusbar">
+      <AccountButton />
       <span>{noteCount} notes</span>
       {words != null && <span>{words} words</span>}
       {backlinks != null && <span>{backlinks} backlinks</span>}

@@ -71,6 +71,16 @@ export const Pencil = (p: P) => (
     <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
   </svg>
 )
+export const User = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" />
+  </svg>
+)
+export const LogOut = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" />
+  </svg>
+)
 export const Envelope = (p: P) => (
   <svg {...base(p)}>
     <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 7 10 6 10-6" />
