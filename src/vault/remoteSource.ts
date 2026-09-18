@@ -88,6 +88,47 @@ export async function requestAccess(): Promise<string | null> {
   return data.accessRequestedAt
 }
 
+// ── Reuse corpus ────────────────────────────────────────────────────────────
+// Spaces someone has already generated. Users never browse this; it exists so
+// the same topic isn't drafted from scratch for every new person.
+
+export interface LibrarySpace {
+  name: string
+  /** Server-normalized match key (lowercased, punctuation collapsed). */
+  key: string
+  noteCount: number
+}
+
+export async function fetchLibrarySpaces(): Promise<LibrarySpace[]> {
+  const { spaces } = await api<{ spaces: LibrarySpace[] }>('/api/vaults/library/spaces')
+  return spaces
+}
+
+/** Copy a corpus space into the caller's own vault. */
+export async function adoptSpace(space: string): Promise<{ adopted: number; skipped: number; openPath: string }> {
+  return api('/api/vaults/mine/adopt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ space }),
+  })
+}
+
+/** Add freshly generated drafts to the corpus. Insert-only server-side.
+ * Never rejects: contributing is a side benefit, and the user's own notes are
+ * already saved by the time this runs — a failure here must not surface. */
+export async function contributeToLibrary(entries: { path: string; content: string }[]): Promise<void> {
+  try {
+    await fetch('/api/vaults/library/contribute', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries }),
+    })
+  } catch (err) {
+    console.warn('[library] contribution failed (ignored):', err)
+  }
+}
+
 export function signInWithGoogle(returnTo = '/'): void {
   window.location.href = `/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`
 }

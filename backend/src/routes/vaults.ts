@@ -1,7 +1,16 @@
-// "mine/*" = the caller's personal vault merged with the read-only global
-// vault (origin-tagged, personal shadows global on path collision — the same
-// "local overlay wins" rule SeedVaultSource already uses for the bundled demo
-// vault). "global/*" = the raw global vault, owner-only, for editing it.
+// "mine/*" = the caller's personal vault, and ONLY that. The global vault
+// used to be merged into every user's listing; it isn't any more. Merging
+// meant every user's file tree filled up with every other user's topics as
+// the corpus grew, which does not survive more than a handful of users.
+//
+// The global vault now has two jobs, neither of which is "appear in someone
+// else's sidebar":
+//   • the owner's own curated vault, edited through the owner-only /global/*
+//     routes below;
+//   • a reuse corpus — /library/spaces lists what has already been written,
+//     /mine/adopt copies a space into a user's own vault, and /library/
+//     contribute adds newly generated drafts. Users never see it directly;
+//     they get their own copy or nothing.
 import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
@@ -51,26 +60,17 @@ function parsePathParam(raw: unknown): string | { error: string } {
 
 vaultsRouter.get('/mine/notes', asyncHandler(async (req, res) => {
   const personalVaultId = await getOrCreatePersonalVaultId(req.user!.id)
-  const globalVaultId = await getGlobalVaultId()
 
   const personalRows = await db
     .select({ path: notes.path, sizeBytes: notes.sizeBytes, mtime: notes.mtime })
     .from(notes)
     .where(eq(notes.vaultId, personalVaultId))
-  const globalRows = globalVaultId
-    ? await db
-        .select({ path: notes.path, sizeBytes: notes.sizeBytes, mtime: notes.mtime })
-        .from(notes)
-        .where(eq(notes.vaultId, globalVaultId))
-    : []
 
-  const personalPaths = new Set(personalRows.map((r) => r.path))
-  const merged = [
-    ...personalRows.map((r) => ({ ...r, origin: 'personal' as const })),
-    // Personal shadows global on a path collision — global rows for paths the
-    // user already has a personal note at are dropped from the merged view.
-    ...globalRows.filter((r) => !personalPaths.has(r.path)).map((r) => ({ ...r, origin: 'global' as const })),
-  ]
+  // origin is still reported, and is still always 'personal' here. App.tsx
+  // keys its "brand new vault" check off it, and keeping the field means a
+  // client that predates this change reads an empty global set rather than
+  // an undefined one.
+  const merged = personalRows.map((r) => ({ ...r, origin: 'personal' as const }))
 
   res.json(
     merged.map((r) => ({
@@ -106,19 +106,9 @@ vaultsRouter.get('/mine/note', asyncHandler(async (req, res) => {
     return
   }
 
-  const globalVaultId = await getGlobalVaultId()
-  if (globalVaultId) {
-    const global = await db
-      .select({ content: notes.content })
-      .from(notes)
-      .where(and(eq(notes.vaultId, globalVaultId), eq(notes.path, path)))
-      .limit(1)
-    if (global[0]) {
-      res.json({ content: global[0].content })
-      return
-    }
-  }
-
+  // No global fallback: a user reads their own notes only. Content from the
+  // corpus reaches them by being copied into their vault (/mine/adopt), never
+  // by being read through from someone else's.
   res.status(404).json({ error: 'note not found' })
 }))
 
@@ -160,6 +150,182 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
 // somewhere to land without a 404 while a vault has zero assets.
 vaultsRouter.get('/mine/assets', asyncHandler(async (_req, res) => {
   res.json([])
+}))
+
+// ── Reuse corpus ────────────────────────────────────────────────────────────
+//
+// Spaces already written, so the eleventh person to ask for Kubernetes gets a
+// copy instead of six more model calls. Backed by the global vault, but users
+// never read through to it: they get their own copy in their own vault, which
+// they can then edit without affecting anyone else.
+
+const SPACE_ROOT = 'Automated Graph/'
+
+/** "Automated Graph/Economics/Topics/x.md" -> "Economics". Null for anything
+ * outside that layout, which the corpus doesn't describe. */
+function spaceOf(path: string): string | null {
+  if (!path.startsWith(SPACE_ROOT)) return null
+  const rest = path.slice(SPACE_ROOT.length)
+  const slash = rest.indexOf('/')
+  return slash > 0 ? rest.slice(0, slash) : null
+}
+
+/** Match key for "do we already have this topic?". Deliberately conservative:
+ * case and punctuation are noise, but anything cleverer (stemming, embeddings)
+ * risks handing someone a space about a different subject, which is far worse
+ * than regenerating one. */
+function normalizeTopic(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+vaultsRouter.get('/library/spaces', asyncHandler(async (_req, res) => {
+  const globalVaultId = await getGlobalVaultId()
+  if (!globalVaultId) {
+    res.json({ spaces: [] })
+    return
+  }
+  const rows = await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, globalVaultId))
+  const counts = new Map<string, number>()
+  for (const r of rows) {
+    const space = spaceOf(r.path)
+    if (space) counts.set(space, (counts.get(space) ?? 0) + 1)
+  }
+  res.json({
+    spaces: [...counts].map(([name, noteCount]) => ({ name, key: normalizeTopic(name), noteCount })),
+  })
+}))
+
+/** Copy one corpus space into the caller's own vault. Paths the user already
+ * has are skipped, never overwritten — adopting must not clobber work. */
+vaultsRouter.post('/mine/adopt', asyncHandler(async (req, res) => {
+  const space = typeof req.body?.space === 'string' ? req.body.space : null
+  if (!space || space.includes('/')) {
+    res.status(400).json({ error: 'body.space (a single space name) required' })
+    return
+  }
+
+  const globalVaultId = await getGlobalVaultId()
+  if (!globalVaultId) {
+    res.status(404).json({ error: 'nothing in the library yet' })
+    return
+  }
+
+  const source = await db
+    .select({ path: notes.path, content: notes.content })
+    .from(notes)
+    .where(eq(notes.vaultId, globalVaultId))
+  const wanted = source.filter((r) => spaceOf(r.path) === space)
+  if (wanted.length === 0) {
+    res.status(404).json({ error: 'no such space in the library' })
+    return
+  }
+
+  const personalVaultId = await getOrCreatePersonalVaultId(req.user!.id)
+  const existing = new Set(
+    (await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, personalVaultId))).map((r) => r.path),
+  )
+  const toInsert = wanted.filter((r) => !existing.has(r.path))
+
+  if (toInsert.length > 0) {
+    await db.insert(notes).values(
+      toInsert.map((r) => ({
+        vaultId: personalVaultId,
+        path: r.path,
+        content: r.content,
+        sizeBytes: Buffer.byteLength(r.content, 'utf8'),
+        mtime: new Date(),
+      })),
+    )
+  }
+
+  res.json({
+    adopted: toInsert.length,
+    skipped: wanted.length - toInsert.length,
+    openPath: `${SPACE_ROOT}${space}/Next Up.md`,
+  })
+  void logUsageEvent({ userId: req.user!.id, eventType: 'vault_sync', metadata: { adopted: space } })
+}))
+
+const MAX_CONTRIBUTION_NOTES = 40
+const MAX_CONTRIBUTION_BYTES = 512 * 1024
+
+/** Add freshly generated drafts to the corpus.
+ *
+ * This is the one place a non-owner writes to the global vault, so it is
+ * insert-only: onConflictDoNothing means an existing note — including
+ * anything the owner has curated — can never be modified or replaced through
+ * here. The worst a caller can do is add a path nobody was using, which the
+ * owner can delete from the global-edit view.
+ *
+ * Only AI-drafted content is sent (see the client), captured at creation
+ * before the user has edited anything, so nothing anyone considers private
+ * passes through this route. */
+vaultsRouter.post('/library/contribute', asyncHandler(async (req, res) => {
+  const raw = req.body?.entries
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_CONTRIBUTION_NOTES) {
+    res.status(400).json({ error: `body.entries must be 1-${MAX_CONTRIBUTION_NOTES} notes` })
+    return
+  }
+
+  const entries: { path: string; content: string }[] = []
+  let total = 0
+  for (const e of raw) {
+    if (typeof e?.path !== 'string' || typeof e?.content !== 'string') {
+      res.status(400).json({ error: 'each entry needs a string path and content' })
+      return
+    }
+    let path: string
+    try {
+      path = validateVaultPath(e.path)
+    } catch (err) {
+      res.status(400).json({ error: err instanceof PathError ? err.message : 'invalid path' })
+      return
+    }
+    // Confine contributions to the generated-space layout. Without this a
+    // caller could drop a file anywhere in the owner's vault, including over
+    // a path the owner intends to use later.
+    if (!spaceOf(path)) {
+      res.status(400).json({ error: `contributions must live under ${SPACE_ROOT}<space>/` })
+      return
+    }
+    total += Buffer.byteLength(e.content, 'utf8')
+    if (total > MAX_CONTRIBUTION_BYTES) {
+      res.status(413).json({ error: 'contribution too large' })
+      return
+    }
+    entries.push({ path, content: e.content })
+  }
+
+  const globalVaultId = await getGlobalVaultId()
+  if (!globalVaultId) {
+    // Not an error the user caused or can fix, and their own notes are
+    // already saved — the corpus simply doesn't exist yet.
+    res.json({ added: 0, reason: 'no global vault' })
+    return
+  }
+
+  const before = new Set(
+    (await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, globalVaultId))).map((r) => r.path),
+  )
+  const fresh = entries.filter((e) => !before.has(e.path))
+  if (fresh.length > 0) {
+    await db
+      .insert(notes)
+      .values(
+        fresh.map((e) => ({
+          vaultId: globalVaultId,
+          path: e.path,
+          content: e.content,
+          sizeBytes: Buffer.byteLength(e.content, 'utf8'),
+          mtime: new Date(),
+        })),
+      )
+      // Belt and braces alongside the filter above: two users finishing the
+      // same new topic at once would both pass the check, and the loser of
+      // that race must not error or overwrite.
+      .onConflictDoNothing({ target: [notes.vaultId, notes.path] })
+  }
+  res.json({ added: fresh.length, skipped: entries.length - fresh.length })
 }))
 
 // ── Owner-only: editing the raw global vault directly ───────────────────────

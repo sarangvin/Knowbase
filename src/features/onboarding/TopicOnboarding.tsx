@@ -7,10 +7,11 @@ import { useVault } from '../../vault/vaultStore'
 import { generateLearningPlan, generateTopicNote, type ValidatedPlan } from './topicGeneration'
 import { disambiguateSpace, dedupeSegments, buildTopicNote, buildNextUpNote } from './notePlan'
 import { takePendingTopic } from './pendingTopic'
+import { fetchLibrarySpaces, adoptSpace, contributeToLibrary } from '../../vault/remoteSource'
 import { Sparkles } from '../../ui/icons'
 import './onboarding.css'
 
-type Stage = 'idle' | 'generating' | 'drafting' | 'writing' | 'error'
+type Stage = 'idle' | 'checking' | 'adopting' | 'generating' | 'drafting' | 'writing' | 'error'
 
 interface PendingWrite {
   entries: { path: string; content: string }[]
@@ -20,6 +21,8 @@ interface PendingWrite {
 export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
   const index = useVault((s) => s.index)
   const createNotes = useVault((s) => s.createNotes)
+  const reload = useVault((s) => s.reload)
+  const openNote = useVault((s) => s.openNote)
 
   const [topic, setTopic] = useState('')
   const [stage, setStage] = useState<Stage>('idle')
@@ -78,23 +81,55 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
   const runGeneration = async () => {
     // Every in-flight stage must be listed here, not just the first one —
     // Enter is still bound while a run is in progress.
-    if (!topic.trim() || stage === 'generating' || stage === 'drafting' || stage === 'writing') return
+    if (!topic.trim() || isBusy) return
     await runGenerationFor(topic.trim())
   }
 
   // Takes the topic as an argument rather than reading state: the auto-start
   // effect runs in the same tick as its setTopic, so state would still be ''.
+  // Same normalization the server applies to space names, so a hit here is a
+  // hit there. Kept deliberately dumb — matching "Kubernetes" to "Kubernetes"
+  // is worth doing; guessing that "k8s" means the same thing risks handing
+  // someone a space about a different subject.
+  const normalizeTopic = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
   const runGenerationFor = async (t: string) => {
-    setStage('generating')
+    setStage('checking')
     setErrorMsg('')
     setPending(null)
     try {
+      // Someone may already have written this. Copying their drafts is
+      // instant and costs nothing, where generating is ~6 model calls.
+      try {
+        const spaces = await fetchLibrarySpaces()
+        const hit = spaces.find((sp) => sp.key === normalizeTopic(t))
+        if (hit) {
+          setStage('adopting')
+          const { openPath } = await adoptSpace(hit.name)
+          // Adoption happens server-side, so the client's index knows nothing
+          // about the new notes — re-list from the server rather than calling
+          // createNotes with an empty set, which would leave the index stale
+          // and then try to open a path it has never heard of.
+          await reload()
+          openNote(openPath, { replace: true })
+          return
+        }
+      } catch (err) {
+        // The corpus is an optimization. If looking it up fails, generate.
+        console.warn('[library] lookup failed, generating instead:', err)
+      }
+
+      setStage('generating')
       const plan = await generateLearningPlan(t)
       setTotalTopics(plan.subtopics.length)
       setStage('drafting')
       const write = await buildEntries(plan)
       setPending(write)
       await runWrite(write)
+      // Contribute the drafts as created, before the user edits anything, so
+      // only AI-written content ever leaves their vault. Deliberately not
+      // awaited ahead of the user seeing their notes.
+      void contributeToLibrary(write.entries)
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : String(e))
       setStage('error')
@@ -113,7 +148,8 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const isBusy = stage === 'generating' || stage === 'drafting' || stage === 'writing'
+  const isBusy =
+    stage === 'checking' || stage === 'adopting' || stage === 'generating' || stage === 'drafting' || stage === 'writing'
 
   return (
     <div className="onboarding">
@@ -129,6 +165,16 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
 
         {stage === 'error' && <div className="ob-error">{errorMsg}</div>}
 
+        {stage === 'checking' && (
+          <div className="ob-actions">
+            <p className="ob-note"><span className="spinner" /> Looking for an existing space…</p>
+          </div>
+        )}
+        {stage === 'adopting' && (
+          <div className="ob-actions">
+            <p className="ob-note"><span className="spinner" /> Found one — copying it into your vault…</p>
+          </div>
+        )}
         {stage === 'generating' && (
           <div className="ob-actions">
             <p className="ob-note"><span className="spinner" /> Generating your learning plan…</p>
