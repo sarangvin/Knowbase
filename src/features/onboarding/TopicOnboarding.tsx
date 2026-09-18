@@ -9,7 +9,7 @@ import { disambiguateSpace, dedupeSegments, buildTopicNote, buildNextUpNote } fr
 import { takePendingTopic } from './pendingTopic'
 import { fetchLibrarySpaces, adoptSpace } from '../../vault/remoteSource'
 import { draftRemainingInBackground, type PendingDraft } from './backgroundDrafts'
-import { Sparkles } from '../../ui/icons'
+import { Sparkles, Eye } from '../../ui/icons'
 import './onboarding.css'
 
 type Stage = 'idle' | 'checking' | 'adopting' | 'generating' | 'drafting' | 'writing' | 'error'
@@ -22,6 +22,7 @@ interface PendingWrite {
 export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
   const index = useVault((s) => s.index)
   const createNotes = useVault((s) => s.createNotes)
+  const loadSeed = useVault((s) => s.loadSeed)
   const reload = useVault((s) => s.reload)
   const openNote = useVault((s) => s.openNote)
 
@@ -250,11 +251,22 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
           </div>
         )}
 
-        <p className="ob-note" style={{ marginTop: 16 }}>
-          <button className="ob-linklike" onClick={onSkip} disabled={isBusy}>
+        {/* Never disabled, including mid-generation. This screen owns the
+            whole viewport — no nav, no back button — so disabling every way
+            out while the model runs leaves the user watching a spinner with
+            nothing they can press. Leaving is always allowed: the drafting
+            already handed to the server finishes regardless of what this
+            component does next.
+            Reuses .ob-secondary from the landing screen rather than adding a
+            class, because onboarding.css is being edited elsewhere. */}
+        <div className="ob-secondary">
+          <button className="ob-linklike" onClick={() => void loadSeed()}>
+            <Eye /> Explore a finished warren
+          </button>
+          <button className="ob-linklike" onClick={onSkip}>
             Skip for now — start with an empty vault
           </button>
-        </p>
+        </div>
       </div>
     </div>
   )
