@@ -167,8 +167,12 @@ export const useVault = create<VaultState>((set, get) => {
       _searchIndex = buildSearch(parsed)
       const tree = buildTree(files)
 
-      // Pick a sensible landing note: Welcome > Today > first note.
+      // Landing note: Next Up > Welcome > Today > first note. Next Up leads
+      // because it answers the question the product exists to answer — what
+      // should I study now — whereas Welcome is boilerplate the reader has
+      // already seen once.
       const preferred =
+        parsed.find((n) => /\/Next Up\.md$/i.test(n.path)) ??
         parsed.find((n) => /(^|\/)Welcome\.md$/i.test(n.path)) ??
         parsed.find((n) => /(^|\/)Today\.md$/i.test(n.path)) ??
         parsed[0]

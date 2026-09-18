@@ -26,15 +26,45 @@ export default function App() {
   const checkAuth = useVault((s) => s.checkAuth)
   const source = useVault((s) => s.source)
   const files = useVault((s) => s.files)
+  const loadRemote = useVault((s) => s.loadRemote)
   const [topicOnboardingSkipped, setTopicOnboardingSkipped] = useState(false)
+  // True until we know whether this visit resumes an existing session. Without
+  // it the landing screen paints for the length of an /auth/me round-trip and
+  // is then yanked away, which reads as a flash of "signed out" to someone who
+  // never signed out.
+  const [booting, setBooting] = useState(true)
   useKeybindings()
 
-  // On boot: try to restore a previously-opened folder and check for a signed-in
-  // Google session; otherwise the onboarding screen lets the user pick the demo
-  // vault, sign in for their cloud vault, or open their own local folder.
+  // On boot: resume whatever the visitor already had. A previously-opened
+  // local folder wins (it was an explicit choice and needs no network), then
+  // a signed-in, approved account goes straight to its cloud vault.
+  //
+  // Making a returning user pick their vault from a menu on every single
+  // visit is a toll for something they never changed. They only see the
+  // landing screen when there is genuinely a decision to make: no session, or
+  // an account still waiting on approval.
   useEffect(() => {
-    void tryRestoreFolder()
-    void checkAuth()
+    let cancelled = false
+    void (async () => {
+      try {
+        const restored = await tryRestoreFolder()
+        await checkAuth()
+        if (cancelled) return
+        // Re-read from the store rather than closing over props: both calls
+        // above are async and the values captured at mount are stale by now.
+        const { user, source: current } = useVault.getState()
+        if (restored || current) return
+        if (user?.accessApproved) await loadRemote()
+      } catch {
+        // Any failure here just means we fall through to the landing screen,
+        // which is a working state — never a dead spinner.
+      } finally {
+        if (!cancelled) setBooting(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -75,6 +105,16 @@ export default function App() {
     }
   }, [])
 
+  // Hold the splash while auto-resume is still deciding. Onboarding draws its
+  // own spinner once a vault is actually loading, so this only covers the gap
+  // before that starts.
+  if (booting && status !== 'ready') {
+    return (
+      <div className="onboarding">
+        <div className="spinner" />
+      </div>
+    )
+  }
   if (status !== 'ready') return <Onboarding />
 
   // A brand-new cloud user (personal vault has zero notes of its own, distinct
