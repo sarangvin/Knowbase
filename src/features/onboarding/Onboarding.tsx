@@ -20,7 +20,7 @@ function EarlyAccess({ requestedAt }: { requestedAt: string | null }) {
   if (sent) {
     return (
       <div className="ob-pending">
-        <Check /> Request received — we'll email you when your access is ready.
+        <Check /> Request received — we'll let you know when your access is ready.
       </div>
     )
   }
