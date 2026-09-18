@@ -47,6 +47,17 @@ function PropValue({ value }: { value: unknown }) {
     return <span className="prop-pill">{value}</span>
   }
   if (typeof value === 'boolean') return <span className="prop-pill">{value ? 'true' : 'false'}</span>
+  // js-yaml parses an unquoted YYYY-MM-DD into a Date, which would otherwise
+  // fall through to String() and print "Thu Jun 11 2026 05:30:00 GMT+0530…".
+  // Render it back as the plain date the file actually contains.
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return (
+      <span className="prop-pill">
+        {value.getUTCFullYear()}-{pad(value.getUTCMonth() + 1)}-{pad(value.getUTCDate())}
+      </span>
+    )
+  }
   if (value == null || value === '') return <span className="prop-empty">—</span>
   return <span className="prop-pill">{String(value)}</span>
 }
