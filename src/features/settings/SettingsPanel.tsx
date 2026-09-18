@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { listSavedKeys, saveKey, deleteKey, type SavedKey } from '../ask-ai/keys'
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
+import { User, LogOut, Cloud, Pencil } from '../../ui/icons'
 import './settings.css'
 
 /** `onClose` omitted renders the panel inline as a full pane (the Settings
@@ -9,6 +10,9 @@ import './settings.css'
 export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const user = useVault((s) => s.user)
   const loginWithGoogle = useVault((s) => s.loginWithGoogle)
+  const logout = useVault((s) => s.logout)
+  const loadRemote = useVault((s) => s.loadRemote)
+  const loadGlobalVault = useVault((s) => s.loadGlobalVault)
 
   const [keys, setKeys] = useState<SavedKey[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,6 +125,65 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const body = (
     <>
         <div className="settings-title">Settings</div>
+
+        {/* Account first: it answers "who am I signed in as" before any
+            question about plans or keys, and it is where someone looks for
+            sign-out. It used to be a popover on the status bar, which put a
+            rarely-needed menu permanently in the chrome. */}
+        <div className="settings-section">
+          <div className="settings-label">Account</div>
+          {user ? (
+            <>
+              <div className="settings-account">
+                {user.avatarUrl ? (
+                  <img className="settings-avatar" src={user.avatarUrl} alt="" />
+                ) : (
+                  <span className="settings-avatar settings-avatar-fallback"><User width={15} height={15} /></span>
+                )}
+                <div className="settings-account-who">
+                  <div className="settings-account-name">{user.displayName || user.email}</div>
+                  <div className="settings-dim" style={{ margin: 0 }}>
+                    {user.displayName ? user.email : null}
+                    {user.role === 'owner' ? (user.displayName ? ' · owner' : 'owner') : null}
+                    {!user.accessApproved && ' · early access pending'}
+                  </div>
+                </div>
+              </div>
+              <div className="settings-account-actions">
+                {user.accessApproved && (
+                  <button className="ask-btn" onClick={() => void loadRemote()}>
+                    <Cloud width={13} height={13} /> Open my cloud vault
+                  </button>
+                )}
+                {user.role === 'owner' && (
+                  <>
+                    <button className="ask-btn" onClick={() => void loadGlobalVault()}>
+                      <Pencil width={13} height={13} /> Edit the global vault
+                    </button>
+                    <a className="ask-btn" href="/admin"><User width={13} height={13} /> Admin</a>
+                  </>
+                )}
+                <button className="ask-btn" onClick={() => void logout()}>
+                  <LogOut width={13} height={13} /> Sign out
+                </button>
+              </div>
+              {!user.accessApproved && (
+                <p className="settings-dim">
+                  Your cloud vault unlocks once your early access request is approved.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="settings-dim">
+                Not signed in. Signing in saves your vault to your account and syncs it across devices.
+              </p>
+              <button className="ask-btn primary" onClick={loginWithGoogle}>
+                <User width={13} height={13} /> Create account or sign in
+              </button>
+            </>
+          )}
+        </div>
 
         {user && (
           <div className="settings-section">

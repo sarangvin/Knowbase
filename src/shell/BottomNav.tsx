@@ -6,12 +6,11 @@
 // in the same place, and nothing about it stops working at 375px, which is
 // the failure mode the old top-right icon row had.
 //
-// The bar also absorbs the status bar: the account control keeps its
-// bottom-left position and the note counts sit on the right, both hidden on
-// narrow screens where the five destinations need the whole width. Account
-// stays reachable there through the Settings tab.
+// The bar also absorbs the status bar: the note counts sit on the right,
+// hidden on narrow screens where the five destinations need the whole width.
+// The account lives in Settings — a menu you open a handful of times does not
+// earn permanent space in the chrome.
 import { useVault } from '../vault/vaultStore'
-import { AccountButton } from './AccountButton'
 import { spaceOfPath } from '../features/automated-graph/engine'
 import { Sparkles, Folder, Layers, HelpCircle, Settings } from '../ui/icons'
 
@@ -85,9 +84,9 @@ export function BottomNav() {
 
   return (
     <nav className="bottomnav" aria-label="Main">
-      <div className="bottomnav-side bottomnav-left">
-        <AccountButton />
-      </div>
+      {/* Empty, but kept: with 1fr on both sides the tab group stays centred
+          on the viewport rather than drifting with the width of the counts. */}
+      <div className="bottomnav-side bottomnav-left" />
 
       <div className="bottomnav-tabs" role="tablist">
         {tabs.map((t) => (
