@@ -62,7 +62,7 @@ export function BottomNav() {
   const tabs: { id: TabId; label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }[] = [
     {
       id: 'next',
-      label: 'Next learning',
+      label: 'Learn',
       icon: <Sparkles />,
       onClick: () => nextPath && openNote(nextPath),
       disabled: !nextPath,

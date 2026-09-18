@@ -13,7 +13,7 @@ import { useVault } from '../../vault/vaultStore'
 import { FsAccessVaultSource } from '../../vault/source'
 import { requestAccess } from '../../vault/remoteSource'
 import { setPendingTopic } from './pendingTopic'
-import { GraduationCap, Folder, Eye, Cloud, Pencil, Envelope, Check, ArrowRight } from '../../ui/icons'
+import { RabbitSolid, Folder, Eye, Cloud, Pencil, Envelope, Check, ArrowRight } from '../../ui/icons'
 import './onboarding.css'
 
 export function Onboarding() {
@@ -37,7 +37,7 @@ export function Onboarding() {
     return (
       <div className="onboarding">
         <div className="spinner" />
-        <p className="ob-sub">Indexing vault…</p>
+        <p className="ob-sub">Digging the tunnels…</p>
       </div>
     )
   }
@@ -79,17 +79,24 @@ export function Onboarding() {
     }
   }
 
-  const startLabel = user == null ? 'Sign in and build it' : awaitingApproval ? 'Request early access' : 'Build my space'
+  const startLabel = user == null ? 'Sign in and build it' : awaitingApproval ? 'Request early access' : 'Dig my warren'
 
   return (
     <div className="onboarding">
+      {/* Decorative only — the rings behind the card read as a burrow seen
+          from above, and are what makes the landing page feel like the
+          entrance to something rather than a generic sign-in. */}
+      <div className="ob-burrow" aria-hidden="true">
+        <span className="burrow" />
+      </div>
+
       <div className="ob-card">
         <div className="ob-logo">
-          <GraduationCap width={34} height={34} />
+          <RabbitSolid width={36} height={36} />
         </div>
         <h1 className="ob-title">What do you want to learn?</h1>
         <p className="ob-sub">
-          Name a topic and Rabbithole builds you a learning space — the subtopics worth knowing,
+          Name a topic and Rabbithole digs you a warren — the subtopics worth knowing,
           what to study in what order, and a first draft of notes for each.
         </p>
 
@@ -129,7 +136,7 @@ export function Onboarding() {
             hatches and the returning-user paths, not the main road. */}
         <div className="ob-secondary">
           <button className="ob-linklike" onClick={() => void loadSeed()}>
-            <Eye /> Explore a finished example
+            <Eye /> Explore a finished warren
           </button>
           {user != null && !awaitingApproval && (
             <button className="ob-linklike" onClick={() => void loadRemote()}>

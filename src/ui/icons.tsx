@@ -144,3 +144,55 @@ export const GraduationCap = (p: P) => (
     <path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c0 1 2.5 3 6 3s6-2 6-3v-5" />
   </svg>
 )
+
+/* ── Rabbit-hole set ────────────────────────────────────────────────────────
+   Hand-drawn on the same 24px grid as everything above. The rabbit has to
+   survive being rendered at 16px in the nav bar, which is why it is ears +
+   head + a nose dash and nothing else: eyes and whiskers turn to mush at that
+   size and only make the silhouette harder to read. ───────────────────────── */
+
+export const Rabbit = (p: P) => (
+  <svg {...base(p)}>
+    <ellipse cx="8.8" cy="7.4" rx="2" ry="4.8" transform="rotate(-15 8.8 7.4)" />
+    <ellipse cx="15.2" cy="7.4" rx="2" ry="4.8" transform="rotate(15 15.2 7.4)" />
+    <circle cx="12" cy="16" r="5" />
+    <path d="M10.6 16.2h2.8" />
+  </svg>
+)
+
+/* Filled companion to <Rabbit>, for logo-sized marks where an outline at
+   34px+ looks thin and unconfident. */
+export const RabbitSolid = (p: P) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <ellipse cx="8.8" cy="7.4" rx="2" ry="4.8" transform="rotate(-15 8.8 7.4)" />
+    <ellipse cx="15.2" cy="7.4" rx="2" ry="4.8" transform="rotate(15 15.2 7.4)" />
+    <circle cx="12" cy="16" r="5" />
+  </svg>
+)
+
+export const Carrot = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4.5 19.5 12.7 9.9l3.6 3.6z" />
+    <path d="M14.5 11.7 18.8 7.4M14.5 11.7 15.3 6.3M14.5 11.7 20 12.4" />
+  </svg>
+)
+
+/* A hole seen at an angle: three rings receding, the innermost closed. Used
+   for "down a level" / the burrow itself. */
+export const Burrow = (p: P) => (
+  <svg {...base(p)}>
+    <ellipse cx="12" cy="13" rx="9" ry="5.5" />
+    <ellipse cx="12" cy="14" rx="5.5" ry="3.3" />
+    <ellipse cx="12" cy="15" rx="2" ry="1.2" />
+  </svg>
+)
+
+export const Paw = (p: P) => (
+  <svg {...base(p)}>
+    <ellipse cx="6.6" cy="10.2" rx="1.8" ry="2.4" transform="rotate(-24 6.6 10.2)" />
+    <ellipse cx="10" cy="6.9" rx="1.8" ry="2.4" transform="rotate(-8 10 6.9)" />
+    <ellipse cx="14" cy="6.9" rx="1.8" ry="2.4" transform="rotate(8 14 6.9)" />
+    <ellipse cx="17.4" cy="10.2" rx="1.8" ry="2.4" transform="rotate(24 17.4 10.2)" />
+    <path d="M12 12.5c3.3 0 5.5 2.2 5.5 4.6 0 2-1.6 3.4-3.4 3.4-1 0-1.5-.4-2.1-.4s-1.1.4-2.1.4c-1.8 0-3.4-1.4-3.4-3.4 0-2.4 2.2-4.6 5.5-4.6Z" />
+  </svg>
+)

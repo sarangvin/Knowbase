@@ -177,9 +177,10 @@ export function buildTopicNote(
       // Written into the note itself rather than surfaced as app chrome: the
       // reader finds out a fuller draft is coming at the moment they open the
       // note and see only a sentence, which is exactly when the question
-      // occurs to them. It is replaced wholesale when the draft lands, and
-      // rewritten without this line if drafting fails.
-      ? `${s.summary.trim()}\n\n_Writing a fuller draft of this note…_`
+      // occurs to them. The server replaces this whole section when the draft
+      // lands, so it says to come back — the running client holds an
+      // in-memory index and will not notice the write until it re-reads.
+      ? `${s.summary.trim()}\n\n_A fuller draft of this note is being written — reopen the app in a minute to see it._`
       : s.summary.trim()
 
   // Left empty deliberately: a model asked for "useful links" produces

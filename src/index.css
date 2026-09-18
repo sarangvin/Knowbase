@@ -1,36 +1,56 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   KnowBase Web — design tokens + base styles. Obsidian-inspired dark theme.
+   Rabbithole — design tokens + base styles.
+
+   The theme is a burrow at dusk: warm soil-brown surfaces instead of neutral
+   grey, a carrot accent for anything actionable, rabbit-ear blush for tags and
+   clover green for success. Everything derives from the three hue tokens
+   below, so re-tinting the whole app is a one-line change.
+
    Feature panels MUST use these CSS variables (never hardcode colors) and the
    shared component classes below so the UI stays cohesive.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --accent-h: 258;
-  --accent: hsl(var(--accent-h) 70% 64%);
-  --accent-hover: hsl(var(--accent-h) 70% 70%);
-  --accent-soft: hsl(var(--accent-h) 70% 64% / 0.15);
+  /* The three hues the palette is built from. --soil-h warms every surface;
+     keeping saturation low on it is what stops the app reading as sepia. */
+  --soil-h: 26;
+  --accent-h: 24;   /* carrot */
+  --blush-h: 344;   /* rabbit ear */
 
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #181818;
-  --bg-sidebar: #161616;
-  --bg-elevated: #262626;
-  --bg-hover: #2a2a2a;
-  --bg-active: #303030;
-  --bg-modal: #202020;
+  --accent: hsl(var(--accent-h) 88% 58%);
+  --accent-hover: hsl(var(--accent-h) 92% 65%);
+  --accent-soft: hsl(var(--accent-h) 88% 58% / 0.14);
+  --accent-line: hsl(var(--accent-h) 70% 50% / 0.55);
+  /* The glow under an active tab / the burrow mouth on the landing page. */
+  --accent-glow: hsl(var(--accent-h) 90% 55% / 0.28);
 
-  --text-normal: #dcddde;
-  --text-muted: #999999;
-  --text-faint: #666666;
-  --text-on-accent: #ffffff;
-  --text-error: #e0666b;
-  --text-success: #6fbf7e;
+  --bg-primary: hsl(var(--soil-h) 12% 10%);
+  --bg-secondary: hsl(var(--soil-h) 13% 8%);
+  --bg-sidebar: hsl(var(--soil-h) 14% 7%);
+  --bg-elevated: hsl(var(--soil-h) 11% 15%);
+  --bg-hover: hsl(var(--soil-h) 11% 18%);
+  --bg-active: hsl(var(--soil-h) 12% 22%);
+  --bg-modal: hsl(var(--soil-h) 12% 12%);
+  /* The deepest tone — used where the UI should read as "further down". */
+  --bg-deep: hsl(var(--soil-h) 16% 5%);
 
-  --border: #2d2d2d;
-  --border-strong: #3a3a3a;
-  --divider: #262626;
+  /* Fur and parchment, not pure greys: neutral text on warm surfaces looks
+     faintly blue by contrast. */
+  --text-normal: hsl(30 22% 90%);
+  --text-muted: hsl(var(--soil-h) 12% 65%);
+  --text-faint: hsl(var(--soil-h) 10% 46%);
+  --text-on-accent: hsl(var(--soil-h) 40% 8%);
+  --text-error: hsl(354 72% 67%);
+  --text-success: hsl(140 42% 60%);
 
-  --tag-bg: hsl(var(--accent-h) 50% 60% / 0.15);
-  --tag-text: hsl(var(--accent-h) 60% 75%);
+  --border: hsl(var(--soil-h) 12% 19%);
+  --border-strong: hsl(var(--soil-h) 13% 26%);
+  --divider: hsl(var(--soil-h) 12% 15%);
+
+  /* Blush rather than the accent: tags are labels, not actions, and giving
+     them the carrot made every note look full of buttons. */
+  --tag-bg: hsl(var(--blush-h) 60% 62% / 0.16);
+  --tag-text: hsl(var(--blush-h) 72% 78%);
 
   --radius-s: 4px;
   --radius-m: 7px;
@@ -49,8 +69,8 @@
   --sidebar-w: 250px;
   --rightbar-w: 290px;
 
-  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55);
-  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 16px 48px hsl(var(--soil-h) 40% 2% / 0.6);
+  --shadow-pop: 0 8px 28px hsl(var(--soil-h) 40% 2% / 0.5);
 }
 
 * { box-sizing: border-box; }
@@ -92,14 +112,21 @@ input, textarea {
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+/* Selection picks up the carrot rather than the browser's default blue, which
+   is the one colour that would otherwise break the warm palette. */
+::selection { background: hsl(var(--accent-h) 80% 50% / 0.32); }
+
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
+  background: var(--border-strong);
   border-radius: 6px;
   border: 3px solid transparent;
   background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover { background: #4a4a4a; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--soil-h) 14% 34%);
+  background-clip: padding-box;
+}
 ::-webkit-scrollbar-corner { background: transparent; }
 
 /* ── Generic icon button used across chrome ─────────────────────────────── */
@@ -149,7 +176,7 @@ a:hover { text-decoration: underline; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: hsl(var(--soil-h) 30% 3% / 0.55);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -193,12 +220,49 @@ a:hover { text-decoration: underline; }
   padding: 28px 16px;
 }
 
-/* spinner */
+/* spinner — a burrow mouth: a ring being dug open, warm at the leading edge */
 .spinner {
   width: 22px; height: 22px;
   border: 2px solid var(--border-strong);
   border-top-color: var(--accent);
+  border-right-color: var(--accent-line);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Rabbit-hole flourishes ─────────────────────────────────────────────────
+   Shared decorative pieces. Both are pure CSS on purpose: they sit behind
+   real content, so they must never cost a request or block paint. ───────── */
+
+/* The burrow: concentric rings receding into the dark, lit from the rim.
+   Used as a backdrop wherever the app wants to say "you are going down".
+   `pointer-events: none` because it always sits over/behind live controls. */
+.burrow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side, transparent 58%, var(--accent-glow) 60%, transparent 62%),
+    radial-gradient(closest-side, transparent 40%, hsl(var(--accent-h) 80% 50% / 0.16) 42%, transparent 44%),
+    radial-gradient(closest-side, transparent 24%, hsl(var(--accent-h) 70% 45% / 0.1) 26%, transparent 28%),
+    radial-gradient(closest-side, var(--bg-deep) 0%, transparent 70%);
+}
+
+/* Ears. Drawn on the ::before of whatever they crown, so any element can
+   sprout them without extra markup — the two pseudo-element "leaves" are one
+   box each, rotated apart and rounded into ear shapes. */
+.has-ears { position: relative; }
+.has-ears::before,
+.has-ears::after {
+  content: '';
+  position: absolute;
+  top: -9px;
+  width: 6px;
+  height: 13px;
+  border-radius: 60% 60% 30% 30%;
+  background: currentColor;
+  opacity: 0.9;
+}
+.has-ears::before { left: calc(50% - 8px); transform: rotate(-16deg); }
+.has-ears::after { left: calc(50% + 2px); transform: rotate(16deg); }

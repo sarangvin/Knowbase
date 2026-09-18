@@ -12,6 +12,7 @@
     "db:seed-global": "tsx --env-file=.env src/db/seedGlobalVault.ts"
   },
   "dependencies": {
+    "@vercel/functions": "^3.9.8",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "drizzle-orm": "^0.44.7",
