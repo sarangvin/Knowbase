@@ -25,6 +25,10 @@ export interface AdminSigninRow {
   email_verified: boolean | null
   display_name: string | null
   role: string
+  /** Owner approval — distinct from email_verified above. */
+  access_approved: boolean
+  access_approved_at: string | null
+  access_requested_at: string | null
   created_at: string
   last_login_at: string
   login_count: number
@@ -38,6 +42,8 @@ export interface AdminSigninsResponse {
   verified: number
   unverified: number
   unknown: number
+  approved: number
+  pending: number
 }
 
 export interface UsageEventRow {
@@ -67,8 +73,8 @@ export interface AdminUserDetail {
   recentEvents: UsageEventRow[]
 }
 
-async function api<T>(path: string): Promise<T> {
-  const res = await fetch(path, { credentials: 'include' })
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {
     const err = new Error(`${path} failed: ${res.status}`) as Error & { status?: number }
     err.status = res.status
@@ -83,6 +89,14 @@ export function fetchUsers(page: number, pageSize = 20): Promise<AdminUsersRespo
 
 export function fetchSignins(page: number, pageSize = 20): Promise<AdminSigninsResponse> {
   return api(`/api/admin/signins?page=${page}&pageSize=${pageSize}`)
+}
+
+export function setApproved(id: string, approved: boolean): Promise<{ access_approved: boolean; access_approved_at: string | null }> {
+  return api(`/api/admin/users/${id}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approved }),
+  })
 }
 
 export function fetchUserDetail(id: string): Promise<AdminUserDetail> {

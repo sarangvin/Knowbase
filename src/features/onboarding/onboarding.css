@@ -62,6 +62,22 @@
   font-size: 13px;
   margin-bottom: 18px;
 }
+/* Deliberately not .ob-error styling: waiting for approval is the expected
+   state for a new signup, not something that went wrong. */
+.ob-pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line, var(--accent));
+  color: var(--accent);
+  border-radius: var(--radius-m);
+  padding: 10px 14px;
+  font-size: 13px;
+  text-align: left;
+}
+
 .ob-topic-input {
   width: 100%;
   min-width: 240px;

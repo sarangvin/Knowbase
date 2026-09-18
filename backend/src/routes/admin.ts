@@ -68,6 +68,7 @@ adminRouter.get('/signins', asyncHandler(async (req, res) => {
   const result = await db.execute(sql`
     SELECT
       u.id, u.email, u.email_verified, u.display_name, u.role,
+      u.access_approved, u.access_approved_at, u.access_requested_at,
       u.created_at, u.last_login_at,
       COALESCE(lg.login_count, 0)::int AS login_count
     FROM users u
@@ -85,11 +86,56 @@ adminRouter.get('/signins', asyncHandler(async (req, res) => {
       count(*)::int AS total,
       count(*) FILTER (WHERE email_verified IS TRUE)::int  AS verified,
       count(*) FILTER (WHERE email_verified IS FALSE)::int AS unverified,
-      count(*) FILTER (WHERE email_verified IS NULL)::int  AS unknown
+      count(*) FILTER (WHERE email_verified IS NULL)::int  AS unknown,
+      count(*) FILTER (WHERE access_approved)::int         AS approved,
+      count(*) FILTER (
+        WHERE NOT access_approved AND access_requested_at IS NOT NULL
+      )::int AS pending
     FROM users WHERE last_login_at IS NOT NULL
-  `)).rows as { total: number; verified: number; unverified: number; unknown: number }[]
+  `)).rows as {
+    total: number; verified: number; unverified: number; unknown: number
+    approved: number; pending: number
+  }[]
 
   res.json({ signins: result.rows, page, pageSize, ...counts })
+}))
+
+// Grant or revoke early access. Body: { approved: boolean }.
+//
+// An owner's own row is refused rather than silently ignored: resolveSession
+// forces accessApproved true for owners, so a "revoked" owner would still
+// have full access and the admin table would show a state that isn't real.
+adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {
+  const approved = req.body?.approved
+  if (typeof approved !== 'boolean') {
+    res.status(400).json({ error: 'body.approved (boolean) required' })
+    return
+  }
+
+  const target = await db
+    .select({ id: users.id, role: users.role })
+    .from(users)
+    .where(eq(users.id, req.params.id))
+    .limit(1)
+  if (!target[0]) {
+    res.status(404).json({ error: 'user not found' })
+    return
+  }
+  if (target[0].role === 'owner') {
+    res.status(400).json({ error: 'owners always have access; their approval cannot be changed' })
+    return
+  }
+
+  const [row] = await db
+    .update(users)
+    // Clearing the timestamp on revoke keeps "approved_at" meaning "when the
+    // access they currently hold was granted", not "when they were last
+    // approved at some point in the past".
+    .set({ accessApproved: approved, accessApprovedAt: approved ? new Date() : null })
+    .where(eq(users.id, req.params.id))
+    .returning({ accessApproved: users.accessApproved, accessApprovedAt: users.accessApprovedAt })
+
+  res.json(row)
 }))
 
 adminRouter.get('/users/:id', asyncHandler(async (req, res) => {

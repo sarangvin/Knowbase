@@ -68,11 +68,24 @@ export interface RemoteUser {
   avatarUrl: string | null
   role: string
   planTier: string
+  /** Owner approval for cloud features. Owners are always true. */
+  accessApproved: boolean
+  /** When they asked for access; null if they never have. */
+  accessRequestedAt: string | null
 }
 
 export async function fetchCurrentUser(): Promise<RemoteUser | null> {
   const { user } = await api<{ user: RemoteUser | null }>('/auth/me')
   return user
+}
+
+/** Ask the owner for early access. Idempotent server-side — the first
+ * request's timestamp is the one kept. */
+export async function requestAccess(): Promise<string | null> {
+  const res = await fetch('/auth/request-access', { method: 'POST', credentials: 'include' })
+  if (!res.ok) throw new Error(`Could not send the request: ${res.status}`)
+  const data = (await res.json()) as { accessRequestedAt: string | null }
+  return data.accessRequestedAt
 }
 
 export function signInWithGoogle(returnTo = '/'): void {

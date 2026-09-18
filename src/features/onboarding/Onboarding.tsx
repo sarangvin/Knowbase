@@ -1,7 +1,51 @@
+import { useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { FsAccessVaultSource } from '../../vault/source'
-import { GraduationCap, Folder, Eye, Cloud, Pencil } from '../../ui/icons'
+import { requestAccess } from '../../vault/remoteSource'
+import { GraduationCap, Folder, Eye, Cloud, Pencil, Envelope, Check } from '../../ui/icons'
 import './onboarding.css'
+
+/** Shown to a signed-in user the owner hasn't approved yet. The cloud vault
+ * and every LLM route are gated server-side (requireApproved), so this is the
+ * honest presentation of a real restriction, not a soft UI hint — offering an
+ * "Open my cloud vault" button here would just produce a 403.
+ *
+ * The demo vault and "open my own folder" stay available: both are entirely
+ * client-side and cost the owner nothing. */
+function EarlyAccess({ requestedAt }: { requestedAt: string | null }) {
+  const [sent, setSent] = useState<string | null>(requestedAt)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (sent) {
+    return (
+      <div className="ob-pending">
+        <Check /> Request received — we'll email you when your access is ready.
+      </div>
+    )
+  }
+
+  const send = async () => {
+    setSending(true)
+    setError(null)
+    try {
+      setSent(await requestAccess())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <>
+      <button className="ob-btn" disabled={sending} onClick={() => void send()}>
+        <Envelope /> {sending ? 'Sending…' : 'Sign up for early access'}
+      </button>
+      {error && <div className="ob-error">{error}</div>}
+    </>
+  )
+}
 
 export function Onboarding() {
   const status = useVault((s) => s.status)
@@ -24,13 +68,15 @@ export function Onboarding() {
     )
   }
 
+  const awaitingApproval = user != null && !user.accessApproved
+
   return (
     <div className="onboarding">
       <div className="ob-card">
         <div className="ob-logo">
           <GraduationCap width={34} height={34} />
         </div>
-        <h1 className="ob-title">KnowBase</h1>
+        <h1 className="ob-title">Rabbithole</h1>
         <p className="ob-sub">
           A local-first knowledge base. Browse the linked graph, follow backlinks, and learn what
           to study next — all in your browser.
@@ -42,15 +88,19 @@ export function Onboarding() {
           <button className="ob-btn primary" onClick={() => void loadSeed()}>
             <Eye /> Explore the demo vault
           </button>
-          {user ? (
-            <button className="ob-btn" onClick={() => void loadRemote()}>
-              <Cloud /> Open my cloud vault
-            </button>
-          ) : (
+
+          {user == null && (
             <button className="ob-btn" onClick={loginWithGoogle}>
               <Cloud /> Sign in with Google
             </button>
           )}
+          {user != null && !awaitingApproval && (
+            <button className="ob-btn" onClick={() => void loadRemote()}>
+              <Cloud /> Open my cloud vault
+            </button>
+          )}
+          {awaitingApproval && <EarlyAccess requestedAt={user.accessRequestedAt} />}
+
           {user?.role === 'owner' && (
             <button className="ob-btn" onClick={() => void loadGlobalVault()}>
               <Pencil /> Edit the global vault

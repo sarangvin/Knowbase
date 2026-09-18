@@ -95,6 +95,20 @@
 /* Unknown is muted rather than coloured — it's an absence of information, and
    giving it a warning colour would read as a problem with the account. */
 .admin-pill-unknown { background: var(--bg-elevated); color: var(--text-faint); cursor: help; }
+/* The only state that is a call to action, so the only one using the accent. */
+.admin-pill-pending { background: var(--accent-soft); color: var(--accent); cursor: help; }
+
+.admin-pending-count { color: var(--accent); }
+
+.admin-subtle { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+.admin-btn-sm { padding: 3px 10px; font-size: 12px; }
+.admin-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+.admin-btn-primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--accent); }
 
 .admin-pager { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 

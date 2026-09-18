@@ -6,13 +6,17 @@ import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes, vaults } from '../db/schema.js'
-import { requireAuth, requireOwner } from '../auth/session.js'
+import { requireAuth, requireApproved, requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
 export const vaultsRouter = Router()
 vaultsRouter.use(requireAuth)
+// Cloud vaults are the owner's storage, so they're behind owner approval.
+// The demo vault and "open my own folder" are pure client-side and never
+// reach this router, which is what an unapproved user is left with.
+vaultsRouter.use(requireApproved)
 
 /** vault_id is always derived from the session — never accepted from the client. */
 async function getOrCreatePersonalVaultId(userId: string): Promise<string> {

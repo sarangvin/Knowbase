@@ -13,6 +13,16 @@ export const users = pgTable('users', {
   // assert something we never actually checked. Rows self-correct on next
   // sign-in, since the OAuth callback writes this on every login.
   emailVerified: boolean('email_verified'),
+  // Owner approval — deliberately NOT the same fact as emailVerified above.
+  // emailVerified is Google's claim about the address; accessApproved is the
+  // owner letting a person in. Defaults false: access is granted, never
+  // assumed. Owners bypass it entirely (see requireApproved).
+  accessApproved: boolean('access_approved').notNull().default(false),
+  accessApprovedAt: timestamp('access_approved_at', { withTimezone: true }),
+  // Set when the user asks for access from the landing screen. Kept separate
+  // from approval so the admin list can distinguish "waiting on you" from
+  // "signed in once and never asked".
+  accessRequestedAt: timestamp('access_requested_at', { withTimezone: true }),
   displayName: text('display_name'),
   avatarUrl: text('avatar_url'),
   role: text('role').notNull().default('user'), // 'user' | 'owner'

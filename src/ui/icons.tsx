@@ -71,6 +71,14 @@ export const Pencil = (p: P) => (
     <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
   </svg>
 )
+export const Envelope = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 7 10 6 10-6" />
+  </svg>
+)
+export const Check = (p: P) => (
+  <svg {...base(p)}><path d="m20 6-11 11-5-5" /></svg>
+)
 export const Eye = (p: P) => (
   <svg {...base(p)}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
 )

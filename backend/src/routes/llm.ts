@@ -2,7 +2,7 @@ import { Router, type Request } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { apiKeys } from '../db/schema.js'
-import { requireAuth } from '../auth/session.js'
+import { requireAuth, requireApproved } from '../auth/session.js'
 import { requirePlan } from '../middleware/requirePlan.js'
 import { freeTierRateLimit } from '../middleware/rateLimit.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
@@ -14,6 +14,10 @@ import { logUsageEvent } from '../usage/logEvent.js'
 
 export const llmRouter = Router()
 llmRouter.use(requireAuth)
+// Every tier here spends the owner's own API key (free tier included), so an
+// unapproved account must not be able to reach it — otherwise "demo only"
+// would still let a stranger run up the owner's LLM bill.
+llmRouter.use(requireApproved)
 
 function parseChatBody(req: Request): { system: string; user: string } | { error: string } {
   const { system, user } = req.body ?? {}

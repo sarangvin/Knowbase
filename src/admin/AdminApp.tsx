@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   fetchUsers,
   fetchSignins,
+  setApproved,
   fetchUserDetail,
   fetchCurrentUser,
   type AdminUserRow,
@@ -36,13 +37,37 @@ function VerifiedCell({ value }: { value: boolean | null }) {
   )
 }
 
+/** Access is a three-state read too: approved / asked and waiting / signed in
+ * but never asked. "Waiting" is the one that needs the owner's attention, so
+ * it's the only one that gets a colour. */
+function AccessCell({ row }: { row: AdminSigninRow }) {
+  if (row.access_approved) {
+    return (
+      <span className="admin-pill admin-pill-yes" title={row.access_approved_at ? `Approved ${new Date(row.access_approved_at).toLocaleString()}` : undefined}>
+        Approved
+      </span>
+    )
+  }
+  if (row.access_requested_at) {
+    return (
+      <span className="admin-pill admin-pill-pending" title={`Requested ${new Date(row.access_requested_at).toLocaleString()}`}>
+        Requested
+      </span>
+    )
+  }
+  return <span className="admin-pill admin-pill-unknown">No access</span>
+}
+
 export function AdminApp() {
   const [authState, setAuthState] = useState<'checking' | 'denied' | 'ok'>('checking')
   const [tab, setTab] = useState<Tab>('users')
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState<AdminUserRow[]>([])
   const [signins, setSignins] = useState<AdminSigninRow[]>([])
-  const [counts, setCounts] = useState({ verified: 0, unverified: 0, unknown: 0 })
+  const [counts, setCounts] = useState({ verified: 0, unverified: 0, unknown: 0, approved: 0, pending: 0 })
+  // Ids with an approve/revoke request in flight — disables just that row's
+  // button rather than blocking the whole table.
+  const [busy, setBusy] = useState<Set<string>>(new Set())
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -79,12 +104,52 @@ export function AdminApp() {
         : fetchSignins(page).then((data) => {
             setSignins(data.signins)
             setTotal(data.total)
-            setCounts({ verified: data.verified, unverified: data.unverified, unknown: data.unknown })
+            setCounts({
+              verified: data.verified,
+              unverified: data.unverified,
+              unknown: data.unknown,
+              approved: data.approved,
+              pending: data.pending,
+            })
           })
     request
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
   }, [authState, page, tab])
+
+  const toggleApproval = async (row: AdminSigninRow) => {
+    if (row.access_approved && !confirm(
+      `Revoke access for ${row.email}?\n\nThey'll keep their cloud vault data, but won't be able to open it until you approve them again.`,
+    )) return
+
+    setBusy((b) => new Set(b).add(row.id))
+    setError(null)
+    try {
+      const next = await setApproved(row.id, !row.access_approved)
+      // Patch in place rather than refetching the page: a refetch reorders by
+      // last_login_at and the row you just clicked can jump away under the cursor.
+      setSignins((rows) =>
+        rows.map((r) =>
+          r.id === row.id
+            ? { ...r, access_approved: next.access_approved, access_approved_at: next.access_approved_at }
+            : r,
+        ),
+      )
+      setCounts((c) => ({
+        ...c,
+        approved: c.approved + (next.access_approved ? 1 : -1),
+        pending: row.access_requested_at ? c.pending + (next.access_approved ? -1 : 1) : c.pending,
+      }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy((b) => {
+        const n = new Set(b)
+        n.delete(row.id)
+        return n
+      })
+    }
+  }
 
   const openDetail = (id: string) => {
     setSelected(null)
@@ -145,25 +210,49 @@ export function AdminApp() {
             {counts.unverified > 0 && <> · <strong>{counts.unverified}</strong> not verified</>}
             {counts.unknown > 0 && <> · <strong>{counts.unknown}</strong> unknown</>}
           </p>
+          <p className="admin-dim">
+            <strong>{counts.approved}</strong> with access
+            {counts.pending > 0 && (
+              <> · <strong className="admin-pending-count">{counts.pending}</strong> waiting on you</>
+            )}
+          </p>
           <table className="admin-table">
             <thead>
               <tr>
                 <th>Email</th>
-                <th>Verified</th>
-                <th>Name</th>
+                <th>Email verified</th>
+                <th>Access</th>
+                <th></th>
                 <th>Sign-ins</th>
-                <th>First seen</th>
                 <th>Last login</th>
               </tr>
             </thead>
             <tbody>
               {signins.map((u) => (
                 <tr key={u.id} onClick={() => openDetail(u.id)} className="admin-row">
-                  <td>{u.email}{u.role === 'owner' && <span className="admin-badge">owner</span>}</td>
+                  <td>
+                    {u.email}
+                    {u.role === 'owner' && <span className="admin-badge">owner</span>}
+                    {u.display_name && <div className="admin-subtle">{u.display_name}</div>}
+                  </td>
                   <td><VerifiedCell value={u.email_verified} /></td>
-                  <td>{u.display_name ?? '—'}</td>
+                  <td><AccessCell row={u} /></td>
+                  <td>
+                    {u.role === 'owner' ? (
+                      <span className="admin-subtle">always</span>
+                    ) : (
+                      <button
+                        className={`admin-btn admin-btn-sm${u.access_approved ? '' : ' admin-btn-primary'}`}
+                        disabled={busy.has(u.id)}
+                        /* The row opens a detail overlay; without this the
+                           click would do both. */
+                        onClick={(e) => { e.stopPropagation(); void toggleApproval(u) }}
+                      >
+                        {busy.has(u.id) ? '…' : u.access_approved ? 'Revoke' : 'Verify'}
+                      </button>
+                    )}
+                  </td>
                   <td>{u.login_count}</td>
-                  <td>{formatDate(u.created_at)}</td>
                   <td>{formatDate(u.last_login_at)}</td>
                 </tr>
               ))}
