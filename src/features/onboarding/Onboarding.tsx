@@ -1,51 +1,20 @@
+// The landing screen. It leads with the product's own question — "what do you
+// want to learn?" — rather than a choice between storage backends, which is
+// what it used to open with. A newcomer has no idea what a "vault" is, and
+// three co-equal buttons offered no recommended path.
+//
+// The topic is captured BEFORE authentication and carried across the OAuth
+// round-trip (see pendingTopic.ts). That ordering matters: previously you had
+// to sign in with Google before you could find out you weren't approved yet,
+// which spends the user's effort and then rejects them, and told us nothing
+// about what they actually wanted.
 import { useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { FsAccessVaultSource } from '../../vault/source'
 import { requestAccess } from '../../vault/remoteSource'
-import { GraduationCap, Folder, Eye, Cloud, Pencil, Envelope, Check } from '../../ui/icons'
+import { setPendingTopic } from './pendingTopic'
+import { GraduationCap, Folder, Eye, Cloud, Pencil, Envelope, Check, ArrowRight } from '../../ui/icons'
 import './onboarding.css'
-
-/** Shown to a signed-in user the owner hasn't approved yet. The cloud vault
- * and every LLM route are gated server-side (requireApproved), so this is the
- * honest presentation of a real restriction, not a soft UI hint — offering an
- * "Open my cloud vault" button here would just produce a 403.
- *
- * The demo vault and "open my own folder" stay available: both are entirely
- * client-side and cost the owner nothing. */
-function EarlyAccess({ requestedAt }: { requestedAt: string | null }) {
-  const [sent, setSent] = useState<string | null>(requestedAt)
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  if (sent) {
-    return (
-      <div className="ob-pending">
-        <Check /> Request received — we'll let you know when your access is ready.
-      </div>
-    )
-  }
-
-  const send = async () => {
-    setSending(true)
-    setError(null)
-    try {
-      setSent(await requestAccess())
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSending(false)
-    }
-  }
-
-  return (
-    <>
-      <button className="ob-btn" disabled={sending} onClick={() => void send()}>
-        <Envelope /> {sending ? 'Sending…' : 'Sign up for early access'}
-      </button>
-      {error && <div className="ob-error">{error}</div>}
-    </>
-  )
-}
 
 export function Onboarding() {
   const status = useVault((s) => s.status)
@@ -59,6 +28,11 @@ export function Onboarding() {
   const user = useVault((s) => s.user)
   const fsSupported = FsAccessVaultSource.isSupported()
 
+  const [topic, setTopic] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [requestedAt, setRequestedAt] = useState<string | null>(user?.accessRequestedAt ?? null)
+  const [localError, setLocalError] = useState<string | null>(null)
+
   if (status === 'loading') {
     return (
       <div className="onboarding">
@@ -70,64 +44,123 @@ export function Onboarding() {
 
   const awaitingApproval = user != null && !user.accessApproved
 
+  // One button, three meanings — the difference is the user's state, not
+  // something they should have to reason about before typing.
+  const start = async () => {
+    const t = topic.trim()
+    if (!t || busy) return
+    setLocalError(null)
+    setPendingTopic(t)
+
+    if (user == null) {
+      loginWithGoogle() // full-page redirect; the topic is waiting when we return
+      return
+    }
+    if (awaitingApproval) {
+      setBusy(true)
+      try {
+        setRequestedAt(await requestAccess())
+      } catch (e) {
+        setLocalError(e instanceof Error ? e.message : String(e))
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+    // Approved: load the cloud vault. An empty one hands off to
+    // TopicOnboarding, which picks the pending topic up and starts straight
+    // away rather than asking the same question a second time.
+    setBusy(true)
+    try {
+      await loadRemote()
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : String(e))
+      setBusy(false)
+    }
+  }
+
+  const startLabel = user == null ? 'Sign in and build it' : awaitingApproval ? 'Request early access' : 'Build my space'
+
   return (
     <div className="onboarding">
       <div className="ob-card">
         <div className="ob-logo">
           <GraduationCap width={34} height={34} />
         </div>
-        <h1 className="ob-title">Rabbithole</h1>
+        <h1 className="ob-title">What do you want to learn?</h1>
         <p className="ob-sub">
-          A local-first knowledge base. Browse the linked graph, follow backlinks, and learn what
-          to study next — all in your browser.
+          Name a topic and Rabbithole builds you a learning space — the subtopics worth knowing,
+          what to study in what order, and a first draft of notes for each.
         </p>
 
         {error && <div className="ob-error">{error}</div>}
+        {localError && <div className="ob-error">{localError}</div>}
 
-        <div className="ob-actions">
-          <button className="ob-btn primary" onClick={() => void loadSeed()}>
-            <Eye /> Explore the demo vault
-          </button>
-
-          {user == null && (
-            <button className="ob-btn" onClick={loginWithGoogle}>
-              <Cloud /> Sign in with Google
+        {requestedAt ? (
+          <div className="ob-pending">
+            <Check /> Request received — we'll let you know when your access is ready.
+          </div>
+        ) : (
+          <div className="ob-primary">
+            <input
+              className="ob-topic-input"
+              autoFocus
+              placeholder="e.g. Quantum computing, French cooking, Kubernetes…"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void start()}
+              disabled={busy}
+            />
+            <button className="ob-btn primary" disabled={!topic.trim() || busy} onClick={() => void start()}>
+              {busy ? <span className="spinner" /> : <ArrowRight />} {startLabel}
             </button>
-          )}
+            {user == null && (
+              <p className="ob-hint">You'll sign in with Google so your space is saved to your account.</p>
+            )}
+            {awaitingApproval && (
+              <p className="ob-hint">
+                <Envelope /> Rabbithole is in early access. Tell us your topic and we'll add you to the list.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Everything below is deliberately secondary: these are the escape
+            hatches and the returning-user paths, not the main road. */}
+        <div className="ob-secondary">
+          <button className="ob-linklike" onClick={() => void loadSeed()}>
+            <Eye /> Explore a finished example
+          </button>
           {user != null && !awaitingApproval && (
-            <button className="ob-btn" onClick={() => void loadRemote()}>
+            <button className="ob-linklike" onClick={() => void loadRemote()}>
               <Cloud /> Open my cloud vault
             </button>
           )}
-          {awaitingApproval && <EarlyAccess requestedAt={user.accessRequestedAt} />}
-
           {user?.role === 'owner' && (
-            <button className="ob-btn" onClick={() => void loadGlobalVault()}>
+            <button className="ob-linklike" onClick={() => void loadGlobalVault()}>
               <Pencil /> Edit the global vault
             </button>
           )}
-          {fsSupported ? (
-            <button className="ob-btn" onClick={() => void pickFolder()}>
+          {fsSupported && (
+            <button className="ob-linklike" onClick={() => void pickFolder()}>
               <Folder /> Open my own folder
             </button>
-          ) : (
-            <div className="ob-note">
-              Tip: open in Chrome or Edge to load your own folder with read/write access.
-            </div>
           )}
         </div>
+
+        {!fsSupported && (
+          <p className="ob-note">
+            Tip: open in Chrome or Edge to load your own folder with read/write access.
+          </p>
+        )}
         {user && (
           <p className="ob-note">
             Signed in as {user.email} ·{' '}
-            <button className="ob-linklike" onClick={() => void logout()}>
+            <button className="ob-linklike inline" onClick={() => void logout()}>
               sign out
             </button>
           </p>
         )}
-        <p className="ob-fineprint">
-          Demo edits save in this browser; your own folder writes to disk; your cloud vault syncs
-          to your account and is only visible to you.
-        </p>
       </div>
     </div>
   )

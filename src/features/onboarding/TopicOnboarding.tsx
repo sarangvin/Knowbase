@@ -2,10 +2,11 @@
 // (see the gate in App.tsx): ask what they want to learn, generate a small
 // starter prerequisite graph via the free LLM tier, write it into their
 // vault, and land them on the new space's Next Up dashboard.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { generateLearningPlan, generateTopicNote, type ValidatedPlan } from './topicGeneration'
 import { disambiguateSpace, dedupeSegments, buildTopicNote, buildNextUpNote } from './notePlan'
+import { takePendingTopic } from './pendingTopic'
 import { Sparkles } from '../../ui/icons'
 import './onboarding.css'
 
@@ -26,6 +27,9 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
   const [pending, setPending] = useState<PendingWrite | null>(null)
   const [drafted, setDrafted] = useState(0)
   const [totalTopics, setTotalTopics] = useState(0)
+  // Guards the auto-start below against StrictMode's double-invoked effects
+  // and against any later re-render: a pending topic must generate once.
+  const autoStarted = useRef(false)
 
   // Drafts a first-pass body for every subtopic, then assembles the writes.
   // The drafts run in parallel: they're independent, and five sequential
@@ -75,11 +79,17 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
     // Every in-flight stage must be listed here, not just the first one —
     // Enter is still bound while a run is in progress.
     if (!topic.trim() || stage === 'generating' || stage === 'drafting' || stage === 'writing') return
+    await runGenerationFor(topic.trim())
+  }
+
+  // Takes the topic as an argument rather than reading state: the auto-start
+  // effect runs in the same tick as its setTopic, so state would still be ''.
+  const runGenerationFor = async (t: string) => {
     setStage('generating')
     setErrorMsg('')
     setPending(null)
     try {
-      const plan = await generateLearningPlan(topic.trim())
+      const plan = await generateLearningPlan(t)
       setTotalTopics(plan.subtopics.length)
       setStage('drafting')
       const write = await buildEntries(plan)
@@ -90,6 +100,18 @@ export function TopicOnboarding({ onSkip }: { onSkip: () => void }) {
       setStage('error')
     }
   }
+
+  // The topic was typed on the landing screen before sign-in. Asking for it
+  // again here would make the OAuth round-trip feel like it lost their input.
+  useEffect(() => {
+    if (autoStarted.current) return
+    const pending = takePendingTopic()
+    if (!pending) return
+    autoStarted.current = true
+    setTopic(pending)
+    void runGenerationFor(pending)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const isBusy = stage === 'generating' || stage === 'drafting' || stage === 'writing'
 

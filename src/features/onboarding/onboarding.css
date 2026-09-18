@@ -44,7 +44,10 @@
 .ob-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
 .ob-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 .ob-btn.primary:hover { background: var(--accent-hover); }
-.ob-note { color: var(--text-faint); font-size: 13px; max-width: 280px; line-height: 1.5; }
+/* margin inline auto, not just max-width: these are now direct children of
+   the centred card as well as of flex containers, and a capped block without
+   auto margins sits left of centre. */
+.ob-note { color: var(--text-faint); font-size: 13px; max-width: 280px; line-height: 1.5; margin-inline: auto; }
 .ob-linklike {
   color: var(--text-muted);
   text-decoration: underline;
@@ -52,6 +55,45 @@
   padding: 0;
 }
 .ob-linklike:hover { color: var(--accent); }
+
+/* The one thing we want the visitor to do. Wider than the old button column
+   because it leads with a text field, and a 240px input reads as an
+   afterthought next to a 380px paragraph. */
+.ob-primary { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.ob-primary .ob-btn { min-width: 0; width: 100%; }
+.ob-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 2px 0 0;
+}
+
+/* Escape hatches and returning-user paths. Deliberately quiet and laid out
+   as a wrapping row of links, so they read as "other ways in" rather than
+   as alternatives competing with the primary action above. */
+.ob-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--divider);
+}
+.ob-secondary .ob-linklike {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  text-decoration: none;
+}
+.ob-secondary .ob-linklike:hover { text-decoration: underline; }
+/* Inside a sentence (e.g. "· sign out"), where the row layout must not apply. */
+.ob-linklike.inline { display: inline; }
 .ob-fineprint { color: var(--text-faint); font-size: 12px; margin-top: 24px; }
 .ob-error {
   background: rgba(224, 102, 107, 0.12);
