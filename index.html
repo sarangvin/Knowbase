@@ -3,10 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- viewport-fit=cover is required for env(safe-area-inset-*) to resolve
-         to anything but 0, which the bottom nav uses to clear the iOS home
-         indicator. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Deliberately NOT viewport-fit=cover: it expands the layout viewport to
+         the whole physical display, which left the layout wider than the
+         visible area on Android and cropped ~35px off the right of every
+         screen. env(safe-area-inset-*) just resolves to 0 without it, which
+         the bottom nav handles fine. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KnowBase</title>
   </head>
   <body>

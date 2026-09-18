@@ -58,6 +58,13 @@
 html, body, #root {
   height: 100%;
   margin: 0;
+  /* Belt and braces against any single element escaping its container: the
+     shell is a fixed, non-scrolling layout, so nothing should ever make the
+     document wider than the screen. Without this, one stray overflowing
+     child silently crops the chrome — the nav and the top-bar controls —
+     rather than scrolling, because body already hides overflow. */
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
