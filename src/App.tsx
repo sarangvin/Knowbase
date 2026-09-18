@@ -5,12 +5,11 @@ import { useKeybindings } from './ui/useKeybindings'
 import { registerAutomatedGraph } from './features/automated-graph/register'
 import { Onboarding } from './features/onboarding/Onboarding'
 import { TopicOnboarding } from './features/onboarding/TopicOnboarding'
-import { FileExplorer } from './features/explorer/FileExplorer'
 import { TopBar } from './shell/TopBar'
 import { TabBar } from './shell/TabBar'
 import { MainPane } from './shell/MainPane'
 import { RightSidebar } from './shell/RightSidebar'
-import { StatusBar } from './shell/StatusBar'
+import { BottomNav } from './shell/BottomNav'
 import { CommandPalette } from './features/palette/CommandPalette'
 import { QuickSwitcher } from './features/palette/QuickSwitcher'
 import './App.css'
@@ -22,11 +21,9 @@ const MOBILE_QUERY = '(max-width: 768px)'
 
 export default function App() {
   const status = useVault((s) => s.status)
-  const leftOpen = useVault((s) => s.leftOpen)
   const rightOpen = useVault((s) => s.rightOpen)
   const tryRestoreFolder = useVault((s) => s.tryRestoreFolder)
   const checkAuth = useVault((s) => s.checkAuth)
-  const activeView = useVault((s) => s.activeView())
   const source = useVault((s) => s.source)
   const files = useVault((s) => s.files)
   const [topicOnboardingSkipped, setTopicOnboardingSkipped] = useState(false)
@@ -56,7 +53,7 @@ export default function App() {
     const sync = () => {
       const isMobile = window.matchMedia(MOBILE_QUERY).matches
       lastIsMobile = isMobile
-      useVault.setState({ leftOpen: !isMobile, rightOpen: !isMobile })
+      useVault.setState({ rightOpen: !isMobile })
     }
     sync()
     // Three independent signals, deliberately redundant: matchMedia's 'change'
@@ -78,15 +75,6 @@ export default function App() {
     }
   }, [])
 
-  // Mobile only: picking a note closes the file-drawer automatically so the
-  // reading pane is immediately visible, matching Obsidian's mobile behavior.
-  useEffect(() => {
-    if (activeView?.kind !== 'note') return
-    if (!window.matchMedia(MOBILE_QUERY).matches) return
-    useVault.setState({ leftOpen: false })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView?.kind === 'note' ? activeView.path : null])
-
   if (status !== 'ready') return <Onboarding />
 
   // A brand-new cloud user (personal vault has zero notes of its own, distinct
@@ -102,16 +90,13 @@ export default function App() {
     return <TopicOnboarding onSkip={() => setTopicOnboardingSkipped(true)} />
   }
 
-  const closeDrawers = () => useVault.setState({ leftOpen: false, rightOpen: false })
+  const closeDrawers = () => useVault.setState({ rightOpen: false })
 
   return (
     <div className="app">
       <TopBar />
       <div className="app-body">
-        {(leftOpen || rightOpen) && <div className="drawer-backdrop" onClick={closeDrawers} />}
-        <aside className={`left-sidebar ${leftOpen ? '' : 'collapsed'}`}>
-          <FileExplorer />
-        </aside>
+        {rightOpen && <div className="drawer-backdrop" onClick={closeDrawers} />}
         <main className="main">
           <TabBar />
           <div className="main-content">
@@ -122,7 +107,7 @@ export default function App() {
           <RightSidebar />
         </aside>
       </div>
-      <StatusBar />
+      <BottomNav />
       <CommandPalette />
       <QuickSwitcher />
     </div>

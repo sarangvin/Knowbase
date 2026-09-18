@@ -43,6 +43,9 @@
   --topbar-h: 40px;
   --tabbar-h: 36px;
   --statusbar-h: 24px;
+  /* Approximate height of the bottom nav, for fixed-position drawers that
+     must stop above it. Kept as a token so both stay in sync. */
+  --bottomnav-h: 56px;
   --sidebar-w: 250px;
   --rightbar-w: 290px;
 

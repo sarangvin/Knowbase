@@ -13,9 +13,16 @@ import { parseNote } from './parse'
 import { buildIndex, resolveTarget } from './graph'
 import { buildTree } from './tree'
 
+// Sections reachable from the bottom nav are views, not a parallel routing
+// concept: that way back/forward, tabs and the command palette all work on
+// them for free, rather than each needing to learn about a separate "which
+// section am I in" flag.
 export type View =
   | { kind: 'note'; path: string; heading?: string }
   | { kind: 'graph' }
+  | { kind: 'files' }
+  | { kind: 'quiz' }
+  | { kind: 'settings' }
   | { kind: 'home' }
 
 export interface Tab {

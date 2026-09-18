@@ -1,6 +1,9 @@
 import { useVault } from '../vault/vaultStore'
 import { NoteView } from '../features/reader/NoteView'
 import { GraphView } from '../features/graph/GraphView'
+import { FileExplorer } from '../features/explorer/FileExplorer'
+import { SettingsPanel } from '../features/settings/SettingsPanel'
+import { QuizView } from '../features/quiz/QuizView'
 import { GraduationCap, Network } from '../ui/icons'
 
 function HomeView() {
@@ -44,5 +47,10 @@ export function MainPane() {
   if (!view) return <HomeView />
   if (view.kind === 'note') return <NoteView path={view.path} heading={view.heading} />
   if (view.kind === 'graph') return <GraphView />
+  // Files is a destination now rather than a docked sidebar, so the explorer
+  // renders as a full pane. Same component — it was never sidebar-specific.
+  if (view.kind === 'files') return <div className="files-pane"><FileExplorer /></div>
+  if (view.kind === 'quiz') return <QuizView />
+  if (view.kind === 'settings') return <SettingsPanel />
   return <HomeView />
 }

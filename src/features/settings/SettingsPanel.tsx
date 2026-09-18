@@ -4,7 +4,9 @@ import { listSavedKeys, saveKey, deleteKey, type SavedKey } from '../ask-ai/keys
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
 import './settings.css'
 
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
+/** `onClose` omitted renders the panel inline as a full pane (the Settings
+ * tab) instead of a modal — same content, no overlay, no Close button. */
+export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const user = useVault((s) => s.user)
   const loginWithGoogle = useVault((s) => s.loginWithGoogle)
 
@@ -116,9 +118,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
+  const body = (
+    <>
         <div className="settings-title">Settings</div>
 
         {user && (
@@ -184,9 +185,19 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           {error && <div className="ask-error">{error}</div>}
         </div>
 
-        <div className="settings-foot">
-          <button className="ask-btn" onClick={onClose}>Close</button>
-        </div>
+        {onClose && (
+          <div className="settings-foot">
+            <button className="ask-btn" onClick={onClose}>Close</button>
+          </div>
+        )}
+    </>
+  )
+
+  if (!onClose) return <div className="settings-pane">{body}</div>
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
+        {body}
       </div>
     </div>
   )

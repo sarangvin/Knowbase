@@ -1,15 +1,13 @@
 import { useState } from 'react'
 import { useVault } from '../vault/vaultStore'
 import { SyncModal } from '../features/sync/SyncModal'
-import { SettingsPanel } from '../features/settings/SettingsPanel'
 import {
-  ArrowLeft, ArrowRight, PanelLeft, PanelRight, Search, Network, Pencil, Eye, Command, RotateCw, Sparkles,
+  ArrowLeft, ArrowRight, PanelRight, Search, Network, Pencil, Eye, Command, RotateCw,
 } from '../ui/icons'
 
 export function TopBar() {
   const s = useVault()
   const [syncOpen, setSyncOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const view = s.activeView()
   const note = view?.kind === 'note' ? s.getNote(view.path) : null
   const crumbs = note ? note.path.replace(/\.md$/i, '').split('/') : []
@@ -17,9 +15,6 @@ export function TopBar() {
   return (
     <div className="topbar">
       <div className="topbar-left">
-        <button className="icon-btn" title="Toggle file explorer (⌘\)" onClick={s.toggleLeft}>
-          <PanelLeft />
-        </button>
         <button className="icon-btn" disabled={!s.canBack()} title="Back (⌥←)" onClick={s.back}>
           <ArrowLeft />
         </button>
@@ -72,12 +67,8 @@ export function TopBar() {
         <button className="icon-btn" title="Toggle right sidebar" onClick={s.toggleRight}>
           <PanelRight />
         </button>
-        <button className="icon-btn" title="AI settings — providers & API keys" onClick={() => setSettingsOpen(true)}>
-          <Sparkles />
-        </button>
       </div>
       {syncOpen && <SyncModal onClose={() => setSyncOpen(false)} />}
-      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
