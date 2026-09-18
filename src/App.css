@@ -14,9 +14,15 @@
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
-.topbar-left, .topbar-right { display: flex; align-items: center; gap: 2px; }
+/* flex: none on the control clusters, min-width: 0 on the title. Without the
+   min-width the title never shrinks below its own content — a flex item
+   defaults to min-width: auto — so a long breadcrumb pushed the right-hand
+   controls clean off the screen on a phone. overflow: hidden could not save
+   it, because the box itself was never allowed to get smaller. */
+.topbar-left, .topbar-right { display: flex; align-items: center; gap: 2px; flex: none; }
 .topbar-title {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -65,6 +71,22 @@
   }
   .right-sidebar-wrap { right: 0; transform: translateX(0); border-left: 1px solid var(--border); }
   .right-sidebar-wrap.collapsed { transform: translateX(100%); border-left: none; }
+
+  /* A phone has room for the note's own name, not its whole path. The
+     ancestors are still one tap away in Files. */
+  .topbar-title .crumb,
+  .topbar-title .crumb-sep { display: none; }
+  .topbar-title .crumb-current { overflow: hidden; text-overflow: ellipsis; }
+
+  /* Dashboard tables carry six columns of numbers; they cannot fit 375px and
+     must not be squeezed into illegibility. Scroll them sideways instead,
+     the same affordance markdown tables already have. */
+  .dv-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
 
   .drawer-backdrop {
     display: block;
