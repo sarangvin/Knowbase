@@ -1,5 +1,19 @@
 import { useVault } from '../../vault/vaultStore'
+import { ScoreSlider } from './ScoreSlider'
 import './properties.css'
+
+// The three frontmatter fields that feed the Next Up ranking, and the only
+// ones the reader is expected to change from day to day. Everything else in
+// frontmatter stays read-only here — it is structure, not a dial.
+const SCORE_KEYS = new Set(['importance', 'interest', 'confidence'])
+
+/** Frontmatter may carry these as numbers, numeric strings, or nothing at
+ *  all for a note that declares the key but leaves it blank. */
+function asScore(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim()) : NaN
+  if (!Number.isFinite(n)) return value == null || value === '' ? 0 : null
+  return Math.min(5, Math.max(0, Math.round(n)))
+}
 
 const WIKILINK_RE = /\[\[([^\]]+?)\]\]/
 
@@ -37,19 +51,32 @@ function PropValue({ value }: { value: unknown }) {
   return <span className="prop-pill">{String(value)}</span>
 }
 
-export function Properties({ frontmatter }: { frontmatter: Record<string, unknown> }) {
+export function Properties({
+  frontmatter,
+  notePath,
+}: {
+  frontmatter: Record<string, unknown>
+  notePath: string
+}) {
   const entries = Object.entries(frontmatter)
   if (entries.length === 0) return null
   return (
     <div className="properties">
-      {entries.map(([key, value]) => (
-        <div className="prop-row" key={key}>
-          <div className="prop-key">{key}</div>
-          <div className="prop-val">
-            <PropValue value={value} />
+      {entries.map(([key, value]) => {
+        const score = SCORE_KEYS.has(key.toLowerCase()) ? asScore(value) : null
+        return (
+          <div className="prop-row" key={key}>
+            <div className="prop-key">{key}</div>
+            <div className="prop-val">
+              {score === null ? (
+                <PropValue value={value} />
+              ) : (
+                <ScoreSlider notePath={notePath} field={key} value={score} />
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

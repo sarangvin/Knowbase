@@ -61,7 +61,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
             ))}
           </div>
         )}
-        <Properties frontmatter={note.frontmatter} />
+        <Properties frontmatter={note.frontmatter} notePath={note.path} />
         <MarkdownView content={body} notePath={note.path} />
       </div>
     </div>

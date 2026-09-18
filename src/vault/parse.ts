@@ -130,3 +130,42 @@ export function parseNote(path: string, raw: string, mtime: number): Note {
     mtime,
   }
 }
+
+/**
+ * Replace a single scalar value in the frontmatter block, touching nothing
+ * else in the file.
+ *
+ * Deliberately a line edit rather than parse-and-re-dump. These files are
+ * also an Obsidian vault that people hand-edit: round-tripping through a YAML
+ * serializer would reorder keys, restyle quoting and drop comments across the
+ * whole block, turning "I moved a slider" into a diff touching every line.
+ *
+ * Returns the input unchanged when there is no frontmatter, or no line for
+ * that key — callers only offer this for keys the note already declares, and
+ * silently inventing frontmatter would be a surprising side effect of
+ * dragging a slider.
+ */
+export function setFrontmatterValue(raw: string, key: string, value: string | number): string {
+  const m = raw.match(FRONTMATTER_RE)
+  if (!m) return raw
+
+  const block = m[1]
+  const lines = block.split('\n')
+  // Only top-level keys: an indented line belongs to a nested structure (a
+  // prerequisites list, say), and replacing one of those would corrupt it.
+  const keyRe = new RegExp(`^(${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:)(\\s*)(.*)$`, 'i')
+
+  let found = false
+  const next = lines.map((line) => {
+    if (found || /^\s/.test(line)) return line
+    const km = line.match(keyRe)
+    if (!km) return line
+    found = true
+    // Preserve the author's spacing after the colon; default to one space for
+    // a key that was written bare ("confidence:").
+    return `${km[1]}${km[2] || ' '}${value}`
+  })
+  if (!found) return raw
+
+  return raw.slice(0, m.index! ) + m[0].replace(block, next.join('\n')) + raw.slice(m.index! + m[0].length)
+}
