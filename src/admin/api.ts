@@ -18,6 +18,28 @@ export interface AdminUsersResponse {
   total: number
 }
 
+export interface AdminSigninRow {
+  id: string
+  email: string
+  /** Three-valued: Google said verified / said not verified / never observed. */
+  email_verified: boolean | null
+  display_name: string | null
+  role: string
+  created_at: string
+  last_login_at: string
+  login_count: number
+}
+
+export interface AdminSigninsResponse {
+  signins: AdminSigninRow[]
+  page: number
+  pageSize: number
+  total: number
+  verified: number
+  unverified: number
+  unknown: number
+}
+
 export interface UsageEventRow {
   id: number
   event_type: string
@@ -57,6 +79,10 @@ async function api<T>(path: string): Promise<T> {
 
 export function fetchUsers(page: number, pageSize = 20): Promise<AdminUsersResponse> {
   return api(`/api/admin/users?page=${page}&pageSize=${pageSize}`)
+}
+
+export function fetchSignins(page: number, pageSize = 20): Promise<AdminSigninsResponse> {
+  return api(`/api/admin/signins?page=${page}&pageSize=${pageSize}`)
 }
 
 export function fetchUserDetail(id: string): Promise<AdminUserDetail> {

@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
-import { fetchUsers, fetchUserDetail, fetchCurrentUser, type AdminUserRow, type AdminUserDetail } from './api'
+import {
+  fetchUsers,
+  fetchSignins,
+  fetchUserDetail,
+  fetchCurrentUser,
+  type AdminUserRow,
+  type AdminSigninRow,
+  type AdminUserDetail,
+} from './api'
 import './admin.css'
+
+type Tab = 'users' | 'signins'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -12,34 +22,63 @@ function formatDate(s: string | null): string {
   return s ? new Date(s).toLocaleString() : '—'
 }
 
+/** Three-valued on purpose — see the /signins route comment. "Unknown" is a
+ * real state (no verification claim observed yet), not a styling variant of
+ * "no", and collapsing it would misreport accounts that simply predate the
+ * column. */
+function VerifiedCell({ value }: { value: boolean | null }) {
+  if (value === true) return <span className="admin-pill admin-pill-yes">Verified</span>
+  if (value === false) return <span className="admin-pill admin-pill-no">Not verified</span>
+  return (
+    <span className="admin-pill admin-pill-unknown" title="No verification claim recorded yet — this account has not signed in since the column was added.">
+      Unknown
+    </span>
+  )
+}
+
 export function AdminApp() {
-  const [authState, setAuthState] = useState<'checking' | 'signed-out' | 'not-owner' | 'ok'>('checking')
+  const [authState, setAuthState] = useState<'checking' | 'denied' | 'ok'>('checking')
+  const [tab, setTab] = useState<Tab>('users')
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState<AdminUserRow[]>([])
+  const [signins, setSignins] = useState<AdminSigninRow[]>([])
+  const [counts, setCounts] = useState({ verified: 0, unverified: 0, unknown: 0 })
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<AdminUserDetail | null>(null)
 
   useEffect(() => {
-    fetchCurrentUser().then((user) => {
-      if (!user) setAuthState('signed-out')
-      else if (user.role !== 'owner') setAuthState('not-owner')
-      else setAuthState('ok')
-    })
+    // Signed-out and signed-in-but-not-owner collapse into one 'denied' state
+    // that renders as a plain not-found. Distinguishing them would confirm to
+    // a stranger that an admin panel lives at this URL.
+    fetchCurrentUser()
+      .then((user) => setAuthState(user?.role === 'owner' ? 'ok' : 'denied'))
+      .catch(() => setAuthState('denied'))
   }, [])
+
+  // Reset paging when switching tabs — page 3 of Users is meaningless in Sign-ins.
+  useEffect(() => { setPage(1) }, [tab])
 
   useEffect(() => {
     if (authState !== 'ok') return
     setLoading(true)
-    fetchUsers(page)
-      .then((data) => {
-        setRows(data.users)
-        setTotal(data.total)
-      })
+    setError(null)
+    const request =
+      tab === 'users'
+        ? fetchUsers(page).then((data) => {
+            setRows(data.users)
+            setTotal(data.total)
+          })
+        : fetchSignins(page).then((data) => {
+            setSignins(data.signins)
+            setTotal(data.total)
+            setCounts({ verified: data.verified, unverified: data.unverified, unknown: data.unknown })
+          })
+    request
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
-  }, [authState, page])
+  }, [authState, page, tab])
 
   const openDetail = (id: string) => {
     setSelected(null)
@@ -49,16 +88,18 @@ export function AdminApp() {
   }
 
   if (authState === 'checking') {
-    return <div className="admin-shell"><p>Loading…</p></div>
+    return <div className="admin-shell" />
   }
-  if (authState === 'signed-out' || authState === 'not-owner') {
+  if (authState === 'denied') {
+    // Deliberately says nothing about an admin panel, whether one exists here,
+    // or who may use it. The API is already owner-gated (requireOwner 403s),
+    // so this is presentation only — but a page that advertises itself is a
+    // pointer for anyone poking at URLs. Owner signs in via the main app.
     return (
       <div className="admin-shell">
-        <h1>KnowBase Admin</h1>
-        <p className="admin-dim">
-          {authState === 'signed-out' ? 'Sign in with the owner Google account to view this.' : "You're signed in, but not as the owner account."}
-        </p>
-        <a className="admin-btn" href="/auth/google/start?returnTo=/admin.html">Sign in with Google</a>
+        <h1>404</h1>
+        <p className="admin-dim">This page could not be found.</p>
+        <a className="admin-btn" href="/">Go to Rabbithole</a>
       </div>
     )
   }
@@ -67,10 +108,66 @@ export function AdminApp() {
 
   return (
     <div className="admin-shell">
-      <h1>KnowBase Admin</h1>
-      <p className="admin-dim">{total} user{total === 1 ? '' : 's'}</p>
+      <h1>Rabbithole Admin</h1>
+
+      <div className="admin-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'users'}
+          className={`admin-tab${tab === 'users' ? ' admin-tab-active' : ''}`}
+          onClick={() => setTab('users')}
+        >
+          Users
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'signins'}
+          className={`admin-tab${tab === 'signins' ? ' admin-tab-active' : ''}`}
+          onClick={() => setTab('signins')}
+        >
+          Sign-ins
+        </button>
+      </div>
+
       {error && <div className="admin-error">{error}</div>}
 
+      {tab === 'signins' ? (
+        <>
+          <p className="admin-dim">
+            {total} account{total === 1 ? '' : 's'} have signed in ·{' '}
+            <strong>{counts.verified}</strong> verified
+            {counts.unverified > 0 && <> · <strong>{counts.unverified}</strong> not verified</>}
+            {counts.unknown > 0 && <> · <strong>{counts.unknown}</strong> unknown</>}
+          </p>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Verified</th>
+                <th>Name</th>
+                <th>Sign-ins</th>
+                <th>First seen</th>
+                <th>Last login</th>
+              </tr>
+            </thead>
+            <tbody>
+              {signins.map((u) => (
+                <tr key={u.id} onClick={() => openDetail(u.id)} className="admin-row">
+                  <td>{u.email}{u.role === 'owner' && <span className="admin-badge">owner</span>}</td>
+                  <td><VerifiedCell value={u.email_verified} /></td>
+                  <td>{u.display_name ?? '—'}</td>
+                  <td>{u.login_count}</td>
+                  <td>{formatDate(u.created_at)}</td>
+                  <td>{formatDate(u.last_login_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!loading && signins.length === 0 && <p className="admin-dim">No sign-ins recorded yet.</p>}
+        </>
+      ) : (
+      <>
+      <p className="admin-dim">{total} user{total === 1 ? '' : 's'}</p>
       <table className="admin-table">
         <thead>
           <tr>
@@ -97,6 +194,8 @@ export function AdminApp() {
           ))}
         </tbody>
       </table>
+      </>
+      )}
       {loading && <p className="admin-dim">Loading…</p>}
 
       <div className="admin-pager">

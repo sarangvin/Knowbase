@@ -54,6 +54,48 @@
   color: var(--accent);
 }
 
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 14px 0 16px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.admin-tab {
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  /* -1px pulls the active underline onto the container's border so the two
+     read as one line rather than two stacked rules. */
+  margin-bottom: -1px;
+}
+
+.admin-tab:hover { color: var(--text-normal); }
+
+.admin-tab-active {
+  color: var(--text-normal);
+  border-bottom-color: var(--accent);
+}
+
+.admin-pill {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.admin-pill-yes     { background: color-mix(in srgb, var(--text-success) 16%, transparent); color: var(--text-success); }
+.admin-pill-no      { background: color-mix(in srgb, var(--text-error) 16%, transparent);   color: var(--text-error); }
+/* Unknown is muted rather than coloured — it's an absence of information, and
+   giving it a warning colour would read as a problem with the account. */
+.admin-pill-unknown { background: var(--bg-elevated); color: var(--text-faint); cursor: help; }
+
 .admin-pager { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 
 .admin-overlay {

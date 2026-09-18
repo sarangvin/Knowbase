@@ -47,6 +47,51 @@ adminRouter.get('/users', asyncHandler(async (req, res) => {
   res.json({ users: result.rows, page, pageSize, total: count })
 }))
 
+// Sign-in log: every account that has actually authenticated, with the
+// email-verification claim Google made at that account's most recent login.
+//
+// `last_login_at IS NOT NULL` is the "has logged in" filter. Today it matches
+// every row, because the OAuth callback is the only thing that creates users
+// and it always stamps the column — but that's an implementation detail of
+// one code path, not a schema guarantee, so the query states the requirement
+// rather than assuming it.
+//
+// email_verified is three-valued and is rendered that way: true / false /
+// null, where null means no verification claim has been observed for that
+// account yet (a row predating the column, not yet re-authenticated). It is
+// deliberately not collapsed into a boolean.
+adminRouter.get('/signins', asyncHandler(async (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1)
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(req.query.pageSize) || 20))
+  const offset = (page - 1) * pageSize
+
+  const result = await db.execute(sql`
+    SELECT
+      u.id, u.email, u.email_verified, u.display_name, u.role,
+      u.created_at, u.last_login_at,
+      COALESCE(lg.login_count, 0)::int AS login_count
+    FROM users u
+    LEFT JOIN (
+      SELECT user_id, count(*) AS login_count
+      FROM usage_events WHERE event_type = 'login' GROUP BY user_id
+    ) lg ON lg.user_id = u.id
+    WHERE u.last_login_at IS NOT NULL
+    ORDER BY u.last_login_at DESC
+    LIMIT ${pageSize} OFFSET ${offset}
+  `)
+
+  const [counts] = (await db.execute(sql`
+    SELECT
+      count(*)::int AS total,
+      count(*) FILTER (WHERE email_verified IS TRUE)::int  AS verified,
+      count(*) FILTER (WHERE email_verified IS FALSE)::int AS unverified,
+      count(*) FILTER (WHERE email_verified IS NULL)::int  AS unknown
+    FROM users WHERE last_login_at IS NOT NULL
+  `)).rows as { total: number; verified: number; unverified: number; unknown: number }[]
+
+  res.json({ signins: result.rows, page, pageSize, ...counts })
+}))
+
 adminRouter.get('/users/:id', asyncHandler(async (req, res) => {
   const userRows = await db.select().from(users).where(eq(users.id, req.params.id)).limit(1)
   if (!userRows[0]) {

@@ -1,12 +1,18 @@
 // M1 schema: auth + personal cloud vaults. M3 adds api_keys. M4 adds
 // subscriptions. M5 adds usage_events.
 import { sql } from 'drizzle-orm'
-import { pgTable, uuid, text, timestamp, integer, bigserial, jsonb, uniqueIndex, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, boolean, timestamp, integer, bigserial, jsonb, uniqueIndex, index } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   googleSub: text('google_sub').notNull().unique(),
   email: text('email').notNull().unique(),
+  // Nullable on purpose: null means "we have never observed a verification
+  // claim for this account" (rows created before this column existed), which
+  // is a different fact from Google telling us false. Backfilling true would
+  // assert something we never actually checked. Rows self-correct on next
+  // sign-in, since the OAuth callback writes this on every login.
+  emailVerified: boolean('email_verified'),
   displayName: text('display_name'),
   avatarUrl: text('avatar_url'),
   role: text('role').notNull().default('user'), // 'user' | 'owner'

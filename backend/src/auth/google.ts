@@ -137,6 +137,10 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
       .update(users)
       .set({
         email: profile.email,
+        // Rewritten on every login rather than only at signup: verification
+        // status can change on Google's side, and it's what backfills the
+        // null left on rows created before the column existed.
+        emailVerified: profile.email_verified ?? null,
         displayName: profile.name ?? existing[0].displayName,
         avatarUrl: profile.picture ?? existing[0].avatarUrl,
         lastLoginAt: new Date(),
@@ -153,6 +157,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
       .values({
         googleSub: profile.sub,
         email: profile.email,
+        emailVerified: profile.email_verified ?? null,
         displayName: profile.name,
         avatarUrl: profile.picture,
         role,
