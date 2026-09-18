@@ -53,7 +53,13 @@ export function AdminApp() {
     // that renders as a plain not-found. Distinguishing them would confirm to
     // a stranger that an admin panel lives at this URL.
     fetchCurrentUser()
-      .then((user) => setAuthState(user?.role === 'owner' ? 'ok' : 'denied'))
+      .then((user) => {
+        const owner = user?.role === 'owner'
+        setAuthState(owner ? 'ok' : 'denied')
+        // Only name the panel once we know who's looking. admin.html ships a
+        // neutral <title> so the served HTML gives nothing away.
+        if (owner) document.title = 'Rabbithole Admin'
+      })
       .catch(() => setAuthState('denied'))
   }, [])
 
