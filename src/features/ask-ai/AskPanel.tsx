@@ -3,7 +3,6 @@ import { useVault } from '../../vault/vaultStore'
 import { MarkdownView } from '../reader/MarkdownView'
 import { answerQuestion, type LlmProvider } from './llmProvider'
 import { PROVIDERS, getActiveProviderId, setActiveProviderId, getProvider } from './providerRegistry'
-import { getModel, setModel as persistOllamaModel } from './ollama'
 import { insertQA, bumpLastReviewed } from './askInsert'
 import './ask.css'
 
@@ -21,8 +20,6 @@ export function AskPanel() {
 
   const [readiness, setReadiness] = useState<'checking' | 'ready' | 'not-ready'>('checking')
   const [readyMessage, setReadyMessage] = useState<string | null>(null)
-  const [models, setModels] = useState<string[]>([])
-  const [model, setModel] = useState(getModel())
 
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
@@ -38,20 +35,9 @@ export function AskPanel() {
     check.then(({ ready, message }) => {
       setReadiness(ready ? 'ready' : 'not-ready')
       setReadyMessage(message ?? null)
-      if (ready && p.listModels) {
-        p.listModels()
-          .then((names) => {
-            setModels(names)
-            setModel((m) => {
-              const next = m && names.includes(m) ? m : (names[0] ?? '')
-              if (next) persistOllamaModel(next)
-              return next
-            })
-          })
-          .catch(() => setModels([]))
-      } else {
-        setModels([])
-      }
+      // No model picker any more: listModels only ever had an implementation
+      // for Ollama, enumerating what was installed on the user's own machine.
+      // The remaining providers each use one model chosen server-side.
     })
   }
 
@@ -122,7 +108,7 @@ export function AskPanel() {
     setSaved(false)
     setError(null)
     try {
-      await answerQuestion(provider, n, question, model, (chunk) => setAnswer((a) => a + chunk))
+      await answerQuestion(provider, n, question, undefined, (chunk) => setAnswer((a) => a + chunk))
       setStatus('done')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -149,18 +135,6 @@ export function AskPanel() {
       <div className="panel-header">
         Ask AI
         {providerPicker}
-        {models.length > 0 && (
-          <select
-            className="ask-model"
-            value={model}
-            onChange={(e) => { setModel(e.target.value); persistOllamaModel(e.target.value) }}
-            title="Model"
-          >
-            {models.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        )}
       </div>
       <div className="ask-input-row">
         <textarea

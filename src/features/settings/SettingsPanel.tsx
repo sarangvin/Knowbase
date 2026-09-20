@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { listSavedKeys, saveKey, deleteKey, type SavedKey } from '../ask-ai/keys'
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
 import { User, LogOut, Cloud, Pencil } from '../../ui/icons'
 import './settings.css'
@@ -14,11 +13,6 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const loadRemote = useVault((s) => s.loadRemote)
   const loadGlobalVault = useVault((s) => s.loadGlobalVault)
 
-  const [keys, setKeys] = useState<SavedKey[]>([])
-  const [loading, setLoading] = useState(true)
-  const [apiKeyInput, setApiKeyInput] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const [sub, setSub] = useState<SubscriptionStatus | null>(null)
   const [subBusy, setSubBusy] = useState(false)
@@ -27,15 +21,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = () => {
-    if (!user) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    listSavedKeys()
-      .then(setKeys)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false))
+    if (!user) return
     getSubscriptionStatus()
       .then(setSub)
       .catch((e) => setSubError(e instanceof Error ? e.message : String(e)))
@@ -44,36 +30,6 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   useEffect(refresh, [user])
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
 
-  const anthropicKey = keys.find((k) => k.provider === 'anthropic')
-
-  const save = async () => {
-    if (!apiKeyInput.trim() || busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      await saveKey('anthropic', apiKeyInput.trim())
-      setApiKeyInput('')
-      refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const remove = async () => {
-    if (busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      await deleteKey('anthropic')
-      refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const upgrade = async () => {
     if (subBusy) return
@@ -208,44 +164,10 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
         )}
 
         <div className="settings-section">
-          <div className="settings-label">AI providers</div>
+          <div className="settings-label">AI</div>
           <p className="settings-dim">
-            Free tier (a hosted Gemma model) works with no setup. Add your own Anthropic key below
-            to use Claude instead, or use a local Ollama server — no account needed for that.
+            Answers and note drafts use a hosted model. Nothing to configure.
           </p>
-
-          {!user ? (
-            <div className="settings-note">
-              <button className="ask-btn" onClick={loginWithGoogle}>Sign in with Google to add a key</button>
-            </div>
-          ) : loading ? (
-            <div className="settings-note">Loading…</div>
-          ) : (
-            <div className="settings-key-row">
-              <span className="settings-key-label">Anthropic (Claude)</span>
-              {anthropicKey ? (
-                <>
-                  <code className="settings-key-value">sk-…{anthropicKey.lastFour}</code>
-                  <button className="ask-btn" disabled={busy} onClick={() => void remove()}>Remove</button>
-                </>
-              ) : (
-                <>
-                  <input
-                    className="settings-key-input"
-                    type="password"
-                    placeholder="sk-ant-…"
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && void save()}
-                  />
-                  <button className="ask-btn primary" disabled={busy || !apiKeyInput.trim()} onClick={() => void save()}>
-                    Save
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {error && <div className="ask-error">{error}</div>}
         </div>
 
         {onClose && (

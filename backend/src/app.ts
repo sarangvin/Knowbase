@@ -5,7 +5,6 @@ import { attachUser } from './auth/session.js'
 import { asyncHandler } from './middleware/asyncHandler.js'
 import { authRouter } from './routes/auth.js'
 import { vaultsRouter } from './routes/vaults.js'
-import { settingsRouter } from './routes/settings.js'
 import { llmRouter } from './routes/llm.js'
 import { billingRouter, billingWebhookHandler } from './routes/billing.js'
 import { adminRouter } from './routes/admin.js'
@@ -67,7 +66,6 @@ export function createApp() {
   app.get('/health', (_req, res) => res.json({ ok: true }))
   app.use('/auth', authRouter)
   app.use('/api/vaults', vaultsRouter)
-  app.use('/api/settings', settingsRouter)
   app.use('/api/llm', llmRouter)
   app.use('/api/billing', billingRouter)
   app.use('/api/admin', adminRouter)
