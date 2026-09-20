@@ -132,11 +132,6 @@ export const Save = (p: P) => (
 export const RotateCw = (p: P) => (
   <svg {...base(p)}><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></svg>
 )
-// Double chevron: "keep going in this direction", as distinct from the
-// single ChevronRight used for disclosure.
-export const ChevronsDown = (p: P) => (
-  <svg {...base(p)}><path d="m7 6 5 5 5-5" /><path d="m7 13 5 5 5-5" /></svg>
-)
 export const Home = (p: P) => (
   <svg {...base(p)}><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" /></svg>
 )

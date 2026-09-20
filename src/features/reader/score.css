@@ -79,98 +79,135 @@
   .score-range::-moz-range-thumb { transition: none; }
 }
 
-/* ── Review tab ──────────────────────────────────────────────────────────
-   Pinned to the foot of the reader and filled by sustained overscroll (see
-   useScrollReview.ts). Sticky rather than fixed so it belongs to the note
-   pane: on mobile it stacks above the bottom nav instead of covering it,
-   and on desktop it stays out of the sidebars. */
-.reviewbar-slot {
+
+/* ── Review sheet ────────────────────────────────────────────────────────
+   An orange panel at the foot of the reader that grows as the note is
+   swiped up past its end, capped at a fifth of the screen. See
+   useScrollReview.ts for the gesture that drives --p (0–1). */
+
+/* --p (0–1) is the single value everything here is derived from: the
+   sheet's height, the dial's size, the gap, the corner radius.
+   Registering it makes it a *number* the engine can interpolate, so one
+   transition on --p animates all of them together. Transitioning the
+   derived `height` instead looks equivalent and is not: against an
+   unregistered custom property Chrome computes the new length immediately
+   and the height transition can stall part-way, which it did — the sheet
+   froze at 53px on the wheel path while reporting --p: 1. Where @property
+   is unsupported the transition is simply dropped and the sheet snaps,
+   which is a worse animation but never a stuck one. */
+@property --p {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+/* The slot is the only part that takes part in layout, and its height never
+   changes. This matters more than it looks: the gesture is armed by the
+   scroller being at its end, so a panel that grew *in flow* would push the
+   end further away with every pixel it gained, un-arm itself, collapse, and
+   oscillate. Growth happens on the absolutely positioned child instead. */
+.reviewsheet-slot {
   position: sticky;
   bottom: 0;
   z-index: 5;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 30px 20px 14px;
-  /* The tab is drawn over text scrolling beneath it; without this the last
-     line of a paragraph collides with the label. */
-  background: linear-gradient(to top, var(--bg-primary) 62%, transparent);
-  /* Only the tab itself is clickable — the fade gutter above it must not
-     swallow clicks on the note text underneath. */
-  pointer-events: none;
+  height: 44px;
+  pointer-events: none; /* only the sheet itself is clickable */
 }
 
-.reviewbar {
+.reviewsheet {
   pointer-events: auto;
-  position: relative;
-  display: block;
-  width: 100%;
-  overflow: hidden;
-  padding: 0 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-m);
-  background: var(--bg-elevated);
-  color: var(--text-muted);
-  font-size: 13.5px;
-  font-weight: 500;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-
-/* Fills left-to-right as the gesture progresses. A leading edge rather than
-   a plain bar: it reads as a position in a travel, not a loading spinner. */
-.reviewbar-fill {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--p, 0%);
-  background: var(--accent-soft);
-  border-right: 2px solid var(--accent);
-  /* At rest the zero-width fill would still paint its 2px leading edge as an
-     orange sliver down the left of the tab, reading as a stuck progress bar. */
-  opacity: 0;
-  /* Width: short and linear — long enough to smooth wheel jitter, short
-     enough that a finger drag still feels directly attached to the fill. */
-  transition: width 0.12s linear, opacity 0.15s;
-}
-.reviewbar.is-pulling .reviewbar-fill { opacity: 1; }
-
-.reviewbar-body {
-  position: relative; /* above the fill */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Grows upward from the resting bar to a fifth of the screen. */
+  height: calc(44px + (20vh - 44px) * var(--p, 0));
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  /* 44px: the minimum comfortable touch target, and the gesture's own
-     target is the whole note, so this only has to serve the tap fallback. */
-  min-height: 44px;
+  gap: calc(2px + 6px * var(--p, 0));
+  padding: 0 16px;
+  border: 0;
+  border-radius: calc(10px + 6px * var(--p, 0)) calc(10px + 6px * var(--p, 0)) 0 0;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  /* Nothing separates the sheet from the text sliding under it but this. */
+  box-shadow: 0 -10px 24px -12px hsl(0 0% 0% / 0.55);
+  /* While a finger is on it, the sheet must track the finger — linear and
+     short. The springy curve below takes over the moment it is let go. */
+  transition: --p 0.09s linear, background 0.15s;
 }
-.reviewbar-label { line-height: 1.3; }
+.reviewsheet:not(.is-pulling) {
+  transition: --p 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.15s;
+}
+.reviewsheet.is-armed:not(.is-pulling):not(.is-done) { background: var(--accent-hover, var(--accent)); }
+.reviewsheet:hover:not(:disabled) { background: var(--accent-hover, var(--accent)); }
+.reviewsheet:focus-visible { outline: 2px solid var(--text-normal); outline-offset: -4px; }
+.reviewsheet:disabled { cursor: default; }
 
-/* At the end of the note the tab goes from a label to an offer. */
-.reviewbar.is-armed { color: var(--text-normal); border-color: var(--accent-line); }
-.reviewbar.is-pulling { color: var(--accent); }
-.reviewbar.is-done { color: var(--text-success); border-color: var(--text-success); opacity: 1; }
-.reviewbar:hover:not(:disabled) { background: var(--bg-hover); color: var(--accent); border-color: var(--accent); }
-.reviewbar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.reviewbar:disabled { cursor: default; }
-.reviewbar:disabled:not(.is-done) { opacity: 0.6; }
-
-.reviewbar-err {
-  pointer-events: auto;
-  margin-bottom: 8px;
+/* Read-only vaults get the shape without the promise: an orange bar you
+   cannot use is worse than no bar. */
+.reviewsheet.is-locked {
+  background: var(--bg-elevated);
+  color: var(--text-faint);
+  border-top: 1px solid var(--border-strong);
+}
+.reviewsheet.is-error {
+  background: var(--bg-elevated);
   color: var(--text-error);
-  font-size: 12.5px;
+  border-top: 1px solid var(--text-error);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  /* A small bob on the chevrons once the gesture is available: the direction
-     is the one thing a static label can't show. Armed only, so it is never
-     movement for its own sake. */
-  .reviewbar.is-armed:not(.is-pulling) .reviewbar-body svg { animation: reviewbar-bob 1.6s ease-in-out infinite; }
+/* Ring and glyph share one box, so a single width scales both. */
+.rs-dial {
+  width: calc(19px + 33px * var(--p, 0));
+  height: calc(19px + 33px * var(--p, 0));
+  flex: none;
+  /* Start the sweep at twelve o'clock rather than three. */
+  transform: rotate(-90deg);
 }
-@keyframes reviewbar-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(2.5px); }
+.rs-track,
+.rs-fill {
+  fill: none;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+.rs-track { stroke: hsl(0 0% 0% / 0.22); }
+.rs-fill {
+  stroke: var(--text-on-accent);
+  transition: stroke-dasharray 0.1s linear;
+}
+.rs-glyph {
+  fill: none;
+  stroke: var(--text-on-accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* Counter-rotate out of the ring's -90deg so the arrow points up. */
+  transform: rotate(90deg);
+  transform-origin: 18px 18px;
+}
+.is-locked .rs-track,
+.is-error .rs-track { stroke: var(--border-strong); }
+.is-locked .rs-fill,
+.is-locked .rs-glyph { stroke: var(--text-faint); }
+.is-error .rs-fill,
+.is-error .rs-glyph { stroke: var(--text-error); }
+
+.rs-label {
+  line-height: 1.3;
+  text-align: center;
+  /* The label is the one thing that should not grow with the sheet — it is
+     the same sentence at every height. */
+  font-size: calc(13px + 1px * var(--p, 0));
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reviewbar, .reviewbar-fill { transition: none; }
+  .reviewsheet,
+  .reviewsheet:not(.is-pulling) { transition: background 0.15s; }
+  .rs-fill { transition: none; }
 }
