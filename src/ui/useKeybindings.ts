@@ -18,7 +18,7 @@ export function useKeybindings() {
         s.setQuickSwitchOpen(!s.quickSwitchOpen)
       } else if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
         e.preventDefault()
-        s.setSearchOpen(true)
+        s.openView({ kind: 'search' })
       } else if (mod && e.key === 'e') {
         e.preventDefault()
         if (s.activeView()?.kind === 'note') s.setMode(s.mode === 'read' ? 'edit' : 'read')

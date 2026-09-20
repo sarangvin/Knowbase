@@ -56,65 +56,14 @@
 .app-body { display: flex; min-height: 0; min-width: 0; position: relative; overflow: hidden; }
 /* The file tree is a bottom-nav destination now, not a docked column. */
 .files-pane { height: 100%; overflow: auto; background: var(--bg-sidebar); }
-.right-sidebar-wrap {
-  width: var(--rightbar-w);
-  flex: 0 0 var(--rightbar-w);
-  background: var(--bg-sidebar);
-  border-left: 1px solid var(--border);
-  overflow: hidden;
-  transition: flex-basis 0.16s ease, width 0.16s ease;
-}
-.right-sidebar-wrap.collapsed { width: 0; flex-basis: 0; border-left: none; }
-
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .main-content { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
 
-.drawer-backdrop { display: none; }
 
-/* ── Mobile: sidebars become full-height overlay drawers, not flex columns.
-   Two fixed-width columns (250px + 290px) would otherwise squeeze the main
-   content to nothing and push the right sidebar off-screen entirely. ──────── */
-@media (max-width: 768px) {
-  .right-sidebar-wrap {
-    position: fixed;
-    top: var(--topbar-h);
-    bottom: var(--bottomnav-h);
-    z-index: 40;
-    width: min(84vw, 320px);
-    flex-basis: 0; /* fixed-position children exit flex flow; kept for clarity */
-    transition: transform 0.2s ease;
-    box-shadow: var(--shadow-pop);
-  }
-  .right-sidebar-wrap { right: 0; transform: translateX(0); border-left: 1px solid var(--border); }
-  .right-sidebar-wrap.collapsed { transform: translateX(100%); border-left: none; }
-
-  /* A phone has room for the note's own name, not its whole path. The
-     ancestors are still one tap away in Files. */
-  .topbar-title .crumb,
-  .topbar-title .crumb-sep { display: none; }
-  .topbar-title .crumb-current { overflow: hidden; text-overflow: ellipsis; }
-
-  /* Dashboard tables carry six columns of numbers; they cannot fit 375px and
-     must not be squeezed into illegibility. Scroll them sideways instead,
-     the same affordance markdown tables already have. */
-  .dv-table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .drawer-backdrop {
-    display: block;
-    position: fixed;
-    top: var(--topbar-h);
-    bottom: var(--bottomnav-h);
-    left: 0;
-    right: 0;
-    background: hsl(var(--soil-h) 30% 3% / 0.6);
-    z-index: 30;
-  }
-}
+/* Panes that were a docked right column and are now destinations. Capped to
+   the reader's measure so switching to Search or Ask doesn't throw the text
+   across the full width of a desktop window. */
+.side-pane { height: 100%; overflow: auto; max-width: 820px; margin-inline: auto; }
 
 /* ── Tab bar ─────────────────────────────────────────────────────────────── */
 .tabbar {
@@ -154,16 +103,12 @@
 .tab-close:hover { background: var(--bg-elevated); color: var(--text-normal); }
 .tab-new { flex: 0 0 auto; }
 
-/* ── Right sidebar ───────────────────────────────────────────────────────── */
-.right-sidebar { display: flex; flex-direction: column; height: 100%; }
-.right-tabs {
-  display: flex;
+/*  display: flex;
   align-items: center;
   gap: 2px;
   padding: 5px 6px;
   border-bottom: 1px solid var(--border);
 }
-.right-content { flex: 1; min-height: 0; overflow-y: auto; }
 
 /* ── Bottom navigation ───────────────────────────────────────────────────── */
 .bottomnav {

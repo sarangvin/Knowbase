@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useVault } from '../vault/vaultStore'
 import { SyncModal } from '../features/sync/SyncModal'
 import {
-  ArrowLeft, ArrowRight, PanelRight, Search, Network, Pencil, Eye, Command, RotateCw,
+  ArrowLeft, ArrowRight, Search, Sparkles, Network, Pencil, Eye, Command, RotateCw,
 } from '../ui/icons'
 
 export function TopBar() {
@@ -49,8 +49,11 @@ export function TopBar() {
         <button className="icon-btn" title="Command palette (⌘P)" onClick={() => s.setPaletteOpen(true)}>
           <Command />
         </button>
-        <button className="icon-btn" title="Search (⌘⇧F)" onClick={() => s.setSearchOpen(true)}>
+        <button className="icon-btn" title="Search (⌘⇧F)" onClick={() => s.openView({ kind: 'search' })}>
           <Search />
+        </button>
+        <button className="icon-btn" title="Ask AI" onClick={() => s.openView({ kind: 'ask' })}>
+          <Sparkles />
         </button>
         {view?.kind === 'note' && (
           <button
@@ -63,9 +66,6 @@ export function TopBar() {
         )}
         <button className="icon-btn" title="Graph view (⌘G)" onClick={() => s.openView({ kind: 'graph' })}>
           <Network />
-        </button>
-        <button className="icon-btn" title="Toggle right sidebar" onClick={s.toggleRight}>
-          <PanelRight />
         </button>
       </div>
       {syncOpen && <SyncModal onClose={() => setSyncOpen(false)} />}

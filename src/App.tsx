@@ -10,7 +10,6 @@ import { startOnboarding, fetchOnboardingJob } from './features/onboarding/onboa
 import { TopBar } from './shell/TopBar'
 import { TabBar } from './shell/TabBar'
 import { MainPane } from './shell/MainPane'
-import { RightSidebar } from './shell/RightSidebar'
 import { BottomNav } from './shell/BottomNav'
 import { CommandPalette } from './features/palette/CommandPalette'
 import { QuickSwitcher } from './features/palette/QuickSwitcher'
@@ -19,7 +18,6 @@ import './App.css'
 // Register native dashboard renderers (Dataview replacement) once.
 registerAutomatedGraph()
 
-const MOBILE_QUERY = '(max-width: 768px)'
 
 /** Path-based rather than a query flag so the URL is something you can hand
  *  to someone: rabbithole-topaz.vercel.app/demo. Trailing slash tolerated
@@ -30,7 +28,6 @@ function isDemoRoute(): boolean {
 
 export default function App() {
   const status = useVault((s) => s.status)
-  const rightOpen = useVault((s) => s.rightOpen)
   const tryRestoreFolder = useVault((s) => s.tryRestoreFolder)
   const checkAuth = useVault((s) => s.checkAuth)
   const loadRemote = useVault((s) => s.loadRemote)
@@ -123,43 +120,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // On narrow viewports both sidebars become full-height overlay drawers (see
-  // App.css) instead of fixed-width flex columns — two 250px+290px columns
-  // would otherwise squeeze the main content to nothing and put the right
-  // sidebar off-screen. React to the breakpoint live (not just once at mount —
-  // a mount-only check misses a resize that happens after first paint, e.g.
-  // rotating a phone or resizing a desktop window): entering mobile closes
-  // both drawers so the note is visible first; leaving mobile back to desktop
-  // reopens both, since otherwise the user lands on a full desktop screen with
-  // no way back to either panel except manually clicking both toggle buttons.
-  useEffect(() => {
-    const mq = window.matchMedia(MOBILE_QUERY)
-    let lastIsMobile = mq.matches
-    const sync = () => {
-      const isMobile = window.matchMedia(MOBILE_QUERY).matches
-      lastIsMobile = isMobile
-      useVault.setState({ rightOpen: !isMobile })
-    }
-    sync()
-    // Three independent signals, deliberately redundant: matchMedia's 'change'
-    // and window 'resize' are the standard, cheap, event-driven path for a
-    // real user resizing a real browser window or rotating a phone. Some
-    // devtools/CDP-driven viewport overrides, though, change the rendered
-    // layout without dispatching either (observed against this app's own
-    // preview tooling) — a low-frequency poll is the only mechanism that
-    // can't be silently skipped by however the viewport change was triggered.
-    mq.addEventListener('change', sync)
-    window.addEventListener('resize', sync)
-    const poll = setInterval(() => {
-      if (window.matchMedia(MOBILE_QUERY).matches !== lastIsMobile) sync()
-    }, 500)
-    return () => {
-      mq.removeEventListener('change', sync)
-      window.removeEventListener('resize', sync)
-      clearInterval(poll)
-    }
-  }, [])
-
   // Hold the splash while auto-resume is still deciding. Onboarding draws its
   // own spinner once a vault is actually loading, so this only covers the gap
   // before that starts.
@@ -179,22 +139,17 @@ export default function App() {
   // means the space is still being written — which OnboardingBanner says, from
   // wherever the user happens to be.
 
-  const closeDrawers = () => useVault.setState({ rightOpen: false })
 
   return (
     <div className="app">
       <TopBar />
       <div className="app-body">
-        {rightOpen && <div className="drawer-backdrop" onClick={closeDrawers} />}
         <main className="main">
           <TabBar />
           <div className="main-content">
             <MainPane />
           </div>
         </main>
-        <aside className={`right-sidebar-wrap ${rightOpen ? '' : 'collapsed'}`}>
-          <RightSidebar />
-        </aside>
       </div>
       <BottomNav />
       <OnboardingBanner />

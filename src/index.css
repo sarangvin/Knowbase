@@ -72,7 +72,6 @@
      must stop above it. Kept as a token so both stay in sync. */
   --bottomnav-h: 56px;
   --sidebar-w: 250px;
-  --rightbar-w: 290px;
 
   --shadow-modal: 0 16px 48px hsl(var(--soil-h) 40% 2% / 0.6);
   --shadow-pop: 0 8px 28px hsl(var(--soil-h) 40% 2% / 0.5);

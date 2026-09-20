@@ -21,6 +21,8 @@ export type View =
   | { kind: 'note'; path: string; heading?: string }
   | { kind: 'graph' }
   | { kind: 'files' }
+  | { kind: 'search' }
+  | { kind: 'ask' }
   | { kind: 'quiz' }
   | { kind: 'settings' }
   | { kind: 'home' }
@@ -31,7 +33,6 @@ export interface Tab {
   pos: number
 }
 
-export type RightPanel = 'backlinks' | 'outline' | 'tags'
 export type Mode = 'read' | 'edit'
 
 export interface SearchHit {
@@ -66,11 +67,8 @@ interface VaultState {
 
   // ── ui ──
   leftOpen: boolean
-  rightOpen: boolean
-  rightPanel: RightPanel
   paletteOpen: boolean
   quickSwitchOpen: boolean
-  searchOpen: boolean
 
   // ── actions: loading ──
   loadSeed: () => Promise<void>
@@ -102,11 +100,8 @@ interface VaultState {
 
   // ── actions: ui ──
   toggleLeft: () => void
-  toggleRight: () => void
-  setRightPanel: (p: RightPanel) => void
   setPaletteOpen: (open: boolean) => void
   setQuickSwitchOpen: (open: boolean) => void
-  setSearchOpen: (open: boolean) => void
 
   // ── selectors / helpers ──
   activeView: () => View | null
@@ -231,11 +226,8 @@ export const useVault = create<VaultState>((set, get) => {
     activeTabId: null,
     mode: 'read',
     leftOpen: true,
-    rightOpen: true,
-    rightPanel: 'backlinks',
     paletteOpen: false,
     quickSwitchOpen: false,
-    searchOpen: false,
 
     loadSeed: async () => loadFromSource(new SeedVaultSource()),
     pickFolder: async () => {
@@ -366,11 +358,8 @@ export const useVault = create<VaultState>((set, get) => {
     },
 
     toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),
-    toggleRight: () => set((s) => ({ rightOpen: !s.rightOpen })),
-    setRightPanel: (p) => set({ rightPanel: p, rightOpen: true }),
     setPaletteOpen: (open) => set({ paletteOpen: open }),
     setQuickSwitchOpen: (open) => set({ quickSwitchOpen: open }),
-    setSearchOpen: (open) => set({ searchOpen: open, rightOpen: open ? true : get().rightOpen }),
 
     activeView: () => {
       const { tabs, activeTabId } = get()

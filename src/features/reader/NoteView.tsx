@@ -16,7 +16,7 @@ function stripLeadingTitle(body: string, title: string): string {
 export function NoteView({ path, heading }: { path: string; heading?: string }) {
   const note = useVault((s) => s.getNote(path))
   const mode = useVault((s) => s.mode)
-  const openTag = useVault((s) => s.setSearchOpen)
+  const openView = useVault((s) => s.openView)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Scroll to a linked heading when navigating to [[Note#Heading]].
@@ -56,7 +56,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
         {note.tags.length > 0 && (
           <div className="note-tags">
             {note.tags.map((t) => (
-              <span key={t} className="tag" onClick={() => openTag(true)}>
+              <span key={t} className="tag" onClick={() => openView({ kind: 'search' })}>
                 #{t}
               </span>
             ))}
