@@ -28,13 +28,28 @@ export function setPendingTopic(topic: string): void {
   }
 }
 
+/** Read without consuming, for pre-filling the landing screen's input.
+ *
+ *  The handoff used to be take-only, which meant that whenever the automatic
+ *  start did not fire — an unapproved account, most obviously — the topic sat
+ *  in storage unread while the user stared at an empty box and typed it
+ *  again. Being able to look without consuming is what makes "you only ever
+ *  type it once" true on every path rather than the happy one. */
+export function peekPendingTopic(): string | null {
+  return readPendingTopic(false)
+}
+
 /** Reads and clears in one step: a pending topic is consumed exactly once,
  * so a failed generation doesn't silently re-trigger on the next render. */
 export function takePendingTopic(): string | null {
+  return readPendingTopic(true)
+}
+
+function readPendingTopic(consume: boolean): string | null {
   let raw: string | null = null
   try {
     raw = localStorage.getItem(KEY)
-    localStorage.removeItem(KEY)
+    if (consume) localStorage.removeItem(KEY)
   } catch {
     return null
   }

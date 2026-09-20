@@ -413,6 +413,11 @@ export function AdminApp() {
                     {u.email}
                     {u.role === 'owner' && <span className="admin-badge">owner</span>}
                     {u.display_name && <div className="admin-subtle">{u.display_name}</div>}
+                    {/* Approving starts building this, so it belongs next to
+                        the button that does it, not on another screen. */}
+                    {!u.access_approved && u.requested_topic && (
+                      <div className="admin-subtle">wants: {u.requested_topic}</div>
+                    )}
                   </td>
                   <td><VerifiedCell value={u.email_verified} /></td>
                   <td><AccessCell row={u} /></td>

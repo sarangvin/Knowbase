@@ -28,6 +28,14 @@ authRouter.get('/me', (req, res) => {
 // the one worth recording, and letting repeat clicks bump it would let
 // someone push themselves to the top of a date-sorted queue.
 authRouter.post('/request-access', requireAuth, asyncHandler(async (req, res) => {
+  const topic = typeof req.body?.topic === 'string' ? req.body.topic.trim().slice(0, 120) : ''
+  // The timestamp is first-ask-wins, deliberately (see above). The topic is
+  // last-ask-wins: someone who comes back and asks for something else has
+  // changed their mind, and the point of storing it is to build the right
+  // thing when they are let in.
+  if (topic) {
+    await db.update(users).set({ requestedTopic: topic }).where(eq(users.id, req.user!.id))
+  }
   await db
     .update(users)
     .set({ accessRequestedAt: new Date() })

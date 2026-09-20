@@ -57,6 +57,13 @@
       "when": 1789905677882,
       "tag": "0007_red_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789919516782,
+      "tag": "0008_silent_dorian_gray",
+      "breakpoints": true
     }
   ]
 }

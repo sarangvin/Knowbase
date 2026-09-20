@@ -8,11 +8,11 @@
 // to sign in with Google before you could find out you weren't approved yet,
 // which spends the user's effort and then rejects them, and told us nothing
 // about what they actually wanted.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { FsAccessVaultSource } from '../../vault/source'
 import { requestAccess } from '../../vault/remoteSource'
-import { setPendingTopic, clearPendingTopic } from './pendingTopic'
+import { setPendingTopic, clearPendingTopic, peekPendingTopic } from './pendingTopic'
 import { startOnboarding } from './onboardingApi'
 import { randomTopicPlaceholder } from './examples'
 import { RabbitSolid, Folder, Eye, Cloud, Pencil, Envelope, Check, ArrowRight, Sparkles } from '../../ui/icons'
@@ -30,7 +30,11 @@ export function Onboarding() {
   const user = useVault((s) => s.user)
   const fsSupported = FsAccessVaultSource.isSupported()
 
-  const [topic, setTopic] = useState('')
+  // Pre-filled from the handoff, so coming back from Google never shows an
+  // empty box. The automatic start below usually means this is never seen,
+  // but it is what makes "type it once" true when the start cannot fire —
+  // an account still waiting on approval, most of all.
+  const [topic, setTopic] = useState(() => peekPendingTopic() ?? '')
   const [examples] = useState(randomTopicPlaceholder)
   const [busy, setBusy] = useState(false)
   const [requestedAt, setRequestedAt] = useState<string | null>(user?.accessRequestedAt ?? null)
@@ -49,8 +53,8 @@ export function Onboarding() {
 
   // One button, three meanings — the difference is the user's state, not
   // something they should have to reason about before typing.
-  const start = async () => {
-    const t = topic.trim()
+  const start = async (override?: string) => {
+    const t = (override ?? topic).trim()
     if (!t || busy) return
     setLocalError(null)
     setPendingTopic(t)
@@ -62,7 +66,12 @@ export function Onboarding() {
     if (awaitingApproval) {
       setBusy(true)
       try {
-        setRequestedAt(await requestAccess())
+        // The topic goes with the request. "Tell us your topic and we'll add
+        // you to the list" was not true before — the topic stayed in this
+        // browser, so approving someone produced an account with nothing in
+        // it and no memory of what they had asked for.
+        setRequestedAt(await requestAccess(t))
+        clearPendingTopic()
       } catch (e) {
         setLocalError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -86,6 +95,24 @@ export function Onboarding() {
       setBusy(false)
     }
   }
+
+  // Coming back from Google with a topic already given: build it, rather
+  // than presenting the same question a second time. App.tsx does this too,
+  // on the boot path; this covers every way the landing screen can end up
+  // rendered for an approved user who has already answered — the redirect
+  // resolving after boot, a reload mid-flow, an earlier start that failed.
+  //
+  // Guarded by a ref rather than state: an effect that can fire twice would
+  // spend six model calls twice.
+  const autoStarted = useRef(false)
+  useEffect(() => {
+    if (autoStarted.current || busy || user == null || awaitingApproval) return
+    const pending = peekPendingTopic()
+    if (!pending) return
+    autoStarted.current = true
+    void start(pending)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, awaitingApproval])
 
   const startLabel = user == null ? 'Sign in and start digging' : awaitingApproval ? 'Request early access' : 'Start digging'
 

@@ -6,7 +6,9 @@
 import { Router } from 'express'
 import { sql, eq, desc } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { users, usageEvents, subscriptions } from '../db/schema.js'
+import { users, usageEvents, subscriptions, onboardingJobs } from '../db/schema.js'
+import { waitUntil } from '@vercel/functions'
+import { runOnboarding } from '../onboarding/run.js'
 import { queueDepth } from '../onboarding/queue.js'
 import { requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
@@ -69,7 +71,7 @@ adminRouter.get('/signins', asyncHandler(async (req, res) => {
   const result = await db.execute(sql`
     SELECT
       u.id, u.email, u.email_verified, u.display_name, u.role,
-      u.access_approved, u.access_approved_at, u.access_requested_at,
+      u.access_approved, u.access_approved_at, u.access_requested_at, u.requested_topic,
       u.created_at, u.last_login_at,
       COALESCE(lg.login_count, 0)::int AS login_count
     FROM users u
@@ -237,7 +239,7 @@ adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {
   }
 
   const target = await db
-    .select({ id: users.id, role: users.role })
+    .select({ id: users.id, role: users.role, requestedTopic: users.requestedTopic })
     .from(users)
     .where(eq(users.id, req.params.id))
     .limit(1)
@@ -259,11 +261,31 @@ adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {
     .where(eq(users.id, req.params.id))
     .returning({ accessApproved: users.accessApproved, accessApprovedAt: users.accessApprovedAt })
 
+  // Being let in is the moment their space can finally be built, and they
+  // already told us what they wanted before they knew they had to wait. Not
+  // starting here would mean their next visit is the same empty box asking
+  // the same question for a third time.
+  //
+  // Guarded on there being no job yet, so re-approving someone never
+  // regenerates a space they have already been using.
+  let started: string | null = null
+  if (approved && target[0].requestedTopic) {
+    const existing = await db
+      .select({ status: onboardingJobs.status })
+      .from(onboardingJobs)
+      .where(eq(onboardingJobs.userId, target[0].id))
+      .limit(1)
+    if (!existing[0]) {
+      started = target[0].requestedTopic
+      waitUntil(runOnboarding(target[0].id, started))
+    }
+  }
+
   // snake_case to match GET /signins, which is raw SQL and therefore returns
   // column names. Two casings for the same two fields across one resource is
   // exactly the kind of mismatch that reads fine in curl and silently yields
   // `undefined` in the client.
-  res.json({ access_approved: row.accessApproved, access_approved_at: row.accessApprovedAt })
+  res.json({ access_approved: row.accessApproved, access_approved_at: row.accessApprovedAt, started })
 }))
 
 adminRouter.get('/users/:id', asyncHandler(async (req, res) => {

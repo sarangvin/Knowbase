@@ -4,7 +4,7 @@ import { useKeybindings } from './ui/useKeybindings'
 import { registerAutomatedGraph } from './features/automated-graph/register'
 import { Onboarding } from './features/onboarding/Onboarding'
 import { OnboardingBanner } from './features/onboarding/OnboardingBanner'
-import { takePendingTopic } from './features/onboarding/pendingTopic'
+import { takePendingTopic, clearPendingTopic } from './features/onboarding/pendingTopic'
 import { resetDemoOverlay } from './vault/source'
 import { startOnboarding, fetchOnboardingJob } from './features/onboarding/onboardingApi'
 import { TopBar } from './shell/TopBar'
@@ -81,10 +81,24 @@ export default function App() {
         if (restored || current) return
         if (!user?.accessApproved) return
 
-        // A topic typed before sign-in, carried across the OAuth round-trip.
-        // This is the only place it can be picked up: an approved user never
-        // sees the landing screen again, because the resume below takes them
-        // straight past it.
+        // The job comes first, because the server may already have started
+        // one. Approving a waitlisted account now kicks off the topic they
+        // gave before they knew they were waiting — so by the time they get
+        // here the work is underway, and consuming the stale handoff would
+        // generate the same space a second time at six model calls a go.
+        const job = await fetchOnboardingJob()
+        if (job) {
+          clearPendingTopic()
+          // Mid-generation, so their own vault is empty or half-written. The
+          // demo space is the honest thing to show; the banner brings them
+          // across the moment theirs is ready.
+          if (job.status === 'running') await loadSeed()
+          else await loadRemote()
+          return
+        }
+
+        // No job: a topic typed before sign-in, carried across the OAuth
+        // round-trip, is the thing to act on.
         const pending = takePendingTopic()
         if (pending) {
           try {
@@ -92,20 +106,12 @@ export default function App() {
             await loadSeed()
           } catch {
             // Couldn't start it — fall through to the landing screen, where
-            // they can try again, rather than into an empty vault that
-            // explains nothing.
+            // the input is pre-filled with what they typed, rather than into
+            // an empty vault that explains nothing.
           }
           return
         }
 
-        // Mid-generation, so their own vault is empty or half-written. The
-        // demo space is the honest thing to show; the banner brings them
-        // across the moment theirs is ready.
-        const job = await fetchOnboardingJob()
-        if (job?.status === 'running') {
-          await loadSeed()
-          return
-        }
         await loadRemote()
       } catch {
         // Any failure here just means we fall through to the landing screen,

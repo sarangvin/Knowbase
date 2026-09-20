@@ -23,6 +23,11 @@ export const users = pgTable('users', {
   // from approval so the admin list can distinguish "waiting on you" from
   // "signed in once and never asked".
   accessRequestedAt: timestamp('access_requested_at', { withTimezone: true }),
+  // What they said they wanted to learn, captured on the landing screen
+  // before they could possibly know they were not approved yet. Kept so
+  // approving someone can start building the thing they asked for, rather
+  // than dropping them back on an empty box to type it a third time.
+  requestedTopic: text('requested_topic'),
   displayName: text('display_name'),
   avatarUrl: text('avatar_url'),
   role: text('role').notNull().default('user'), // 'user' | 'owner'

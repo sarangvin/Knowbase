@@ -81,8 +81,13 @@ export async function fetchCurrentUser(): Promise<RemoteUser | null> {
 
 /** Ask the owner for early access. Idempotent server-side — the first
  * request's timestamp is the one kept. */
-export async function requestAccess(): Promise<string | null> {
-  const res = await fetch('/auth/request-access', { method: 'POST', credentials: 'include' })
+export async function requestAccess(topic?: string): Promise<string | null> {
+  const res = await fetch('/auth/request-access', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic: topic ?? '' }),
+  })
   if (!res.ok) throw new Error(`Could not send the request: ${res.status}`)
   const data = (await res.json()) as { accessRequestedAt: string | null }
   return data.accessRequestedAt

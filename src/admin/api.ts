@@ -29,6 +29,9 @@ export interface AdminSigninRow {
   access_approved: boolean
   access_approved_at: string | null
   access_requested_at: string | null
+  /** What they asked to learn on the landing screen. Approving them starts
+   *  building it, so this is worth seeing before you decide. */
+  requested_topic: string | null
   created_at: string
   last_login_at: string
   login_count: number

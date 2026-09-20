@@ -18,13 +18,35 @@ demo space while the server works.
 |---|---|
 | Landing screen, before sign-in | `src/features/onboarding/Onboarding.tsx` |
 | Empty vault or the collections home | `src/features/onboarding/TopicLauncher.tsx` |
+| The owner approving a waitlisted account | `backend/src/routes/admin.ts` |
 
-Both call `startOnboarding(topic)` →
+The first two call `startOnboarding(topic)` →
 `POST /api/onboarding/start` (`backend/src/routes/onboarding.ts`).
 
 `TopicLauncher` renders `null` unless `user.accessApproved`. Generation spends
 the owner's model key, so the server refuses an unapproved account; saying so
 up front beats letting someone type a topic and handing back a 403.
+
+### The topic is asked for exactly once
+
+It is typed on the landing screen *before* sign-in, and has to survive
+everything that happens next. Three mechanisms, because there are three ways
+the moment of typing can be separated from the moment of building:
+
+| Gap | Carried by |
+|---|---|
+| The Google OAuth full-page redirect | `localStorage`, via `pendingTopic.ts`. Not a query parameter: it stays out of server logs and `Referer` |
+| Landing screen rendered again after the redirect | `peekPendingTopic()` pre-fills the input, and an effect auto-starts for an approved user — so the screen is usually not seen at all |
+| Days spent on the waitlist | `users.requested_topic`, sent with `POST /auth/request-access`. Approving the account starts that build immediately |
+
+`peek` versus `take` matters. The handoff used to be take-only, so whenever
+the automatic start did not fire — an unapproved account, most obviously —
+the topic sat unread in storage while the user looked at an empty box and
+typed it again.
+
+`App.tsx` fetches the job **before** consuming the handoff: approval may have
+started the build already, and a stale handoff would generate the same space
+a second time at six model calls a go.
 
 ---
 
