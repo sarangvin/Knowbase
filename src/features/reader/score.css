@@ -79,34 +79,98 @@
   .score-range::-moz-range-thumb { transition: none; }
 }
 
-/* ── Mark reviewed ───────────────────────────────────────────────────────── */
-.review {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid var(--divider);
+/* ── Review tab ──────────────────────────────────────────────────────────
+   Pinned to the foot of the reader and filled by sustained overscroll (see
+   useScrollReview.ts). Sticky rather than fixed so it belongs to the note
+   pane: on mobile it stacks above the bottom nav instead of covering it,
+   and on desktop it stays out of the sidebars. */
+.reviewbar-slot {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 30px 20px 14px;
+  /* The tab is drawn over text scrolling beneath it; without this the last
+     line of a paragraph collides with the label. */
+  background: linear-gradient(to top, var(--bg-primary) 62%, transparent);
+  /* Only the tab itself is clickable — the fade gutter above it must not
+     swallow clicks on the note text underneath. */
+  pointer-events: none;
 }
-.review-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
+
+.reviewbar {
+  pointer-events: auto;
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-m);
   background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  color: var(--text-normal);
+  color: var(--text-muted);
   font-size: 13.5px;
   font-weight: 500;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.review-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); color: var(--accent); }
-.review-btn:disabled { opacity: 0.5; cursor: default; }
-.review-hint { color: var(--text-faint); font-size: 12.5px; line-height: 1.5; }
-.review-err { color: var(--text-error); font-size: 12.5px; }
+
+/* Fills left-to-right as the gesture progresses. A leading edge rather than
+   a plain bar: it reads as a position in a travel, not a loading spinner. */
+.reviewbar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--p, 0%);
+  background: var(--accent-soft);
+  border-right: 2px solid var(--accent);
+  /* At rest the zero-width fill would still paint its 2px leading edge as an
+     orange sliver down the left of the tab, reading as a stuck progress bar. */
+  opacity: 0;
+  /* Width: short and linear — long enough to smooth wheel jitter, short
+     enough that a finger drag still feels directly attached to the fill. */
+  transition: width 0.12s linear, opacity 0.15s;
+}
+.reviewbar.is-pulling .reviewbar-fill { opacity: 1; }
+
+.reviewbar-body {
+  position: relative; /* above the fill */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  /* 44px: the minimum comfortable touch target, and the gesture's own
+     target is the whole note, so this only has to serve the tap fallback. */
+  min-height: 44px;
+}
+.reviewbar-label { line-height: 1.3; }
+
+/* At the end of the note the tab goes from a label to an offer. */
+.reviewbar.is-armed { color: var(--text-normal); border-color: var(--accent-line); }
+.reviewbar.is-pulling { color: var(--accent); }
+.reviewbar.is-done { color: var(--text-success); border-color: var(--text-success); opacity: 1; }
+.reviewbar:hover:not(:disabled) { background: var(--bg-hover); color: var(--accent); border-color: var(--accent); }
+.reviewbar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reviewbar:disabled { cursor: default; }
+.reviewbar:disabled:not(.is-done) { opacity: 0.6; }
+
+.reviewbar-err {
+  pointer-events: auto;
+  margin-bottom: 8px;
+  color: var(--text-error);
+  font-size: 12.5px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* A small bob on the chevrons once the gesture is available: the direction
+     is the one thing a static label can't show. Armed only, so it is never
+     movement for its own sake. */
+  .reviewbar.is-armed:not(.is-pulling) .reviewbar-body svg { animation: reviewbar-bob 1.6s ease-in-out infinite; }
+}
+@keyframes reviewbar-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2.5px); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .review-btn { transition: none; }
+  .reviewbar, .reviewbar-fill { transition: none; }
 }

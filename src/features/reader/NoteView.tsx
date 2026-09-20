@@ -3,7 +3,7 @@ import { useVault } from '../../vault/vaultStore'
 import { slugify } from '../../vault/parse'
 import { MarkdownView } from './MarkdownView'
 import { Properties } from './Properties'
-import { ReviewButton } from './ReviewButton'
+import { ReviewBar } from './ReviewBar'
 import { Editor } from '../editor/Editor'
 import './noteview.css'
 
@@ -64,8 +64,11 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
         )}
         <Properties frontmatter={note.frontmatter} notePath={note.path} />
         <MarkdownView content={body} notePath={note.path} />
-        <ReviewButton note={note} />
       </div>
+      {/* Outside .note-container on purpose: as a sibling it can stick to the
+          foot of the scroller for the whole note, rather than only once the
+          container's own bottom edge comes into view. */}
+      <ReviewBar note={note} scrollRef={scrollRef} />
     </div>
   )
 }
