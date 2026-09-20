@@ -180,3 +180,47 @@ export const onboardingJobs = pgTable(
   },
   (t) => [uniqueIndex('onboarding_jobs_user_unique').on(t.userId)],
 )
+
+/** The global queue of notes still to be written.
+ *
+ *  Drafting used to happen inline inside the request that asked for it. That
+ *  works right up until it doesn't: a run that exceeds the function's time
+ *  limit, or an invocation that gets killed, leaves the note as a one-line
+ *  placeholder with nothing anywhere that knows to try again. Three notes in
+ *  production sat like that indefinitely before this table existed.
+ *
+ *  So the work is recorded before it is attempted, and any invocation can
+ *  pick up what an earlier one dropped.
+ */
+export const draftQueue = pgTable(
+  'draft_queue',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    vaultId: uuid('vault_id').notNull().references(() => vaults.id, { onDelete: 'cascade' }),
+    /** The note this job fills in. Unique per vault: one job per note. */
+    path: text('path').notNull(),
+    space: text('space').notNull(),
+    title: text('title').notNull(),
+    /** The one-line summary from the plan, which is also what the placeholder
+     *  body shows until the draft lands. */
+    summary: text('summary').notNull().default(''),
+    /** Sibling topic titles, for the prompt's sense of where this note sits. */
+    siblings: jsonb('siblings').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /** 'grow' | 'onboarding' | 'reconcile' — which path created the job. */
+    source: text('source').notNull().default('grow'),
+    /** 'pending' → 'running' → 'done' | 'failed'. A 'running' row older than
+     *  the stale timeout is reclaimed: that is the killed-invocation case. */
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('draft_queue_vault_path_unique').on(t.vaultId, t.path),
+    // The claim query's access path: pending work, oldest first.
+    index('draft_queue_status_created_idx').on(t.status, t.createdAt),
+  ],
+)

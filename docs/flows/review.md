@@ -65,11 +65,47 @@ succeeded.
   dragged without reading anything.
 - If fewer than `MAX_UNREVIEWED` (**3**) topics are unstudied, generate more,
   at most `MAX_PER_RUN` (**3**) per run.
-- New topics land as placeholders, then get drafted; each write re-checks the
-  placeholder, so a note the user has already opened and edited is left alone.
+- New topics are written as placeholders and their bodies **queued**, not
+  drafted inline. See below.
 
 The cap is the point. Topping back up to three keeps a next step always
 available without turning the sidebar into a backlog nobody will finish.
+
+### The draft queue
+
+`backend/src/onboarding/queue.ts`, table `draft_queue`.
+
+Drafting used to run inline in whichever request asked for it, so the work
+existed only as long as that invocation did. Overrun the 60s limit or get
+killed and the note stayed a one-line placeholder with nothing, anywhere,
+that knew to retry. Three notes in one user's vault sat like that for a day.
+
+| | |
+|---|---|
+| **Enqueued by** | `growSpace`, and `reconcileQueue` for anything stranded |
+| **Claimed by** | one `UPDATE … FOR UPDATE SKIP LOCKED` statement, so overlapping drains take different rows rather than drafting the same note twice |
+| **Driven by** | `GET /api/onboarding/status` — the banner already polls it every 5s, which makes it the heartbeat. There is no long-running worker to put this on |
+| **Retried** | up to `MAX_ATTEMPTS` (3); a `running` row older than 5 minutes is reclaimed as dead |
+| **Swept by** | `POST /api/onboarding/queue/sweep` — scans notes for placeholders no job is tracking |
+| **Visible in** | admin › Model usage, as pending / in flight / given up on |
+
+Each write re-checks that the note is still a placeholder, immediately before
+committing: a draft call takes seconds, and the user may have opened and
+edited the note during them. Their text always wins.
+
+Onboarding does **not** use the queue — it drafts all five notes before
+declaring the space ready, which is a deliberate product decision (see
+[onboarding.md](onboarding.md)).
+
+### "Coming soon"
+
+A placeholder carries `pending: true` in its frontmatter, and Next Up renders
+a "Coming soon" chip beside the title. `fillPlaceholder` removes the flag in
+the same write that puts the body in, so the chip disappears on its own.
+
+The flag exists rather than the client sniffing for the placeholder sentence:
+that string is prose, it will be reworded, and a UI that breaks when prose
+changes is exactly the coupling the rest of this document is about.
 
 ---
 

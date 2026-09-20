@@ -198,10 +198,17 @@ export function buildTopicNote(
     ? body.questions.map((q) => `- ${sanitizeInline(q)}`).join('\n') + '\n'
     : ''
 
+  // `pending` says the body is a stub the queue has not reached yet. A
+  // frontmatter field rather than the client sniffing for the placeholder
+  // sentence: that string is prose, it will be reworded eventually, and a UI
+  // that breaks when prose changes is the kind of coupling this codebase has
+  // been paying for all week. Removed by fillPlaceholder when the draft lands.
+  const pendingLine = opts?.pending ? 'pending: true\n' : ''
+
   return `---
 space:
 status: frontier
-${prereqLine}
+${pendingLine}${prereqLine}
 importance: ${s.importance}
 interest: ${s.interest}
 confidence: 0

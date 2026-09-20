@@ -11,11 +11,10 @@
 import { and, eq, like } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
-import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
 import { generateNextTopics } from './plan.js'
-import { draftOne } from './draftNote.js'
+import { enqueueDrafts, drainQueue } from './queue.js'
 import { buildTopicNote, dedupeSegments, sanitizeSegment } from './notePlan.js'
-import { SPACE_ROOT, getOrCreatePersonalVaultId, contributeToLibrary } from '../vault/spaces.js'
+import { SPACE_ROOT, getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
 /** How many unstudied topics a space should keep available. */
@@ -81,7 +80,6 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) return { added: 0, reason: 'no-key' }
-    const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
 
     const fresh = await generateNextTopics(space, studied, all, want, userId)
     if (!fresh || fresh.length === 0) return { added: 0, reason: 'generation-failed' }
@@ -113,34 +111,24 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
       )
       .onConflictDoNothing({ target: [notes.vaultId, notes.path] })
 
-    // Draft the bodies. Sequential for the same per-user rate limit reason as
-    // onboarding, and each write re-checks the placeholder so a note the user
-    // has already opened and edited is left alone.
+    // Hand the bodies to the queue rather than drafting them here. Growing a
+    // space used to draft inline, which meant the work only existed for as
+    // long as this one invocation did: overrun the function's time limit or
+    // get killed, and the placeholders stayed placeholders with nothing
+    // anywhere that knew to retry. Queued, they survive that.
     const siblings = [...all, ...fresh.map((s) => s.title)]
-    const finished: { path: string; content: string }[] = []
-    for (let i = 0; i < fresh.length; i++) {
-      const content = await draftOne(
-        apiKey,
-        model,
-        space,
-        { path: paths[i], title: fresh[i].title, summary: fresh[i].summary, placeholder: placeholders[i] },
-        siblings,
+    await enqueueDrafts(
+      fresh.map((s, i) => ({
         userId,
-        'grow-draft',
-      )
-      if (!content) continue
-      const existing = await db
-        .select({ content: notes.content })
-        .from(notes)
-        .where(and(eq(notes.vaultId, vaultId), eq(notes.path, paths[i])))
-        .limit(1)
-      if (!existing[0] || existing[0].content !== placeholders[i]) continue
-      await db
-        .update(notes)
-        .set({ content, sizeBytes: Buffer.byteLength(content, 'utf8'), mtime: new Date() })
-        .where(and(eq(notes.vaultId, vaultId), eq(notes.path, paths[i])))
-      finished.push({ path: paths[i], content })
-    }
+        vaultId,
+        path: paths[i],
+        space,
+        title: s.title,
+        summary: s.summary,
+        siblings,
+        source: 'grow',
+      })),
+    )
 
     void logUsageEvent({
       userId,
@@ -148,9 +136,10 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
       metadata: { vault: 'personal', space, count: fresh.length, source: 'grow' },
     })
 
-    await contributeToLibrary(finished).catch((err) =>
-      console.warn('[grow] library contribution failed (ignored):', err),
-    )
+    // Start on them straight away. The caller is already inside a waitUntil,
+    // so this costs the user nothing, and whatever this invocation does not
+    // finish the next drain picks up.
+    await drainQueue()
 
     return { added: fresh.length }
   } catch (err) {

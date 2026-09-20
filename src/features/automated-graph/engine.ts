@@ -110,9 +110,19 @@ export function isReviewedToday(fm: Record<string, unknown>): boolean {
   return lastReviewedDay(fm) === localDay()
 }
 
+/** The note exists but its body is still the one-line stub: a draft job is
+ *  queued for it. Read from frontmatter rather than by sniffing the
+ *  placeholder prose, so rewording that sentence cannot silently break the
+ *  "(Coming soon)" marker. */
+export function isPending(fm: Record<string, unknown>): boolean {
+  return fm.pending === true || fm.pending === 'true'
+}
+
 export interface RankedTopic {
   path: string
   title: string
+  /** Body not written yet — the queue has it. */
+  pending: boolean
   confidence: number
   importance: number
   interest: number
@@ -125,12 +135,14 @@ export interface RankedTopic {
 export interface LockedTopic {
   path: string
   title: string
+  pending: boolean
   needs: { path: string; title: string }[]
 }
 export interface ReviewTopic {
   path: string
   title: string
   space: string
+  pending: boolean
   confidence: number
   interest: number
   lastReviewed: string
@@ -179,6 +191,7 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
       return {
         path: p.path,
         title: p.title,
+        pending: isPending(p.frontmatter),
         confidence: num(p.frontmatter.confidence),
         importance,
         interest,
@@ -189,7 +202,10 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
           interest * cfg.weight_interest,
       }
     })
-    .sort((a, b) => b.score - a.score)
+    // A written note before an unwritten one, whatever the scores. Sending
+    // someone to a topic whose body is still a single sentence wastes the one
+    // recommendation the page makes.
+    .sort((a, b) => Number(a.pending) - Number(b.pending) || b.score - a.score)
 
   const locked: LockedTopic[] = frontier
     .filter((p) => !isReady(p))
@@ -200,6 +216,7 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
     .map((p) => ({
       path: p.path,
       title: p.title,
+      pending: isPending(p.frontmatter),
       needs: prereqPaths(p, index)
         .filter((path) => !isReviewed(index, path))
         .map((path) => ({ path, title: index.notes.get(path)?.title ?? path })),
@@ -216,6 +233,7 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
       path: p.path,
       title: p.title,
       space,
+      pending: isPending(p.frontmatter),
       confidence: num(p.frontmatter.confidence),
       interest: num(p.frontmatter.interest),
       lastReviewed: lastReviewedDay(p.frontmatter) ?? 'never',
@@ -242,6 +260,7 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
       ? {
           path: fallback.path,
           title: fallback.title,
+          pending: fallback.pending,
           confidence: fallback.confidence,
           importance: num(index.notes.get(fallback.path)?.frontmatter.importance),
           interest: fallback.interest,

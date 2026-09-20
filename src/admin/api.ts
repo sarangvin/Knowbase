@@ -86,6 +86,8 @@ export interface AdminUsageResponse {
   models: ModelUsageRow[]
   bySource: { source: string; calls: number }[]
   activeModel: string
+  /** Outstanding note-drafting work (backend/src/onboarding/queue.ts). */
+  queue?: { pending: number; running: number; failed: number }
 }
 
 export interface UsageEventRow {

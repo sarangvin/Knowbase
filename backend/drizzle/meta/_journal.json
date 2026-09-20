@@ -50,6 +50,13 @@
       "when": 1789761423923,
       "tag": "0006_furry_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789905677882,
+      "tag": "0007_red_magma",
+      "breakpoints": true
     }
   ]
 }

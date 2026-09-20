@@ -7,6 +7,7 @@ import { Router } from 'express'
 import { sql, eq, desc } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { users, usageEvents, subscriptions } from '../db/schema.js'
+import { queueDepth } from '../onboarding/queue.js'
 import { requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 
@@ -222,6 +223,9 @@ adminRouter.get('/usage', asyncHandler(async (_req, res) => {
     bySource,
     // So the UI never has to guess which row is the one currently in use.
     activeModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+    // Outstanding drafting work. A queue you cannot see the depth of is one
+    // you find out about when a user reports a note that never filled in.
+    queue: await queueDepth(),
   })
 }))
 

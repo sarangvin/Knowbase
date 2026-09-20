@@ -7,13 +7,25 @@ import {
 } from './engine'
 import './dashboards.css'
 
-function NoteLink({ path, label }: { path: string | null; label: string }) {
+function NoteLink({ path, label, pending }: { path: string | null; label: string; pending?: boolean }) {
   const openNote = useVault((s) => s.openNote)
-  if (!path) return <span className="dv-faint">{label}</span>
+  const marker = pending ? (
+    // The note exists and is readable — it is a one-line stub while the draft
+    // queue gets to it. Saying so beats letting someone open it and conclude
+    // the app produced a sentence. It disappears by itself: the flag comes out
+    // of the frontmatter in the same write that puts the body in.
+    <span className="dv-soon" title="Being written now — the full note will appear here shortly.">
+      Coming soon
+    </span>
+  ) : null
+  if (!path) return <span className="dv-faint">{label}{marker}</span>
   return (
-    <a className="internal-link" onClick={() => openNote(path)}>
-      {label}
-    </a>
+    <>
+      <a className="internal-link" onClick={() => openNote(path)}>
+        {label}
+      </a>
+      {marker}
+    </>
   )
 }
 
@@ -35,7 +47,7 @@ function ReviewTable({ rows, withSpace }: { rows: ReviewTopic[]; withSpace?: boo
         {rows.map((r) => (
           <tr key={r.path}>
             {withSpace && <td>{r.space}</td>}
-            <td><NoteLink path={r.path} label={r.title} /></td>
+            <td><NoteLink path={r.path} label={r.title} pending={r.pending} /></td>
             <td>{r.interest}</td>
             <td>{r.confidence}/5</td>
             <td>{r.lastReviewed}</td>
@@ -58,7 +70,7 @@ export function NextUp({ space }: { space: string }) {
         <div className="dv-pick">
           <div className="dv-pick-label">{r.pick.isReview ? 'Review next' : 'Pick'}</div>
           <div className="dv-pick-title">
-            <NoteLink path={r.pick.path} label={r.pick.title} />
+            <NoteLink path={r.pick.path} label={r.pick.title} pending={r.pick.pending} />
           </div>
           <div className="dv-pick-meta">
             {r.pick.isReview ? (
@@ -91,7 +103,7 @@ export function NextUp({ space }: { space: string }) {
           <tbody>
             {r.ranked.map((c) => (
               <tr key={c.path}>
-                <td><NoteLink path={c.path} label={c.title} /></td>
+                <td><NoteLink path={c.path} label={c.title} pending={c.pending} /></td>
                 <td>{c.confidence}/5</td>
                 <td>{c.importance}</td>
                 <td>{c.unlocks}</td>
@@ -113,7 +125,7 @@ export function NextUp({ space }: { space: string }) {
             <tbody>
               {r.locked.map((l) => (
                 <tr key={l.path}>
-                  <td><NoteLink path={l.path} label={l.title} /></td>
+                  <td><NoteLink path={l.path} label={l.title} pending={l.pending} /></td>
                   <td>
                     {l.needs.map((n, i) => (
                       <span key={n.path}>
@@ -186,6 +198,8 @@ export function Flashcards() {
             {top.map((c) => (
               <tr key={c.path}>
                 <td>{c.space}</td>
+                {/* No marker needed: a flashcard candidate has confidence > 0,
+                    which means it was reviewed, which means it was drafted. */}
                 <td><NoteLink path={c.path} label={c.title} /></td>
                 <td>{c.confidence}/5</td>
                 <td>{c.lastReviewed}</td>

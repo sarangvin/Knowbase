@@ -74,6 +74,9 @@ function fillPlaceholder(placeholder: string, overview: string, keyPoints: strin
     /(^## AI Notes\n\n)([\s\S]*?)(?=\n## )/m,
     (_m, head: string) => `${head}${ai}\n`,
   )
+  // The body is no longer a stub, so the flag that said so goes with it —
+  // this is what makes the "(Coming soon)" marker disappear on its own.
+  out = out.replace(/^pending:\s*true[ \t]*\r?\n/m, '')
   if (questions.length) {
     out = out.replace(/(^## Questions\n\n)([\s\S]*)$/m, (_m, head: string) => {
       return `${head}${questions.map((q) => `- ${sanitizeInline(q)}`).join('\n')}\n`

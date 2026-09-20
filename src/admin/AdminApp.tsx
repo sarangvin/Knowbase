@@ -299,6 +299,17 @@ export function AdminApp() {
           {!loading && (usage?.models.length ?? 0) === 0 && (
             <p className="admin-dim">No model calls logged yet.</p>
           )}
+          {usage?.queue && (
+            <p className="admin-dim" style={{ marginTop: 14 }}>
+              Draft queue: <strong>{usage.queue.pending}</strong> waiting ·{' '}
+              <strong>{usage.queue.running}</strong> in flight
+              {usage.queue.failed > 0 && (
+                <>
+                  {' '}· <strong className="admin-pending-count">{usage.queue.failed}</strong> given up on
+                </>
+              )}
+            </p>
+          )}
           {(usage?.bySource.length ?? 0) > 0 && (
             <>
               <div className="admin-label" style={{ marginTop: 22 }}>What used it (last 24h)</div>

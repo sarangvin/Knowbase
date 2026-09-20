@@ -16,6 +16,7 @@ import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { runOnboarding } from '../onboarding/run.js'
 import { growSpace, MAX_UNREVIEWED } from '../onboarding/grow.js'
+import { drainQueue, queueDepth, reconcileQueue } from '../onboarding/queue.js'
 
 export const onboardingRouter = Router()
 onboardingRouter.use(requireAuth)
@@ -118,8 +119,32 @@ onboardingRouter.post('/grow', asyncHandler(async (req, res) => {
   waitUntil(growSpace(userId, space))
 }))
 
+/** The job's state, and the heartbeat that keeps the draft queue moving.
+ *
+ *  There is no long-running worker to put the queue on — the backend is a
+ *  serverless function — so something has to notice pending work and start
+ *  on it. This poll already runs every five seconds while a space is being
+ *  built, which makes it the natural pulse. The drain claims rows atomically,
+ *  so several clients polling at once is wasteful at worst, never harmful.
+ *
+ *  Deliberately after the response: the poll must stay instant. */
 onboardingRouter.get('/status', asyncHandler(async (req, res) => {
-  res.json({ job: await currentJob(req.user!.id) })
+  const job = await currentJob(req.user!.id)
+  const depth = await queueDepth()
+  res.json({ job, queue: depth })
+  if (depth.pending > 0 || depth.running > 0) waitUntil(drainQueue())
+}))
+
+/** Sweep for work the queue has lost track of, then drain.
+ *
+ *  Separate from the poll because it scans notes rather than the queue, which
+ *  is too heavy to do every five seconds. Safe to call from anywhere — a
+ *  scheduled ping, or by hand after a deploy that fixed whatever was
+ *  breaking the drafts. */
+onboardingRouter.post('/queue/sweep', asyncHandler(async (req, res) => {
+  const reconciled = await reconcileQueue()
+  const drained = await drainQueue()
+  res.json({ reconciled, drained, depth: await queueDepth() })
 }))
 
 /** Called once the user has actually been taken to their new space, so the
