@@ -1,13 +1,23 @@
-import { useState } from 'react'
+// The chrome above the reader: where you are, and the few things you can do
+// from anywhere.
+//
+// It used to carry six icons. Three were removed because they were not
+// earning a permanent place in the one bar visible on every screen:
+//
+//   Graph — reachable by ⌘G and from the command palette, and largely
+//   redundant now that the Learn tab and inline links do the navigating.
+//   Command palette — a keyboard affordance with a keyboard shortcut. On a
+//   phone, where there is no ⌘P, the Files tab does the same job better.
+//   AI Sync — a power tool for hand-written vaults, and its label still
+//   advertised Ollama, which no longer exists here. It lives in Settings now.
+//
+// What is left is what has no other way in: search, Ask AI, and the
+// read/edit toggle.
 import { useVault } from '../vault/vaultStore'
-import { SyncModal } from '../features/sync/SyncModal'
-import {
-  ArrowLeft, ArrowRight, Search, Sparkles, Network, Pencil, Eye, Command, RotateCw,
-} from '../ui/icons'
+import { ArrowLeft, ArrowRight, Search, Sparkles, Pencil, Eye } from '../ui/icons'
 
 export function TopBar() {
   const s = useVault()
-  const [syncOpen, setSyncOpen] = useState(false)
   const view = s.activeView()
   const note = view?.kind === 'note' ? s.getNote(view.path) : null
   const crumbs = note ? note.path.replace(/\.md$/i, '').split('/') : []
@@ -39,16 +49,6 @@ export function TopBar() {
       </div>
 
       <div className="topbar-right">
-        <button
-          className="icon-btn"
-          title="AI Sync — answer open questions & fold My Notes into AI Notes (Ollama)"
-          onClick={() => setSyncOpen(true)}
-        >
-          <RotateCw />
-        </button>
-        <button className="icon-btn" title="Command palette (⌘P)" onClick={() => s.setPaletteOpen(true)}>
-          <Command />
-        </button>
         <button className="icon-btn" title="Search (⌘⇧F)" onClick={() => s.openView({ kind: 'search' })}>
           <Search />
         </button>
@@ -64,11 +64,7 @@ export function TopBar() {
             {s.mode === 'read' ? <Pencil /> : <Eye />}
           </button>
         )}
-        <button className="icon-btn" title="Graph view (⌘G)" onClick={() => s.openView({ kind: 'graph' })}>
-          <Network />
-        </button>
       </div>
-      {syncOpen && <SyncModal onClose={() => setSyncOpen(false)} />}
     </div>
   )
 }

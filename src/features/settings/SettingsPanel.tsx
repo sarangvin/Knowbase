@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
-import { User, LogOut, Cloud, Pencil, Trash } from '../../ui/icons'
+import { User, LogOut, Cloud, Pencil, Trash, RotateCw } from '../../ui/icons'
+import { SyncModal } from '../sync/SyncModal'
 import './settings.css'
 
 /** `onClose` omitted renders the panel inline as a full pane (the Settings
@@ -14,6 +15,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const loadGlobalVault = useVault((s) => s.loadGlobalVault)
 
 
+  const [syncOpen, setSyncOpen] = useState(false)
   const [sub, setSub] = useState<SubscriptionStatus | null>(null)
   const [subBusy, setSubBusy] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
@@ -229,6 +231,16 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
           <p className="settings-dim">
             Answers and note drafts use a hosted model. Nothing to configure.
           </p>
+          {/* Moved off the top bar: a tool you reach for occasionally, on a
+              vault you have written in, does not earn a permanent icon on
+              every screen. */}
+          <button className="ask-btn settings-sync-btn" onClick={() => setSyncOpen(true)}>
+            <RotateCw width={14} height={14} /> Sync notes with AI
+          </button>
+          <p className="settings-dim">
+            Answers any unanswered <code>Q:</code> in a note's Questions section and folds
+            anything under My Notes into the AI Notes above it.
+          </p>
         </div>
 
         {user && (
@@ -253,13 +265,16 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
     </>
   )
 
-  if (!onClose) return <div className="settings-pane">{body}{confirmDialog}</div>
+  const sync = syncOpen ? <SyncModal onClose={() => setSyncOpen(false)} /> : null
+
+  if (!onClose) return <div className="settings-pane">{body}{confirmDialog}{sync}</div>
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
         {body}
       </div>
       {confirmDialog}
+      {sync}
     </div>
   )
 }

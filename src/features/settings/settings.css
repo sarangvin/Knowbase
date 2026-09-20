@@ -98,3 +98,11 @@
 .confirm-body strong { color: var(--text-error); }
 .confirm-list { margin: 10px 0 0; padding-left: 18px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
 .confirm-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* The AI Sync entry point, moved here off the top bar. */
+.settings-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 4px 0 8px;
+}
