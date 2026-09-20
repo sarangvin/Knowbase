@@ -1,10 +1,16 @@
-// Pure, network-free note-building for the topic-onboarding flow: sanitizing
-// generated titles into safe paths/wikilinks, disambiguating a new space name
-// against existing spaces, building topic-note and Next Up.md content, and
-// repairing the small prerequisite graph (breaking cycles, guaranteeing at
-// least one prerequisite-free "foundational" topic).
-import { listSpaces } from '../automated-graph/engine'
-import type { VaultIndex } from '../../vault/types'
+// Pure, network-free note-building for topic onboarding: sanitizing generated
+// titles into safe paths/wikilinks, disambiguating a new space name against
+// existing spaces, building topic-note and Next Up.md content, and repairing
+// the small prerequisite graph (breaking cycles, guaranteeing at least one
+// prerequisite-free "foundational" topic).
+//
+// This used to live in the browser (src/features/onboarding/notePlan.ts), next
+// to the code that called it. It moved here wholesale when generation stopped
+// being something the client does: the server is now the only thing that
+// builds a new space, so this is a move rather than a second copy. Nothing
+// imports it from the frontend any more, and nothing should — two
+// implementations of this would drift, and the note format is load-bearing for
+// the prerequisite graph.
 
 export interface Subtopic {
   title: string
@@ -47,9 +53,11 @@ export function dedupeSegments(rawTitles: string[]): string[] {
   })
 }
 
-/** Case-insensitive collision check against every existing space (personal + global-origin). */
-export function disambiguateSpace(name: string, index: VaultIndex | null): string {
-  const existing = new Set((index ? listSpaces(index) : []).map((s) => s.toLowerCase()))
+/** Case-insensitive collision check against every space the user already has.
+ *  Takes the names directly: the caller reads them out of the user's own note
+ *  paths, where the client used to read them out of its in-memory index. */
+export function disambiguateSpace(name: string, existingSpaces: string[]): string {
+  const existing = new Set(existingSpaces.map((s) => s.toLowerCase()))
   if (!existing.has(name.toLowerCase())) return name
   let n = 2
   while (existing.has(`${name} ${n}`.toLowerCase())) n++

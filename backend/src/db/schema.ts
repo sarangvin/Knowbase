@@ -144,3 +144,39 @@ export const assets = pgTable(
   },
   (t) => [uniqueIndex('assets_vault_path_unique').on(t.vaultId, t.path)],
 )
+
+// M6: one row per user tracking their first-run space generation.
+//
+// Onboarding used to be synchronous in the browser — the user watched a
+// spinner while the plan and the first note were generated. Now the server
+// does the whole thing and the user browses the demo space meanwhile, so the
+// progress has to live somewhere they can be told about it from: this table
+// is what the "your space is ready" notification reads.
+//
+// Unique on userId rather than append-only: this tracks the one first-run job,
+// and a re-run (retry after a failure, or a second topic) replaces it. Keeping
+// a history here would mean deciding which row the notification means.
+export const onboardingJobs = pgTable(
+  'onboarding_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    topic: text('topic').notNull(),
+    // 'running' → 'ready' | 'failed'. 'ready' means the notes exist and are
+    // navigable, NOT that every draft has landed — notesDrafted/notesTotal
+    // carry that, so the user is let in as soon as there is something to see.
+    status: text('status').notNull(),
+    space: text('space'),
+    openPath: text('open_path'),
+    /** User-facing message when status is 'failed'. Safe to display verbatim. */
+    error: text('error'),
+    notesTotal: integer('notes_total').notNull().default(0),
+    notesDrafted: integer('notes_drafted').notNull().default(0),
+    /** Set once the user has actually been taken to the new space, so the
+     *  notification fires once rather than on every load forever. */
+    acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('onboarding_jobs_user_unique').on(t.userId)],
+)

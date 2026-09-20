@@ -14,11 +14,20 @@
 import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { notes, vaults } from '../db/schema.js'
+import { notes } from '../db/schema.js'
 import { requireAuth, requireApproved, requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import {
+  SPACE_ROOT,
+  spaceOf,
+  normalizeTopic,
+  getOrCreatePersonalVaultId,
+  getGlobalVaultId,
+  adoptSpaceInto,
+  contributeToLibrary,
+} from '../vault/spaces.js'
 
 export const vaultsRouter = Router()
 vaultsRouter.use(requireAuth)
@@ -26,28 +35,6 @@ vaultsRouter.use(requireAuth)
 // The demo vault and "open my own folder" are pure client-side and never
 // reach this router, which is what an unapproved user is left with.
 vaultsRouter.use(requireApproved)
-
-/** vault_id is always derived from the session — never accepted from the client. */
-async function getOrCreatePersonalVaultId(userId: string): Promise<string> {
-  const existing = await db
-    .select({ id: vaults.id })
-    .from(vaults)
-    .where(and(eq(vaults.ownerUserId, userId), eq(vaults.kind, 'personal')))
-    .limit(1)
-  if (existing[0]) return existing[0].id
-
-  const [row] = await db
-    .insert(vaults)
-    .values({ ownerUserId: userId, kind: 'personal', name: 'My Vault' })
-    .returning({ id: vaults.id })
-  return row.id
-}
-
-/** Null if the global vault hasn't been seeded yet (see db/seedGlobalVault.ts). */
-async function getGlobalVaultId(): Promise<string | null> {
-  const existing = await db.select({ id: vaults.id }).from(vaults).where(eq(vaults.kind, 'global')).limit(1)
-  return existing[0]?.id ?? null
-}
 
 function parsePathParam(raw: unknown): string | { error: string } {
   if (typeof raw !== 'string') return { error: 'path query param required' }
@@ -159,25 +146,6 @@ vaultsRouter.get('/mine/assets', asyncHandler(async (_req, res) => {
 // never read through to it: they get their own copy in their own vault, which
 // they can then edit without affecting anyone else.
 
-const SPACE_ROOT = 'Automated Graph/'
-
-/** "Automated Graph/Economics/Topics/x.md" -> "Economics". Null for anything
- * outside that layout, which the corpus doesn't describe. */
-function spaceOf(path: string): string | null {
-  if (!path.startsWith(SPACE_ROOT)) return null
-  const rest = path.slice(SPACE_ROOT.length)
-  const slash = rest.indexOf('/')
-  return slash > 0 ? rest.slice(0, slash) : null
-}
-
-/** Match key for "do we already have this topic?". Deliberately conservative:
- * case and punctuation are noise, but anything cleverer (stemming, embeddings)
- * risks handing someone a space about a different subject, which is far worse
- * than regenerating one. */
-function normalizeTopic(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-}
-
 vaultsRouter.get('/library/spaces', asyncHandler(async (_req, res) => {
   const globalVaultId = await getGlobalVaultId()
   if (!globalVaultId) {
@@ -204,45 +172,16 @@ vaultsRouter.post('/mine/adopt', asyncHandler(async (req, res) => {
     return
   }
 
-  const globalVaultId = await getGlobalVaultId()
-  if (!globalVaultId) {
-    res.status(404).json({ error: 'nothing in the library yet' })
-    return
-  }
-
-  const source = await db
-    .select({ path: notes.path, content: notes.content })
-    .from(notes)
-    .where(eq(notes.vaultId, globalVaultId))
-  const wanted = source.filter((r) => spaceOf(r.path) === space)
-  if (wanted.length === 0) {
-    res.status(404).json({ error: 'no such space in the library' })
-    return
-  }
-
   const personalVaultId = await getOrCreatePersonalVaultId(req.user!.id)
-  const existing = new Set(
-    (await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, personalVaultId))).map((r) => r.path),
-  )
-  const toInsert = wanted.filter((r) => !existing.has(r.path))
-
-  if (toInsert.length > 0) {
-    await db.insert(notes).values(
-      toInsert.map((r) => ({
-        vaultId: personalVaultId,
-        path: r.path,
-        content: r.content,
-        sizeBytes: Buffer.byteLength(r.content, 'utf8'),
-        mtime: new Date(),
-      })),
-    )
+  const result = await adoptSpaceInto(personalVaultId, space)
+  if (!result.ok) {
+    res.status(404).json({
+      error: result.reason === 'no-library' ? 'nothing in the library yet' : 'no such space in the library',
+    })
+    return
   }
 
-  res.json({
-    adopted: toInsert.length,
-    skipped: wanted.length - toInsert.length,
-    openPath: `${SPACE_ROOT}${space}/Next Up.md`,
-  })
+  res.json({ adopted: result.adopted, skipped: result.skipped, openPath: result.openPath })
   void logUsageEvent({ userId: req.user!.id, eventType: 'vault_sync', metadata: { adopted: space } })
 }))
 
@@ -296,36 +235,10 @@ vaultsRouter.post('/library/contribute', asyncHandler(async (req, res) => {
     entries.push({ path, content: e.content })
   }
 
-  const globalVaultId = await getGlobalVaultId()
-  if (!globalVaultId) {
-    // Not an error the user caused or can fix, and their own notes are
-    // already saved — the corpus simply doesn't exist yet.
-    res.json({ added: 0, reason: 'no global vault' })
-    return
-  }
-
-  const before = new Set(
-    (await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, globalVaultId))).map((r) => r.path),
-  )
-  const fresh = entries.filter((e) => !before.has(e.path))
-  if (fresh.length > 0) {
-    await db
-      .insert(notes)
-      .values(
-        fresh.map((e) => ({
-          vaultId: globalVaultId,
-          path: e.path,
-          content: e.content,
-          sizeBytes: Buffer.byteLength(e.content, 'utf8'),
-          mtime: new Date(),
-        })),
-      )
-      // Belt and braces alongside the filter above: two users finishing the
-      // same new topic at once would both pass the check, and the loser of
-      // that race must not error or overwrite.
-      .onConflictDoNothing({ target: [notes.vaultId, notes.path] })
-  }
-  res.json({ added: fresh.length, skipped: entries.length - fresh.length })
+  // Returns 0 when the corpus doesn't exist yet, which is not an error the
+  // user caused or can fix — their own notes are already saved either way.
+  const added = await contributeToLibrary(entries)
+  res.json({ added, skipped: entries.length - added })
 }))
 
 // ── Owner-only: editing the raw global vault directly ───────────────────────

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useVault } from './vault/vaultStore'
-import { RemoteVaultSource } from './vault/remoteSource'
 import { useKeybindings } from './ui/useKeybindings'
 import { registerAutomatedGraph } from './features/automated-graph/register'
 import { Onboarding } from './features/onboarding/Onboarding'
-import { TopicOnboarding } from './features/onboarding/TopicOnboarding'
+import { OnboardingBanner } from './features/onboarding/OnboardingBanner'
+import { takePendingTopic } from './features/onboarding/pendingTopic'
+import { startOnboarding, fetchOnboardingJob } from './features/onboarding/onboardingApi'
 import { TopBar } from './shell/TopBar'
 import { TabBar } from './shell/TabBar'
 import { MainPane } from './shell/MainPane'
@@ -24,10 +25,8 @@ export default function App() {
   const rightOpen = useVault((s) => s.rightOpen)
   const tryRestoreFolder = useVault((s) => s.tryRestoreFolder)
   const checkAuth = useVault((s) => s.checkAuth)
-  const source = useVault((s) => s.source)
-  const files = useVault((s) => s.files)
   const loadRemote = useVault((s) => s.loadRemote)
-  const [topicOnboardingSkipped, setTopicOnboardingSkipped] = useState(false)
+  const loadSeed = useVault((s) => s.loadSeed)
   // True until we know whether this visit resumes an existing session. Without
   // it the landing screen paints for the length of an /auth/me round-trip and
   // is then yanked away, which reads as a flash of "signed out" to someone who
@@ -54,7 +53,34 @@ export default function App() {
         // above are async and the values captured at mount are stale by now.
         const { user, source: current } = useVault.getState()
         if (restored || current) return
-        if (user?.accessApproved) await loadRemote()
+        if (!user?.accessApproved) return
+
+        // A topic typed before sign-in, carried across the OAuth round-trip.
+        // This is the only place it can be picked up: an approved user never
+        // sees the landing screen again, because the resume below takes them
+        // straight past it.
+        const pending = takePendingTopic()
+        if (pending) {
+          try {
+            await startOnboarding(pending)
+            await loadSeed()
+          } catch {
+            // Couldn't start it — fall through to the landing screen, where
+            // they can try again, rather than into an empty vault that
+            // explains nothing.
+          }
+          return
+        }
+
+        // Mid-generation, so their own vault is empty or half-written. The
+        // demo space is the honest thing to show; the banner brings them
+        // across the moment theirs is ready.
+        const job = await fetchOnboardingJob()
+        if (job?.status === 'running') {
+          await loadSeed()
+          return
+        }
+        await loadRemote()
       } catch {
         // Any failure here just means we fall through to the landing screen,
         // which is a working state — never a dead spinner.
@@ -117,18 +143,12 @@ export default function App() {
   }
   if (status !== 'ready') return <Onboarding />
 
-  // A brand-new cloud user (personal vault has zero notes of its own, distinct
-  // from the owner's global-edit mode which also returns origin: 'global' for
-  // every file) gets a topic prompt instead of landing in a bare empty vault.
-  // Not persisted across reloads if skipped — the gate naturally stops firing
-  // once they have any personal note.
-  const isBrandNewPersonalVault =
-    source instanceof RemoteVaultSource &&
-    source.mode === 'personal' &&
-    files.filter((f) => f.origin === 'personal').length === 0
-  if (isBrandNewPersonalVault && !topicOnboardingSkipped) {
-    return <TopicOnboarding onSkip={() => setTopicOnboardingSkipped(true)} />
-  }
+  // There is no "brand-new empty vault" gate here any more. It used to catch a
+  // user whose personal vault had no notes and ask them for a topic, because
+  // that was the only moment the client could generate one. The server does
+  // that now, started from the landing screen, so an empty vault at this point
+  // means the space is still being written — which OnboardingBanner says, from
+  // wherever the user happens to be.
 
   const closeDrawers = () => useVault.setState({ rightOpen: false })
 
@@ -148,6 +168,7 @@ export default function App() {
         </aside>
       </div>
       <BottomNav />
+      <OnboardingBanner />
       <CommandPalette />
       <QuickSwitcher />
     </div>

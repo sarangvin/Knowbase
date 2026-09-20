@@ -43,6 +43,13 @@
       "when": 1789750796149,
       "tag": "0005_outgoing_senator_kelly",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789761423923,
+      "tag": "0006_furry_red_hulk",
+      "breakpoints": true
     }
   ]
 }

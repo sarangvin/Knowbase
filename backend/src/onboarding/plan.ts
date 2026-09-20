@@ -1,8 +1,29 @@
-// LLM orchestration for topic onboarding: prompt building, calling the free
-// tier (hardcoded — this is the zero-setup moment, no checkReady()/plan-tier
-// gating needed), defensive JSON extraction/validation, one retry.
-import { freeProvider } from '../ask-ai/free'
-import { breakCycles, ensureFoundational, type Subtopic } from './notePlan'
+// Server-side generation of the starter learning plan for a topic.
+//
+// Moved out of the browser (src/features/onboarding/topicGeneration.ts) when
+// onboarding stopped being a thing the client drives. The prompt and the
+// validation below are that file's, unchanged — they were the part worth
+// keeping; only the transport differs, calling Gemini directly the way
+// routes/draftNotes.ts already does instead of going back out through the
+// app's own /api/llm/free proxy, which would be this process calling itself.
+import { streamGeminiChat, DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
+import { breakCycles, ensureFoundational, type Subtopic } from './notePlan.js'
+
+async function collect(gen: AsyncGenerator<string>): Promise<string> {
+  let out = ''
+  for await (const chunk of gen) out += chunk
+  return out
+}
+
+function callModel(system: string, user: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY
+  // Thrown, not returned empty: this is the one failure the user can be told
+  // something true about, and generateLearningPlan below deliberately
+  // preserves the last real error instead of flattening it to "try another
+  // phrasing".
+  if (!apiKey) throw new Error('The free tier is not configured on this server (no model key set).')
+  return collect(streamGeminiChat(apiKey, system, user, process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL))
+}
 
 const TOPIC_SYSTEM_PROMPT = `You are a curriculum designer helping a complete beginner start learning a brand-new topic
 from scratch. You will be given a topic the learner wants to study. Produce a small starter
@@ -35,82 +56,6 @@ Rules:
   subtopic as its own prerequisite.
 - Keep titles short (a few words) and free of colons, slashes, brackets, or quotation marks.`
 
-const NOTE_SYSTEM_PROMPT = `You are writing the first draft of a study note for someone who is about to learn a
-subtopic for the first time. You will be given the overall subject, the subtopic, and the
-other subtopics in their learning plan.
-
-Rules:
-- Respond with ONLY a single JSON object. No markdown code fences, no prose before or after.
-- The JSON object must exactly match this shape:
-{
-  "overview": string,     // 2-3 short paragraphs of plain prose explaining what this subtopic
-                          // is and why it matters. Markdown emphasis is fine; no headings.
-  "key_points": string[], // 4-6 concrete, specific things worth knowing. Each one sentence.
-  "questions": string[]   // 3 questions the learner should be able to answer once they know
-                          // this. Real comprehension questions, not "what is X?".
-}
-- Write for a beginner: define jargon the first time you use it.
-- Be concrete. Prefer a specific example or number over a general claim.
-- Do NOT invent URLs, citations, book titles or paper references of any kind.
-- Do not mention that you are an AI or describe what you are doing.`
-
-function buildNotePrompt(space: string, s: Subtopic, siblings: string[]): string {
-  const others = siblings.filter((t) => t !== s.title)
-  return `Overall subject: "${space}"
-Subtopic to write about: "${s.title}"
-What it should cover: ${s.summary}
-${others.length ? `Other subtopics in the same plan (for context; don't duplicate them): ${others.join(', ')}` : ''}
-
-Write the first-draft study note for "${s.title}" as specified.`
-}
-
-export interface TopicNoteContent {
-  overview: string
-  keyPoints: string[]
-  questions: string[]
-}
-
-/** Exported for testing. Returns null unless there's at least an overview —
- * a note with empty prose is worse than the plain summary fallback. */
-export function parseNoteContent(raw: string): TopicNoteContent | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stripFence(raw))
-  } catch {
-    return null
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
-  const o = parsed as { overview?: unknown; key_points?: unknown; questions?: unknown }
-
-  const overview = typeof o.overview === 'string' ? o.overview.trim() : ''
-  if (!overview) return null
-
-  const strings = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(Boolean) : []
-
-  return { overview, keyPoints: strings(o.key_points), questions: strings(o.questions) }
-}
-
-/** First-draft note body for one subtopic. Resolves to null rather than
- * throwing: a failed note must degrade that one note to the summary-only
- * fallback, never fail the whole onboarding. One retry, same as the plan. */
-export async function generateTopicNote(
-  space: string,
-  s: Subtopic,
-  siblings: string[],
-): Promise<TopicNoteContent | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const raw = await freeProvider.streamChat(NOTE_SYSTEM_PROMPT, buildNotePrompt(space, s, siblings), {})
-      const parsed = parseNoteContent(raw)
-      if (parsed) return parsed
-      console.warn(`[topic-note] "${s.title}" failed validation:`, raw.slice(0, 500))
-    } catch (err) {
-      console.warn(`[topic-note] "${s.title}" request failed:`, err)
-    }
-  }
-  return null
-}
 
 function buildUserPrompt(topic: string): string {
   return `I want to learn about: "${topic}". Generate my starter learning plan as specified.`
@@ -219,7 +164,7 @@ export async function generateLearningPlan(topic: string): Promise<ValidatedPlan
 
   for (const buildPrompt of [buildUserPrompt, buildRetryUserPrompt]) {
     try {
-      const raw = await freeProvider.streamChat(TOPIC_SYSTEM_PROMPT, buildPrompt(topic), {})
+      const raw = await callModel(TOPIC_SYSTEM_PROMPT, buildPrompt(topic))
       const validated = parseAndValidate(raw)
       if (validated) return validated
       // Reached the model fine, but the response didn't satisfy the schema.

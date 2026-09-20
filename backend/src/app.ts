@@ -10,6 +10,7 @@ import { llmRouter } from './routes/llm.js'
 import { billingRouter, billingWebhookHandler } from './routes/billing.js'
 import { adminRouter } from './routes/admin.js'
 import { draftNotesRouter } from './routes/draftNotes.js'
+import { onboardingRouter } from './routes/onboarding.js'
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -70,6 +71,7 @@ export function createApp() {
   app.use('/api/billing', billingRouter)
   app.use('/api/admin', adminRouter)
   app.use('/api/draft-notes', draftNotesRouter)
+  app.use('/api/onboarding', onboardingRouter)
 
   // Last: catches anything asyncHandler forwarded (or any sync throw) so a
   // bug in one request returns a clean 500 instead of taking the process down.

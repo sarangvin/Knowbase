@@ -12,8 +12,9 @@ import { useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { FsAccessVaultSource } from '../../vault/source'
 import { requestAccess } from '../../vault/remoteSource'
-import { setPendingTopic } from './pendingTopic'
-import { RabbitSolid, Folder, Eye, Cloud, Pencil, Envelope, Check, ArrowRight } from '../../ui/icons'
+import { setPendingTopic, clearPendingTopic } from './pendingTopic'
+import { startOnboarding } from './onboardingApi'
+import { RabbitSolid, Folder, Eye, Cloud, Pencil, Envelope, Check, ArrowRight, Sparkles } from '../../ui/icons'
 import './onboarding.css'
 
 export function Onboarding() {
@@ -67,12 +68,17 @@ export function Onboarding() {
       }
       return
     }
-    // Approved: load the cloud vault. An empty one hands off to
-    // TopicOnboarding, which picks the pending topic up and starts straight
-    // away rather than asking the same question a second time.
+    // Approved: hand the topic to the server and go straight into the demo
+    // space while it builds. Nothing below this line waits on a model — the
+    // notification is what brings them back (see OnboardingBanner), which is
+    // the whole reason the wait could be removed rather than shortened.
     setBusy(true)
     try {
-      await loadRemote()
+      await startOnboarding(t)
+      // Consumed: it lives in the job row now, and leaving it here would let
+      // a later boot start the same generation a second time.
+      clearPendingTopic()
+      await loadSeed()
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : String(e))
       setBusy(false)
@@ -123,6 +129,11 @@ export function Onboarding() {
             </button>
             {user == null && (
               <p className="ob-hint">You'll sign in with Google so your space is saved to your account.</p>
+            )}
+            {user != null && !awaitingApproval && (
+              <p className="ob-hint">
+                <Sparkles /> We'll build it in the background while you look around a finished one.
+              </p>
             )}
             {awaitingApproval && (
               <p className="ob-hint">

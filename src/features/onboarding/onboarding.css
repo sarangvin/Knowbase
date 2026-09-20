@@ -187,3 +187,83 @@
 }
 .ob-topic-input:disabled { opacity: 0.6; }
 .ob-actions .ob-note { display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* ── "your space is ready" notification ──────────────────────────────────────
+   Fixed above the bottom nav rather than placed in the shell grid: the user
+   could be anywhere in the app while their space is generated — that is the
+   point of generating it behind them — so this can't belong to one screen.
+   Sits just above --bottomnav-h so it never covers the nav itself. */
+.ob-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--bottomnav-h) + 12px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 560px;
+  margin-inline: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 28px hsl(0 0% 0% / 0.4);
+}
+
+.ob-banner.ready { border-color: var(--accent-line); }
+.ob-banner.failed { border-color: hsl(354 60% 45%); }
+
+.ob-banner > svg { flex: 0 0 auto; color: var(--accent); }
+.ob-banner.failed > svg { color: var(--text-error); }
+
+/* min-width:0 so a long topic wraps instead of pushing the button off the
+   edge — the same trap the top bar's breadcrumb hit. */
+.ob-banner-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ob-banner-text strong { font-size: 14px; font-weight: 650; }
+.ob-banner-text span { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+
+.ob-banner-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ob-banner-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
+.ob-banner-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+.ob-banner-btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.ob-banner-btn:disabled { opacity: 0.6; cursor: default; }
+
+.ob-banner-dismiss {
+  flex: 0 0 auto;
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.ob-banner-dismiss:hover { background: var(--bg-hover); color: var(--text-normal); }
+
+/* Phone: the button earns its own row rather than squeezing the text to a
+   column of single words. */
+@media (max-width: 560px) {
+  .ob-banner { flex-wrap: wrap; }
+  .ob-banner-text { flex-basis: 100%; order: 1; }
+  .ob-banner > svg, .ob-banner .spinner { order: 0; }
+  .ob-banner-btn { order: 2; margin-left: auto; }
+  .ob-banner-dismiss { order: 3; }
+}
