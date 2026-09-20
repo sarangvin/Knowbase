@@ -18,14 +18,15 @@ function NoteLink({ path, label }: { path: string | null; label: string }) {
 }
 
 function ReviewTable({ rows, withSpace }: { rows: ReviewTopic[]; withSpace?: boolean }) {
-  if (!rows.length) return <p className="dv-faint">Nothing due for review.</p>
+  if (!rows.length) return <p className="dv-faint">Nothing reviewed yet.</p>
   return (
     <table className="dv-table">
       <thead>
         <tr>
           {withSpace && <th>Space</th>}
           <th>Topic</th>
-          <th>Confidence</th>
+          <th>Int.</th>
+          <th>Conf.</th>
           <th>Last reviewed</th>
           <th>Days since</th>
         </tr>
@@ -35,6 +36,7 @@ function ReviewTable({ rows, withSpace }: { rows: ReviewTopic[]; withSpace?: boo
           <tr key={r.path}>
             {withSpace && <td>{r.space}</td>}
             <td><NoteLink path={r.path} label={r.title} /></td>
+            <td>{r.interest}</td>
             <td>{r.confidence}/5</td>
             <td>{r.lastReviewed}</td>
             <td>{r.daysSince ?? '—'}</td>
@@ -54,20 +56,33 @@ export function NextUp({ space }: { space: string }) {
     <div className="dv">
       {r.pick ? (
         <div className="dv-pick">
-          <div className="dv-pick-label">Pick</div>
+          <div className="dv-pick-label">{r.pick.isReview ? 'Review next' : 'Pick'}</div>
           <div className="dv-pick-title">
             <NoteLink path={r.pick.path} label={r.pick.title} />
           </div>
           <div className="dv-pick-meta">
-            Score <strong>{r.pick.score.toFixed(1)}</strong> · importance {r.pick.importance} ·
-            unlocks {r.pick.unlocks} · interest {r.pick.interest} · confidence {r.pick.confidence}/5
+            {r.pick.isReview ? (
+              <>
+                Nothing new left today · interest {r.pick.interest} · confidence{' '}
+                {r.pick.confidence}/5
+              </>
+            ) : (
+              <>
+                Score <strong>{r.pick.score.toFixed(1)}</strong> · importance {r.pick.importance} ·
+                unlocks {r.pick.unlocks} · interest {r.pick.interest} · confidence{' '}
+                {r.pick.confidence}/5
+              </>
+            )}
           </div>
         </div>
       ) : (
-        <p className="dv-faint">No frontier topic is ready yet — raise confidence on a prerequisite.</p>
+        <p className="dv-faint">
+          Nothing to study right now — every topic here has been reviewed today, or is waiting on a
+          prerequisite.
+        </p>
       )}
 
-      <h4 className="dv-h">Frontier (ready now)</h4>
+      <h4 className="dv-h">New topics (ready now)</h4>
       {r.ranked.length ? (
         <table className="dv-table">
           <thead>
@@ -87,7 +102,7 @@ export function NextUp({ space }: { space: string }) {
           </tbody>
         </table>
       ) : (
-        <p className="dv-faint">Nothing ready.</p>
+        <p className="dv-faint">No new topics — everything ready has been opened at least once.</p>
       )}
 
       {r.locked.length > 0 && (
@@ -114,10 +129,10 @@ export function NextUp({ space }: { space: string }) {
         </>
       )}
 
-      {r.dueForReview.length > 0 && (
+      {r.review.length > 0 && (
         <>
-          <h4 className="dv-h">Due for review</h4>
-          <ReviewTable rows={r.dueForReview} />
+          <h4 className="dv-h">Review</h4>
+          <ReviewTable rows={r.review} />
         </>
       )}
     </div>

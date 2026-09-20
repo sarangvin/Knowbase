@@ -12,6 +12,13 @@ An npm workspace with two packages sharing one origin in production:
 | `api/index.ts` | Vercel serverless entry — exports the Express app |
 | `vercel.json` | Build config and the rewrites that route `/api`, `/auth` to the function |
 
+## Flows
+
+Context sheets for the user-facing flows — trigger, steps, what each writes,
+the invariants, and the known gaps — live in [`docs/flows/`](docs/flows/):
+[onboarding](docs/flows/onboarding.md), [review](docs/flows/review.md).
+Change the sheet in the same commit as the flow.
+
 ## Local development
 
 ```bash

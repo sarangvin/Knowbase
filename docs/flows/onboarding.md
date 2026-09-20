@@ -1,0 +1,121 @@
+# Onboarding flow
+
+**A topic goes in; a drafted space comes out.** The user types "Marine
+Biology" and ends up with a folder of five prerequisite-ordered notes, each
+with a real first draft, plus a Next Up dashboard over them.
+
+The defining decision: **none of it blocks the user.** Generating a
+curriculum is roughly six model calls, and there is no version of that which
+is fast enough to wait for. So the wait was removed rather than optimised —
+the request returns as soon as the job is recorded, and the user browses the
+demo space while the server works.
+
+---
+
+## Trigger
+
+| Entry point | File |
+|---|---|
+| Landing screen, before sign-in | `src/features/onboarding/Onboarding.tsx` |
+| Empty vault or the collections home | `src/features/onboarding/TopicLauncher.tsx` |
+
+Both call `startOnboarding(topic)` →
+`POST /api/onboarding/start` (`backend/src/routes/onboarding.ts`).
+
+`TopicLauncher` renders `null` unless `user.accessApproved`. Generation spends
+the owner's model key, so the server refuses an unapproved account; saying so
+up front beats letting someone type a topic and handing back a 403.
+
+---
+
+## Steps
+
+`backend/src/onboarding/run.ts` — `runOnboarding(userId, topic)`. Fired with
+`waitUntil`, never awaited by the request.
+
+| # | Step | Owner | Notes |
+|---|---|---|---|
+| 0 | Record the job, return `202` | `routes/onboarding.ts` | A job already `running` returns the existing one instead of starting a second |
+| 1 | Look for the topic in the reuse corpus | `vault/spaces.ts` → `findLibrarySpaceFor` | Name-key equality only, deliberately dumb. A hit copies the space and finishes here — instant and free against ~6 model calls |
+| 2 | Generate the plan | `onboarding/plan.ts` → `generateLearningPlan` | Throws with a user-facing message; the catch in `run.ts` is what surfaces it |
+| 3 | Draft the landing note | `onboarding/draftNote.ts` → `draftOne` | Just the one, so step 4 can write a space whose entry point is real |
+| 4 | Write the whole space | `run.ts` | **One insert.** A user opening their vault mid-run never sees a half-built folder |
+| 5 | Draft every remaining note | `run.ts` | Sequential, for the per-user rate limit |
+| 6 | Mark `status: 'ready'` | `run.ts` | Only after step 5 — see invariants |
+| 7 | Contribute to the corpus | `vault/spaces.ts` → `contributeToLibrary` | Insert-only; failure is ignored, the user's notes are already saved |
+
+### What the user sees meanwhile
+
+`src/features/onboarding/OnboardingBanner.tsx` polls
+`GET /api/onboarding/status` every **5s**, and also on window focus — a locked
+phone stops timers, and focus is what actually covers that case. On `ready` it
+offers the space; `POST /api/onboarding/ack` stops it reappearing.
+
+---
+
+## What it writes
+
+**`onboarding_jobs`** (one row per user, upserted on `userId`):
+`topic`, `status` (`running` | `ready` | `failed`), `space`, `openPath`,
+`notesTotal`, `notesDrafted`, `error`, `acknowledged`.
+
+**`notes`** under `Automated Graph/<Space>/`:
+
+- `Topics/<Subtopic>.md` — one per subtopic, from `buildTopicNote`
+- `Next Up.md` — the dashboard, from `buildNextUpNote`
+
+Generated topic frontmatter, hardcoded in `notePlan.ts` and never taken from
+model output:
+
+```yaml
+space:                  # ← empty. Known gap, see below
+status: frontier
+prerequisites: [...]    # wikilinks to sibling topics
+importance: 1-5         # from the plan
+interest: 1-5           # from the plan
+confidence: 0
+last_reviewed:          # empty — a new note has never been reviewed
+```
+
+**`usage_events`** — one `llm_call` per model call via
+`backend/src/llm/meter.ts`, plus a `note_write`. Everything that spends the
+key goes through the meter, or the admin usage figures are a confident-looking
+undercount.
+
+---
+
+## Invariants
+
+- **`confidence: 0` and an empty `last_reviewed`.** "Brand new" is a product
+  invariant, so these are hardcoded rather than trusted from generated data.
+  A generated note must never look reviewed.
+- **`status: 'ready'` means every note is drafted**, not just the landing one.
+  Opening a new space and finding four of five topics still a single sentence
+  would make "ready" a lie. This costs ~14s on `gemini-3.5-flash-lite` and was
+  not affordable on the old thinking model (~53s for one draft).
+- **The space is written in a single insert.** No partially-built folder is
+  ever observable.
+- **Corpus lookup is an optimisation, never a dependency.** If the copy falls
+  through, generate.
+- **Contributing to the corpus is insert-only.** An existing note — including
+  anything the owner has curated — is never modified.
+- **The global corpus is the owner's.** Users read from it by adoption; they
+  never see it as a vault.
+
+---
+
+## Known gaps
+
+- **`space:` is written empty** on every generated note
+  (`notePlan.ts`, the template literal). Nothing reads it — paths drive
+  everything, via `spaceOfPath` — so it is cosmetic, but Properties renders a
+  blank row and an exported vault has a field that says nothing.
+- **Adoption copies frontmatter verbatim**, including the owner's
+  `confidence` and `last_reviewed`. Nobody has hit this because the corpus is
+  currently seeded from freshly generated notes, but a user adopting a space
+  the owner has studied would inherit a review history that is not theirs.
+- **`## Questions` is generated as bullets**, which no consumer can act on.
+  See [review.md](review.md#known-gaps).
+- **500 requests/day** on `gemini-3.5-flash-lite` at ~6 calls per onboarding
+  is roughly 80 new spaces per day. Tracked in the admin Usage tab; the
+  ceiling itself has not moved.

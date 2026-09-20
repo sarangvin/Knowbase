@@ -115,6 +115,9 @@ export interface RankedTopic {
   interest: number
   unlocks: number
   score: number
+  /** Set when the pick came from the review list because no new topic was
+   *  available — the card says "review" rather than quoting a score of 0. */
+  isReview?: boolean
 }
 export interface LockedTopic {
   path: string
@@ -126,6 +129,7 @@ export interface ReviewTopic {
   title: string
   space: string
   confidence: number
+  interest: number
   lastReviewed: string
   daysSince: number | null
 }
@@ -135,7 +139,8 @@ export interface NextUpResult {
   pick: RankedTopic | null
   ranked: RankedTopic[]
   locked: LockedTopic[]
-  dueForReview: ReviewTopic[]
+  /** Every topic opened at least once, most worth revisiting first. */
+  review: ReviewTopic[]
 }
 
 export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
@@ -148,25 +153,16 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
   const unlockCount = (p: Note) =>
     frontier.filter((f) => prereqPaths(f, index).includes(p.path)).length
 
-  // What to study next means what to study next — not what scores highest.
-  // Two things have to come off the list or the top pick sticks:
+  // Two lists, split on one question: have you opened this before?
   //
-  //   Already known. Confidence at or above the threshold is the definition
-  //   of "learned" everywhere else in this file; such a topic belongs in
-  //   dueForReview, which already collects it, not in the queue of things
-  //   still to learn. Nothing filtered these out before, so a topic you had
-  //   taken to 4/5 went on outranking everything by importance forever.
-  //
-  //   Reviewed today. One review per note per day is the rule the reader's
-  //   review control enforces, so a note already done today cannot be acted
-  //   on — recommending it is telling someone to do something the app will
-  //   then refuse. An empty pick ("nothing left today") is the honest answer.
-  const available = frontier
-    .filter(isReady)
-    .filter((p) => num(p.frontmatter.confidence) < cfg.confidence_threshold)
-    .filter((p) => !isReviewedToday(p.frontmatter))
+  // Frontier is new material only — topics with no last_reviewed at all.
+  // Anything you have touched has a history, and a history is what the
+  // review list is ordered by; mixing the two put a topic you had taken to
+  // 4/5 at the top of "what to learn next" on importance alone, where it
+  // outranked everything indefinitely.
+  const unopened = frontier.filter(isReady).filter((p) => !lastReviewedDay(p.frontmatter))
 
-  const ranked: RankedTopic[] = available
+  const ranked: RankedTopic[] = unopened
     .map((p) => {
       const unlocks = unlockCount(p)
       const importance = num(p.frontmatter.importance)
@@ -188,9 +184,10 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
 
   const locked: LockedTopic[] = frontier
     .filter((p) => !isReady(p))
-    // Same reason as above: a topic you already know is not "locked", it is
-    // finished, whatever its prerequisites happen to say.
-    .filter((p) => num(p.frontmatter.confidence) < cfg.confidence_threshold)
+    // Locked is the waiting room for new material. A topic you have already
+    // opened is in the review list instead — each topic appears in exactly
+    // one of the three, which is what makes the page readable.
+    .filter((p) => !lastReviewedDay(p.frontmatter))
     .map((p) => ({
       path: p.path,
       title: p.title,
@@ -199,23 +196,53 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
         .map((path) => ({ path, title: index.notes.get(path)?.title ?? path })),
     }))
 
-  const dueForReview: ReviewTopic[] = topics
-    .filter((p) => num(p.frontmatter.confidence) >= cfg.confidence_threshold)
-    .map((p) => {
-      const d = daysSince(p.frontmatter.last_reviewed)
-      return {
-        path: p.path,
-        title: p.title,
-        space,
-        confidence: num(p.frontmatter.confidence),
-        lastReviewed: p.frontmatter.last_reviewed ? String(p.frontmatter.last_reviewed) : 'never',
-        daysSince: d,
-      }
-    })
-    .filter((r) => r.daysSince === null || r.daysSince >= cfg.review_interval_days)
-    .sort((a, b) => (b.daysSince ?? Infinity) - (a.daysSince ?? Infinity))
+  // Everything you have opened at least once, whatever its confidence.
+  // Previously this list required confidence >= threshold *and* 30 days
+  // elapsed, so a topic you had read once and scored 1/5 appeared nowhere
+  // at all — not in the frontier, not here. Half-learned material falling
+  // out of the system is the worst failure this page can have.
+  const review: ReviewTopic[] = topics
+    .filter((p) => !!lastReviewedDay(p.frontmatter))
+    .map((p) => ({
+      path: p.path,
+      title: p.title,
+      space,
+      confidence: num(p.frontmatter.confidence),
+      interest: num(p.frontmatter.interest),
+      lastReviewed: lastReviewedDay(p.frontmatter) ?? 'never',
+      daysSince: daysSince(p.frontmatter.last_reviewed),
+    }))
+    // Want-to-know first, then least-known, then longest-neglected. A
+    // lexicographic sort rather than a blended score: the order has to be
+    // explainable from the columns on screen, and a weighted number is not.
+    .sort(
+      (a, b) =>
+        b.interest - a.interest ||
+        a.confidence - b.confidence ||
+        a.lastReviewed.localeCompare(b.lastReviewed),
+    )
 
-  return { space, pick: ranked[0] ?? null, ranked, locked, dueForReview }
+  // Nothing new left does not mean nothing to do. Fall back to the top of
+  // the review list, skipping anything already reviewed today — one review
+  // per note per day is enforced in the reader, and recommending a note it
+  // will refuse is how this page lost the user's trust the first time.
+  const fallback = review.find((r) => r.daysSince !== 0 && r.lastReviewed !== localDay())
+  const pick: RankedTopic | null =
+    ranked[0] ??
+    (fallback
+      ? {
+          path: fallback.path,
+          title: fallback.title,
+          confidence: fallback.confidence,
+          importance: num(index.notes.get(fallback.path)?.frontmatter.importance),
+          interest: fallback.interest,
+          unlocks: 0,
+          score: 0,
+          isReview: true,
+        }
+      : null)
+
+  return { space, pick, ranked, locked, review }
 }
 
 export interface TodayPick {
@@ -248,7 +275,7 @@ export function computeToday(index: VaultIndex): { picks: TodayPick[]; reviews: 
       if (frontier)
         picks.push({ space, rank: '—', path: null, title: '(nothing ready — see Next Up)', score: '—', confidence: '—' })
     }
-    reviews.push(...r.dueForReview)
+    reviews.push(...r.review)
   }
   return { picks, reviews }
 }
