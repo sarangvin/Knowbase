@@ -82,6 +82,31 @@ function daysSince(dateVal: unknown): number | null {
   return Math.floor((Date.now() - ms) / 86400000)
 }
 
+/** A Date as the vault writes dates: local YYYY-MM-DD, never toISOString(),
+ *  which is UTC and would roll over a day early east of Greenwich. */
+export function localDay(d = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** A note's last_reviewed as a plain YYYY-MM-DD, or null.
+ *
+ *  Defensive about the shape because frontmatter is whatever the YAML parser
+ *  made of it: an unquoted date in YAML is a Date, a quoted one is a string,
+ *  and a hand-edited vault can hold a full timestamp. Exported so the review
+ *  control and the ranking answer "reviewed today?" the same way — the two
+ *  disagreeing is what let Next Up recommend a note you could not review. */
+export function lastReviewedDay(fm: Record<string, unknown>): string | null {
+  const raw = fm.last_reviewed
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) return localDay(raw)
+  if (typeof raw === 'string') return raw.trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? null
+  return null
+}
+
+export function isReviewedToday(fm: Record<string, unknown>): boolean {
+  return lastReviewedDay(fm) === localDay()
+}
+
 export interface RankedTopic {
   path: string
   title: string
@@ -123,8 +148,25 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
   const unlockCount = (p: Note) =>
     frontier.filter((f) => prereqPaths(f, index).includes(p.path)).length
 
-  const ranked: RankedTopic[] = frontier
+  // What to study next means what to study next — not what scores highest.
+  // Two things have to come off the list or the top pick sticks:
+  //
+  //   Already known. Confidence at or above the threshold is the definition
+  //   of "learned" everywhere else in this file; such a topic belongs in
+  //   dueForReview, which already collects it, not in the queue of things
+  //   still to learn. Nothing filtered these out before, so a topic you had
+  //   taken to 4/5 went on outranking everything by importance forever.
+  //
+  //   Reviewed today. One review per note per day is the rule the reader's
+  //   review control enforces, so a note already done today cannot be acted
+  //   on — recommending it is telling someone to do something the app will
+  //   then refuse. An empty pick ("nothing left today") is the honest answer.
+  const available = frontier
     .filter(isReady)
+    .filter((p) => num(p.frontmatter.confidence) < cfg.confidence_threshold)
+    .filter((p) => !isReviewedToday(p.frontmatter))
+
+  const ranked: RankedTopic[] = available
     .map((p) => {
       const unlocks = unlockCount(p)
       const importance = num(p.frontmatter.importance)
@@ -146,6 +188,9 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
 
   const locked: LockedTopic[] = frontier
     .filter((p) => !isReady(p))
+    // Same reason as above: a topic you already know is not "locked", it is
+    // finished, whatever its prerequisites happen to say.
+    .filter((p) => num(p.frontmatter.confidence) < cfg.confidence_threshold)
     .map((p) => ({
       path: p.path,
       title: p.title,

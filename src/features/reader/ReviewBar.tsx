@@ -20,7 +20,7 @@ import { useVault } from '../../vault/vaultStore'
 import { setFrontmatterValue } from '../../vault/parse'
 import type { Note } from '../../vault/types'
 import { requestSpaceGrowth } from '../onboarding/onboardingApi'
-import { spaceOfPath } from '../automated-graph/engine'
+import { configOf, isReviewedToday, localDay, spaceOfPath } from '../automated-graph/engine'
 import { Check, RotateCw } from '../../ui/icons'
 import { useScrollReview } from './useScrollReview'
 import './score.css'
@@ -56,30 +56,6 @@ function useTouchPrimary(): boolean {
   return touch
 }
 
-/** Local date, not toISOString(). The vault stores plain YYYY-MM-DD and
- *  toISOString() is UTC, so anyone east of Greenwich reviewing in the evening
- *  would stamp tomorrow's date. */
-function today(): string {
-  const d = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-/** The note's last_reviewed as a plain YYYY-MM-DD, or null.
- *
- *  Defensive about the shape because frontmatter is whatever the YAML
- *  parser made of it: an unquoted date in YAML is a Date, a quoted one is a
- *  string, and a hand-edited vault can hold a full timestamp. */
-function lastReviewedDay(fm: Record<string, unknown>): string | null {
-  const raw = fm.last_reviewed
-  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${raw.getFullYear()}-${pad(raw.getMonth() + 1)}-${pad(raw.getDate())}`
-  }
-  if (typeof raw === 'string') return raw.trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? null
-  return null
-}
-
 function currentConfidence(fm: Record<string, unknown>): number {
   const raw = fm.confidence
   const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN
@@ -105,6 +81,7 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   const saveNote = useVault((s) => s.saveNote)
   const getNote = useVault((s) => s.getNote)
   const source = useVault((s) => s.source)
+  const index = useVault((s) => s.index)
   const touch = useTouchPrimary()
 
   const [busy, setBusy] = useState(false)
@@ -123,7 +100,12 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   // second review — spacing is the whole mechanism, and letting confidence
   // be walked up to 5 in one sitting would make the ranking describe an
   // afternoon's enthusiasm rather than what has actually stuck.
-  const reviewedToday = lastReviewedDay(note.frontmatter) === today()
+  const reviewedToday = isReviewedToday(note.frontmatter)
+  // The threshold at which a topic counts as learned. Read from the space's
+  // _config so the reader and the Next Up ranking agree on what "known"
+  // means rather than each holding its own idea of it.
+  const space = spaceOfPath(note.path)
+  const threshold = index && space ? configOf(index, space).confidence_threshold : 3
 
   // Held in a ref so the gesture's onComplete — attached once, outside
   // React's render cycle — never calls a stale copy of the write.
@@ -143,10 +125,18 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
       // may have rewritten the body since this note was displayed.
       const current = getNote(note.path)
       if (!current) throw new Error('note not found')
-      let raw = setFrontmatterValue(current.raw, 'last_reviewed', today())
+      let raw = setFrontmatterValue(current.raw, 'last_reviewed', localDay())
       // At 5 there is nothing to raise, but the review still happened — the
       // date is what moves it out of "due for review".
       if (!atMax) raw = setFrontmatterValue(raw, 'confidence', next)
+      // Reaching the threshold is what "learned" means, so say so in the
+      // frontmatter too. The ranking now reads confidence directly, but
+      // status is the field a reader sees and the one a vault exported to
+      // Obsidian is sorted by — leaving it on "frontier" forever made the
+      // note claim to be unlearned material it had finished.
+      if ((atMax ? conf : next) >= threshold && note.frontmatter.status === 'frontier') {
+        raw = setFrontmatterValue(raw, 'status', 'known')
+      }
       // Unchanged means already reviewed today at max confidence — the state
       // the gesture was asking for. Treating that as an error blames the user
       // for the system already being right.
@@ -155,7 +145,6 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
       // tops it back up to three unstudied topics, using what they now know
       // as the prerequisites for what comes next. Not awaited, and its
       // failure cannot surface here — the review is already saved.
-      const space = spaceOfPath(note.path)
       if (space) requestSpaceGrowth(space)
       holdRef.current = setTimeout(() => setDone(false), (touch ? OPEN_MS : 0) + HOLD_MS)
     } catch (e) {

@@ -1,7 +1,5 @@
 # Next Up — Economics
 
-Requires the Dataview plugin (with JavaScript queries enabled). Tunable parameters live in [[_config]].
-
 ```dataviewjs
 const TOPICS_FOLDER = '"Automated Graph/Economics/Topics"';
 
@@ -108,3 +106,5 @@ if (reviewDue.length) {
 - **Due for review** — topics you've already learned (confidence >= threshold) that haven't been touched in `review_interval_days`. Update `last_reviewed` (and re-confirm/adjust `confidence`) after you review one.
 
 To progress a topic: study it, update its `confidence` and `last_reviewed` in frontmatter (the `sync-knowledge-notes` skill can help do this from your "My Notes"), and the rankings recalculate automatically.
+
+Thresholds and weights are tunable in [[_config]]. Exported to Obsidian, the block above needs the Dataview plugin with JavaScript queries enabled; here it is rendered natively.
