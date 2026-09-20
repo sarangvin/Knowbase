@@ -4,7 +4,7 @@
 //   • SeedVaultSource    — the bundled demo vault under /vault (read-only, fetch)
 //   • FsAccessVaultSource — the user's own folder via File System Access API (r/w)
 // ─────────────────────────────────────────────────────────────────────────────
-import { get as idbGet, set as idbSet, del as idbDel, keys as idbKeys, createStore } from 'idb-keyval'
+import { get as idbGet, set as idbSet, del as idbDel, keys as idbKeys, clear as idbClear, createStore } from 'idb-keyval'
 import type { VaultFileMeta } from './types'
 
 export interface VaultSource {
@@ -38,6 +38,20 @@ const overlay = {
       .map((k) => String(k))
       .filter((k) => k.startsWith(OVERLAY_PREFIX))
       .map((k) => k.slice(OVERLAY_PREFIX.length)),
+}
+
+/** Throw away every local edit to the demo vault, returning it to exactly the
+ *  bundled files. Only used by /demo?reset, so the demo can be looked at as a
+ *  first-time visitor sees it rather than carrying the accumulated debris of
+ *  everyone who has poked at it in this browser before. */
+export async function resetDemoOverlay(): Promise<void> {
+  try {
+    await idbClear(overlayStore)
+  } catch (err) {
+    // A blocked or unavailable IndexedDB means there are no stored edits to
+    // clear anyway — the demo still renders from the bundled files.
+    console.warn('[demo] could not clear the local overlay:', err)
+  }
 }
 
 const MD_EXT = new Set(['md'])

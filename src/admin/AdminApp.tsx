@@ -76,6 +76,7 @@ export function AdminApp() {
   const [busy, setBusy] = useState<Set<string>>(new Set())
   const [spaces, setSpaces] = useState<AdminSpaceRow[]>([])
   const [library, setLibrary] = useState({ spaces: 0, notes: 0 })
+  const [demo, setDemo] = useState<{ visits: number; last_visit: string | null }>({ visits: 0, last_visit: null })
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -113,6 +114,7 @@ export function AdminApp() {
         ? fetchSpaces().then((data) => {
             setSpaces(data.rows)
             setLibrary(data.library)
+            setDemo(data.demo ?? { visits: 0, last_visit: null })
             setTotal(data.rows.length)
           })
         : fetchSignins(page).then((data) => {
@@ -230,6 +232,11 @@ export function AdminApp() {
             One row per space in a user's vault. A user with none has signed up but never
             generated anything. Reuse corpus: <strong>{library.spaces}</strong> space
             {library.spaces === 1 ? '' : 's'}, <strong>{library.notes}</strong> notes.
+          </p>
+          <p className="admin-dim">
+            Demo page (<code>/demo</code>, no sign-in): <strong>{demo.visits}</strong> visit
+            {demo.visits === 1 ? '' : 's'}
+            {demo.last_visit ? <> · last {formatDate(demo.last_visit)}</> : null}
           </p>
           <table className="admin-table">
             <thead>

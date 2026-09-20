@@ -5,6 +5,7 @@ import { registerAutomatedGraph } from './features/automated-graph/register'
 import { Onboarding } from './features/onboarding/Onboarding'
 import { OnboardingBanner } from './features/onboarding/OnboardingBanner'
 import { takePendingTopic } from './features/onboarding/pendingTopic'
+import { resetDemoOverlay } from './vault/source'
 import { startOnboarding, fetchOnboardingJob } from './features/onboarding/onboardingApi'
 import { TopBar } from './shell/TopBar'
 import { TabBar } from './shell/TabBar'
@@ -19,6 +20,13 @@ import './App.css'
 registerAutomatedGraph()
 
 const MOBILE_QUERY = '(max-width: 768px)'
+
+/** Path-based rather than a query flag so the URL is something you can hand
+ *  to someone: rabbithole-topaz.vercel.app/demo. Trailing slash tolerated
+ *  because that is how people type and how some hosts normalise. */
+function isDemoRoute(): boolean {
+  return /^\/demo\/?$/.test(location.pathname)
+}
 
 export default function App() {
   const status = useVault((s) => s.status)
@@ -46,6 +54,27 @@ export default function App() {
     let cancelled = false
     void (async () => {
       try {
+        // /demo — see the app exactly as a first-time visitor does, whoever
+        // is signed in. Deliberately the first thing checked and an early
+        // return: every branch below this is "resume what this person
+        // already had", which is precisely what makes the new-user
+        // experience impossible to look at once you have an account.
+        //
+        // No auth, no session check, no network beyond the bundled vault, so
+        // it also works for someone with no account at all.
+        if (isDemoRoute()) {
+          if (new URLSearchParams(location.search).has('reset')) await resetDemoOverlay()
+          // Fire-and-forget: a visit counter must never delay or break the
+          // thing it is counting.
+          void fetch('/api/demo/visit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'demo_open' }),
+          }).catch(() => {})
+          await loadSeed()
+          return
+        }
+
         const restored = await tryRestoreFolder()
         await checkAuth()
         if (cancelled) return

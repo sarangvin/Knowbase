@@ -11,6 +11,7 @@ import { billingRouter, billingWebhookHandler } from './routes/billing.js'
 import { adminRouter } from './routes/admin.js'
 import { draftNotesRouter } from './routes/draftNotes.js'
 import { onboardingRouter } from './routes/onboarding.js'
+import { demoRouter } from './routes/demo.js'
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -70,6 +71,8 @@ export function createApp() {
   app.use('/api/llm', llmRouter)
   app.use('/api/billing', billingRouter)
   app.use('/api/admin', adminRouter)
+  // Unauthenticated by design — see routes/demo.ts.
+  app.use('/api/demo', demoRouter)
   app.use('/api/draft-notes', draftNotesRouter)
   app.use('/api/onboarding', onboardingRouter)
 

@@ -64,6 +64,8 @@ export interface AdminSpaceRow {
 export interface AdminSpacesResponse {
   rows: AdminSpaceRow[]
   library: { spaces: number; notes: number }
+  /** Traffic to the unauthenticated /demo page, which has no vault of its own. */
+  demo: { visits: number; last_visit: string | null }
 }
 
 export interface UsageEventRow {

@@ -158,7 +158,18 @@ adminRouter.get('/spaces', asyncHandler(async (_req, res) => {
     WHERE v.kind = 'global' AND n.path LIKE 'Automated Graph/%/%'
   `)).rows as { spaces: number; notes: number }[]
 
-  res.json({ rows: result.rows, library })
+  // Demo traffic has no vault and no space, so it cannot be a row in the
+  // table above — it is reported alongside it instead.
+  const [demo] = (await db.execute(sql`
+    SELECT
+      COALESCE(count(e.id), 0)::int AS visits,
+      max(e.created_at)             AS last_visit
+    FROM users u
+    LEFT JOIN usage_events e ON e.user_id = u.id AND e.event_type LIKE 'demo_%'
+    WHERE u.email = 'demo@rabbithole.invalid'
+  `)).rows as { visits: number; last_visit: string | null }[]
+
+  res.json({ rows: result.rows, library, demo: demo ?? { visits: 0, last_visit: null } })
 }))
 
 adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {

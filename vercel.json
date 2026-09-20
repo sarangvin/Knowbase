@@ -6,7 +6,9 @@
     { "source": "/api/:vercelRest*", "destination": "/api" },
     { "source": "/auth/:vercelRest*", "destination": "/api" },
     { "source": "/health", "destination": "/api" },
-    { "source": "/admin", "destination": "/admin.html" }
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/demo", "destination": "/index.html" },
+    { "source": "/demo/", "destination": "/index.html" }
   ],
   "functions": {
     "api/index.ts": {
