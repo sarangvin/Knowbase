@@ -219,7 +219,7 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   if (error) label = error
   else if (done) label = 'Review complete'
   else if (!writable) label = 'This vault is read-only'
-  else label = 'Swipe up to review'
+  else label = 'Swipe up to complete'
 
   return (
     <div className="reviewsheet-slot">
@@ -237,8 +237,10 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
         disabled={!writable || busy || done || !visible}
         onClick={() => void run()}
         // The gesture is the discoverable path; assistive tech gets the plain
-        // one, described by what it will actually write.
-        aria-label={`Mark reviewed. ${detail}`}
+        // one, described by what it will actually write. The name starts
+        // with the visible word so voice control ("tap complete") can reach
+        // a control whose visible label is otherwise an instruction.
+        aria-label={`Complete. ${detail}`}
         aria-hidden={!visible}
         title={writable ? detail : 'This vault is read-only.'}
       >

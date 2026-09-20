@@ -21,7 +21,7 @@ hover is the half that decides.
 | Device | Control | Why |
 |---|---|---|
 | Pointer | "Mark reviewed" button at the end of the note | A mouse can aim. Pushing a wheel against a threshold is a gesture borrowed from a device that is not there |
-| Touch | An orange sheet that grows as you swipe up past the end | Growth under the thumb is the feedback; effort replaces aim |
+| Touch | An orange sheet ("Swipe up to complete") that grows as you swipe up past the end | Growth under the thumb is the feedback; effort replaces aim |
 
 The sheet only exists at the very bottom of the note. Elsewhere it is a bar
 covering text with an instruction you cannot act on.
