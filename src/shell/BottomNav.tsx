@@ -11,7 +11,7 @@
 // The account lives in Settings — a menu you open a handful of times does not
 // earn permanent space in the chrome.
 import { useVault } from '../vault/vaultStore'
-import { spaceOfPath } from '../features/automated-graph/engine'
+import { spaceOfPath, listSpaces } from '../features/automated-graph/engine'
 import { Rabbit, Folder, Layers, Carrot, Settings } from '../ui/icons'
 
 type TabId = 'next' | 'files' | 'flashcards' | 'quiz' | 'settings'
@@ -42,7 +42,15 @@ export function BottomNav() {
   const flashcardsPath = (): string | null =>
     notes.find((n) => /(^|\/)Flashcards\.md$/i.test(n.path))?.path ?? null
 
+  // With more than one collection, Learn goes to the collections home —
+  // otherwise the list is unreachable once a note is open, and there is no
+  // way to move between subjects. With one, that screen would be a pointless
+  // extra tap on the way to the only answer.
+  const spaces = index ? listSpaces(index) : []
+  const multi = spaces.length > 1
+
   const active = ((): TabId | null => {
+    if (view?.kind === 'home') return 'next'
     if (view?.kind === 'files') return 'files'
     if (view?.kind === 'quiz') return 'quiz'
     if (view?.kind === 'settings') return 'settings'
@@ -64,8 +72,8 @@ export function BottomNav() {
       id: 'next',
       label: 'Learn',
       icon: <Rabbit />,
-      onClick: () => nextPath && openNote(nextPath),
-      disabled: !nextPath,
+      onClick: () => (multi ? openView({ kind: 'home' }) : nextPath && openNote(nextPath)),
+      disabled: !multi && !nextPath,
     },
     { id: 'files', label: 'Files', icon: <Folder />, onClick: () => openView({ kind: 'files' }) },
     {

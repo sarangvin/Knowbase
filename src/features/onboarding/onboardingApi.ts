@@ -41,8 +41,15 @@ export async function startOnboarding(topic: string): Promise<OnboardingJob> {
   })
   if (!res.ok) throw new Error(await readError(res, `Could not start building your space (${res.status}).`))
   const { job } = (await res.json()) as { job: OnboardingJob }
+  // The banner stops polling once nothing is running, so a job started from
+  // anywhere other than the banner itself would go unnoticed until the tab
+  // next regained focus. Tell it directly.
+  window.dispatchEvent(new CustomEvent(ONBOARDING_STARTED))
   return job
 }
+
+/** Fired when a new space starts building, so any listener can resume polling. */
+export const ONBOARDING_STARTED = 'rabbithole:onboarding-started'
 
 /** Null when there's nothing to report: no job, or the caller isn't approved
  *  (403) and so has nothing being built for them. Never throws — this is

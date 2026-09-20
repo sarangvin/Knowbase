@@ -6,39 +6,82 @@ import { SettingsPanel } from '../features/settings/SettingsPanel'
 import { QuizView } from '../features/quiz/QuizView'
 import { SearchPanel } from '../features/search/SearchPanel'
 import { AskPanel } from '../features/ask-ai/AskPanel'
-import { GraduationCap, Network } from '../ui/icons'
+import { TopicLauncher } from '../features/onboarding/TopicLauncher'
+import { listSpaces } from '../features/automated-graph/engine'
+import { RabbitSolid } from '../ui/icons'
 
 function HomeView() {
   const index = useVault((s) => s.index)
   const openNote = useVault((s) => s.openNote)
-  const openView = useVault((s) => s.openView)
-  const sourceName = useVault((s) => s.sourceName)
   const notes = index ? [...index.notes.values()] : []
-  const featured = notes
-    .filter((n) => /Welcome|Today|README|Claude Projects/i.test(n.name))
-    .slice(0, 6)
+
+  // A "collection" is a generated space: Automated Graph/<Space>/Topics/…
+  // Nobody should be limited to one subject, so the home screen is a list of
+  // them plus a way to add another, rather than a single vault landing page.
+  const spaces = index ? listSpaces(index) : []
+
+  const summary = (space: string) => {
+    const topics = notes.filter((n) => n.path.startsWith(`Automated Graph/${space}/Topics/`))
+    const studied = topics.filter((n) => !!n.frontmatter.last_reviewed).length
+    return { total: topics.length, studied }
+  }
+
+  const nextUpOf = (space: string) =>
+    notes.find((n) => n.path === `Automated Graph/${space}/Next Up.md`)?.path ?? null
 
   return (
     <div className="note-scroll">
       <div className="note-container">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-          <GraduationCap width={26} height={26} style={{ color: 'var(--accent)' }} />
-          <h1 className="note-title" style={{ margin: 0 }}>{sourceName}</h1>
-        </div>
-        <p style={{ color: 'var(--text-muted)' }}>
-          {notes.length} notes. Open the graph, or jump in below.
-        </p>
-        <button className="ob-btn" style={{ minWidth: 0 }} onClick={() => openView({ kind: 'graph' })}>
-          <Network /> Open graph view
-        </button>
-        <h3 style={{ marginTop: 28 }}>Start here</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {featured.map((n) => (
-            <a key={n.path} className="internal-link" onClick={() => openNote(n.path)}>
-              {n.title}
-            </a>
-          ))}
-        </div>
+        {spaces.length === 0 ? (
+          // An empty vault used to render "0 notes" and a graph button, which
+          // is a dead end — most often reached right after resetting an
+          // account. Ask the question that actually moves them forward.
+          <div className="home-empty">
+            <div className="ob-logo home-logo"><RabbitSolid width={30} height={30} /></div>
+            <TopicLauncher
+              title="What do you want to learn?"
+              hint="Name a topic and Rabbithole digs the tunnels — the subtopics worth knowing, what to study in what order, and a first draft of notes for each."
+            />
+          </div>
+        ) : (
+          <>
+            <h1 className="note-title">Your collections</h1>
+            <p className="home-sub">
+              {spaces.length} collection{spaces.length === 1 ? '' : 's'}. Each one is its own
+              subject, with its own order of study.
+            </p>
+            <div className="collection-grid">
+              {spaces.map((space) => {
+                const { total, studied } = summary(space)
+                const path = nextUpOf(space)
+                return (
+                  <button
+                    key={space}
+                    className="collection-card"
+                    onClick={() => path && openNote(path)}
+                    disabled={!path}
+                  >
+                    <div className="collection-name">{space}</div>
+                    <div className="collection-meta">
+                      {total} topic{total === 1 ? '' : 's'} · {studied} studied
+                    </div>
+                    {total > 0 && (
+                      <div className="collection-bar" aria-hidden="true">
+                        <span style={{ width: `${Math.round((studied / total) * 100)}%` }} />
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="collection-new">
+              <TopicLauncher
+                title="Start another collection"
+                hint="A separate subject, kept apart from the ones above."
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

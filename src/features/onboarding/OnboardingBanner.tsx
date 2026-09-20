@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { RemoteVaultSource } from '../../vault/remoteSource'
-import { startOnboarding, fetchOnboardingJob, ackOnboarding, type OnboardingJob } from './onboardingApi'
+import { startOnboarding, fetchOnboardingJob, ackOnboarding, ONBOARDING_STARTED, type OnboardingJob } from './onboardingApi'
 import { Sparkles, ArrowRight, X, RotateCw } from '../../ui/icons'
 import './onboarding.css'
 
@@ -60,12 +60,22 @@ export function OnboardingBanner() {
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
 
+    // A space started elsewhere in the app (the collections home) needs the
+    // interval restarted, not just one extra poll — it was cleared when the
+    // last job finished.
+    const onStarted = () => {
+      void poll()
+      if (timer.current === null) timer.current = window.setInterval(() => void poll(), POLL_MS)
+    }
+    window.addEventListener(ONBOARDING_STARTED, onStarted)
+
     return () => {
       cancelled = true
       if (timer.current !== null) clearInterval(timer.current)
       timer.current = null
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
+      window.removeEventListener(ONBOARDING_STARTED, onStarted)
     }
   }, [approved])
 

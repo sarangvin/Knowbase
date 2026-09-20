@@ -229,3 +229,68 @@
   margin: 0 auto 18px;
 }
 .quiz-soon-stat { color: var(--text-faint); font-size: 13px; }
+
+/* ── Collections home ────────────────────────────────────────────────────── */
+.home-empty { padding-top: 8vh; text-align: center; }
+.home-logo { margin: 0 auto 20px; }
+.home-sub { color: var(--text-muted); font-size: 14.5px; margin: 0 0 22px; }
+
+.collection-grid {
+  display: grid;
+  /* auto-fit + minmax rather than fixed columns: one collection shouldn't
+     render as a lonely card in a 4-up grid, and a phone gets one column
+     without a breakpoint. */
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+.collection-card {
+  display: block;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-normal);
+  transition: border-color 0.12s, background 0.12s;
+}
+.collection-card:hover:not(:disabled) { border-color: var(--accent); background: var(--bg-hover); }
+.collection-card:disabled { opacity: 0.6; cursor: default; }
+.collection-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.collection-meta { color: var(--text-faint); font-size: 12.5px; }
+.collection-bar {
+  margin-top: 10px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  overflow: hidden;
+}
+.collection-bar span { display: block; height: 100%; background: var(--accent); }
+
+.collection-new { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--divider); }
+
+/* ── Topic launcher ──────────────────────────────────────────────────────── */
+.launcher-title { font-size: 17px; font-weight: 650; margin-bottom: 6px; }
+.launcher-hint { color: var(--text-muted); font-size: 13.5px; line-height: 1.55; margin: 0 0 14px; }
+.launcher-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.launcher-row .ob-topic-input { flex: 1; min-width: 0; }
+.launcher-go { min-width: 0; flex: none; }
+.launcher-error { margin: 12px 0 0; }
+.launcher-started {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 13.5px;
+}
+
+/* The launcher's input has a 240px floor from the onboarding card, which
+   overflows a 400px phone once the button wraps beside it. */
+@media (max-width: 560px) {
+  .launcher-row .ob-topic-input { min-width: 100%; }
+  .launcher-go { width: 100%; }
+}
