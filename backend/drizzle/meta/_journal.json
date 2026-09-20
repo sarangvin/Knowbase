@@ -64,6 +64,13 @@
       "when": 1789919516782,
       "tag": "0008_silent_dorian_gray",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789920141249,
+      "tag": "0009_thin_shaman",
+      "breakpoints": true
     }
   ]
 }

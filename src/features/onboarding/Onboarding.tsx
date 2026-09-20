@@ -40,15 +40,6 @@ export function Onboarding() {
   const [requestedAt, setRequestedAt] = useState<string | null>(user?.accessRequestedAt ?? null)
   const [localError, setLocalError] = useState<string | null>(null)
 
-  if (status === 'loading') {
-    return (
-      <div className="onboarding">
-        <div className="spinner" />
-        <p className="ob-sub">Digging the tunnels…</p>
-      </div>
-    )
-  }
-
   const awaitingApproval = user != null && !user.accessApproved
 
   // One button, three meanings — the difference is the user's state, not
@@ -113,6 +104,21 @@ export function Onboarding() {
     void start(pending)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, awaitingApproval])
+
+  // Every hook is above this line, deliberately. An early return placed
+  // before a useRef/useEffect is a hook-order violation that only shows up
+  // once the component renders in both states — which here meant the whole
+  // landing screen crashing the first time `status` settled out of
+  // 'loading'. React's message for it names the symptom, not the cause:
+  // "Rendered fewer hooks than expected."
+  if (status === 'loading') {
+    return (
+      <div className="onboarding">
+        <div className="spinner" />
+        <p className="ob-sub">Digging the tunnels…</p>
+      </div>
+    )
+  }
 
   const startLabel = user == null ? 'Sign in and start digging' : awaitingApproval ? 'Request early access' : 'Start digging'
 

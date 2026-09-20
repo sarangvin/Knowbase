@@ -191,45 +191,6 @@
   margin-inline: auto;
 }
 
-/* ── Quiz: coming-soon lander ────────────────────────────────────────────── */
-.quiz-soon { padding: 48px 0 0; text-align: center; }
-.quiz-soon-icon {
-  /* flex + auto margins, not inline-flex: inline-flex leaves it in the text
-     flow, so the badge sat beside it instead of below. */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 62px; height: 62px;
-  /* Same circular burrow treatment as the landing mark, so the two hero
-     icons in the product read as one family. */
-  border-radius: 50%;
-  background: radial-gradient(closest-side, hsl(var(--accent-h) 80% 50% / 0.2), var(--bg-deep) 96%);
-  border: 1px solid var(--accent-line);
-  box-shadow: 0 0 0 7px hsl(var(--accent-h) 70% 45% / 0.06);
-  color: var(--accent);
-  margin: 0 auto 18px;
-}
-.quiz-soon-badge {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  color: var(--text-muted);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.quiz-soon-title { font-size: 28px; font-weight: 700; margin: 14px 0 10px; letter-spacing: -0.02em; }
-.quiz-soon-lede {
-  color: var(--text-muted);
-  font-size: 15px;
-  line-height: 1.6;
-  max-width: 420px;
-  margin: 0 auto 18px;
-}
-.quiz-soon-stat { color: var(--text-faint); font-size: 13px; }
-
 /* ── Collections home ────────────────────────────────────────────────────── */
 .home-empty { padding-top: 8vh; text-align: center; }
 .home-logo { margin: 0 auto 20px; }

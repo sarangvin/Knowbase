@@ -229,3 +229,40 @@ export const draftQueue = pgTable(
     index('draft_queue_status_created_idx').on(t.status, t.createdAt),
   ],
 )
+
+/** One quiz per user per day.
+ *
+ *  The row is the whole quiz: the questions as asked, the options as shown,
+ *  which one is right, and what the user picked. Storing the generated
+ *  options rather than regenerating them means reopening the tab resumes the
+ *  same quiz instead of quietly producing a different one, and the daily cap
+ *  is a unique index rather than something the client is trusted to enforce.
+ */
+export const quizzes = pgTable(
+  'quizzes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** Local YYYY-MM-DD, supplied by the client — the same day the review
+     *  cap uses, so "one a day" means one calendar day where the user is,
+     *  not where the database is. */
+    day: text('day').notNull(),
+    /** [{ notePath, noteTitle, question, options[4], answer, chosen }] */
+    questions: jsonb('questions').$type<QuizQuestionRow[]>().notNull(),
+    score: integer('score').notNull().default(0),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('quizzes_user_day_unique').on(t.userId, t.day)],
+)
+
+export interface QuizQuestionRow {
+  notePath: string
+  noteTitle: string
+  question: string
+  options: string[]
+  /** Index into options. Never sent to the client before they answer. */
+  answer: number
+  /** Index into options, or null while unanswered. */
+  chosen: number | null
+}

@@ -10,6 +10,7 @@ import { billingRouter, billingWebhookHandler } from './routes/billing.js'
 import { adminRouter } from './routes/admin.js'
 import { draftNotesRouter } from './routes/draftNotes.js'
 import { onboardingRouter } from './routes/onboarding.js'
+import { quizRouter } from './routes/quiz.js'
 import { demoRouter } from './routes/demo.js'
 import { accountRouter } from './routes/account.js'
 
@@ -75,6 +76,7 @@ export function createApp() {
   app.use('/api/demo', demoRouter)
   app.use('/api/draft-notes', draftNotesRouter)
   app.use('/api/onboarding', onboardingRouter)
+  app.use('/api/quiz', quizRouter)
 
   // Last: catches anything asyncHandler forwarded (or any sync throw) so a
   // bug in one request returns a clean 500 instead of taking the process down.
