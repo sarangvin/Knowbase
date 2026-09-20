@@ -54,11 +54,20 @@ export async function startToday(): Promise<Quiz> {
   return ((await jsonOrThrow(res)) as { quiz: Quiz }).quiz
 }
 
+export interface ConfidenceChange {
+  notePath: string
+  from: number
+  to: number
+}
+
 export interface AnswerResult {
   correct: boolean
   answer: number
   score: number
   completed: boolean
+  /** How the note's confidence moved, or null when it did not — already at
+   *  5 and right, already at 0 and wrong. */
+  confidence: ConfidenceChange | null
 }
 
 export async function answerQuestion(index: number, choice: number): Promise<AnswerResult> {

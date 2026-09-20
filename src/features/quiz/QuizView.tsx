@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { Carrot, Check, X, RotateCw } from '../../ui/icons'
-import { fetchToday, startToday, answerQuestion, type Quiz } from './quizApi'
+import { fetchToday, startToday, answerQuestion, type Quiz, type ConfidenceChange } from './quizApi'
 import './quiz.css'
 
 const PASS_MARK = 0.6
@@ -43,6 +43,10 @@ export function QuizView() {
   // that would whip the result of the final tap away before it was read.
   // The user asks for the summary; they are not dropped into it.
   const [showResults, setShowResults] = useState(false)
+  // Keyed by question index. Shown next to the verdict so the consequence of
+  // the answer is visible where the answer was given, rather than being a
+  // number that quietly moved on another screen.
+  const [moved, setMoved] = useState<Record<number, ConfidenceChange | null>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -87,6 +91,7 @@ export function QuizView() {
     setError(null)
     try {
       const r = await answerQuestion(at, choice)
+      setMoved((m) => ({ ...m, [at]: r.confidence }))
       // Patch in place so the answered state, the revealed key and the score
       // all come from the server's reply rather than from a local guess.
       setQuiz({
@@ -251,6 +256,11 @@ export function QuizView() {
             <span className={q.chosen === q.answer ? 'quiz-verdict is-right' : 'quiz-verdict is-wrong'}>
               {q.chosen === q.answer ? 'Correct' : 'Not quite'}
             </span>
+            {moved[at] && (
+              <span className={'quiz-moved' + (moved[at]!.to > moved[at]!.from ? ' is-up' : ' is-down')}>
+                Confidence {moved[at]!.from} → {moved[at]!.to}
+              </span>
+            )}
             <button className="quiz-recap-note" onClick={() => openNote(q.notePath)}>
               Open {q.noteTitle}
             </button>

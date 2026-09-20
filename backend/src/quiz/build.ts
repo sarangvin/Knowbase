@@ -16,26 +16,11 @@ import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
 import type { QuizQuestionRow } from '../db/schema.js'
 import { SPACE_ROOT } from '../vault/spaces.js'
+import { frontmatterValue } from '../vault/frontmatter.js'
 import { meteredGeminiCall } from '../llm/meter.js'
 
 export const QUIZ_LENGTH = 5
 export const OPTION_COUNT = 4
-
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/
-
-/** One flat scalar out of the frontmatter block. A line read rather than a
- *  YAML parse, matching grow.ts: the only fields needed are scalars, and a
- *  second parser is a second thing to disagree with the first. */
-function frontmatterValue(raw: string, key: string): string | null {
-  const m = raw.match(FRONTMATTER_RE)
-  if (!m) return null
-  for (const line of m[1].split('\n')) {
-    if (/^\s/.test(line)) continue
-    const km = line.match(new RegExp(`^${key}\\s*:(.*)$`, 'i'))
-    if (km) return km[1].trim()
-  }
-  return null
-}
 
 function sectionOf(raw: string, heading: string): string {
   const re = new RegExp(`^##\\s+${heading}\\s*$`, 'im')

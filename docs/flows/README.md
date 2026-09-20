@@ -32,6 +32,7 @@ a description of the whole path, which is what these sheets are.
 |---|---|
 | Onboarding — topic in, drafted space out | [onboarding.md](onboarding.md) |
 | Review — closing the loop on a note | [review.md](review.md) |
+| Quiz — five questions a day, scored back into the notes | [quiz.md](quiz.md) |
 
 ## Keeping them true
 

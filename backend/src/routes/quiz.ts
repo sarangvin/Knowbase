@@ -14,6 +14,7 @@ import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectCandidates, pickQuestions, buildQuestions, QUIZ_LENGTH } from '../quiz/build.js'
+import { applyQuizResult } from '../quiz/score.js'
 
 export const quizRouter = Router()
 quizRouter.use(requireAuth)
@@ -169,10 +170,16 @@ quizRouter.post('/answer', asyncHandler(async (req, res) => {
   const score = row.score + (correct ? 1 : 0)
   const completed = questions.every((x) => x.chosen != null)
 
+  // The quiz row first. It is the record of what happened; the note write
+  // below is a consequence of it, and a failure there must not lose the
+  // answer or let the same question be scored twice.
   await db
     .update(quizzes)
     .set({ questions, score, completedAt: completed ? new Date() : null })
     .where(eq(quizzes.id, row.id))
 
-  res.json({ correct, answer: q.answer, score, completed })
+  const vaultId = await getOrCreatePersonalVaultId(userId)
+  const confidence = await applyQuizResult(vaultId, q.notePath, correct ? 1 : -1)
+
+  res.json({ correct, answer: q.answer, score, completed, confidence })
 }))

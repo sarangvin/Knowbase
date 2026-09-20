@@ -173,6 +173,19 @@
 .quiz-verdict { font-size: 13.5px; font-weight: 700; }
 .quiz-verdict.is-right { color: var(--text-success); }
 .quiz-verdict.is-wrong { color: var(--text-error); }
+/* The consequence of the answer, next to the answer. Confidence orders the
+   review list, so a wrong answer here is what floats the note back up. */
+.quiz-moved {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+.quiz-moved.is-up { color: var(--text-success); border-color: color-mix(in srgb, var(--text-success) 45%, transparent); }
+.quiz-moved.is-down { color: var(--text-error); border-color: color-mix(in srgb, var(--text-error) 45%, transparent); }
 /* The next/results button sits at the end of the row on wide screens and
    spans the width on a phone, where it is the only thing you want to hit. */
 .quiz-after .quiz-btn { margin-left: auto; }

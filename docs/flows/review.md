@@ -171,10 +171,8 @@ order has to be explainable from the columns on screen.
   blocks — `unansweredQuestions` in `features/sync/sync.ts` splits on
   `/\n(?=Q\s*:)/`. So Sync reports "nothing to sync" on a note full of
   questions. Ask AI writes the correct `Q:`/`A:` shape, so hand-made
-  questions work and generated ones never have. `QuizView` counts them with a
-  third test (heading plus any bullet), which is why the coming-soon lander
-  claims notes are "ready" for a quiz that could not read them.
-- **The Quiz tab is a lander.** Reviewing is currently self-assessment with
-  no check on it.
+  questions work and generated ones never have. The quiz reads both shapes
+  (`quiz/build.ts` → `questionsOf`) and therefore works; Sync is the one
+  left behind, and the fix is to read the same way.
 - **`status: 'known'` is only written going up.** Lowering confidence below
   the threshold by hand leaves `status: known` behind.

@@ -16,7 +16,8 @@ An npm workspace with two packages sharing one origin in production:
 
 Context sheets for the user-facing flows — trigger, steps, what each writes,
 the invariants, and the known gaps — live in [`docs/flows/`](docs/flows/):
-[onboarding](docs/flows/onboarding.md), [review](docs/flows/review.md).
+[onboarding](docs/flows/onboarding.md), [review](docs/flows/review.md),
+[quiz](docs/flows/quiz.md).
 Change the sheet in the same commit as the flow.
 
 ## Local development

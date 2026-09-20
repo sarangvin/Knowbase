@@ -15,6 +15,7 @@ import { generateNextTopics } from './plan.js'
 import { enqueueDrafts, drainQueue } from './queue.js'
 import { buildTopicNote, dedupeSegments, sanitizeSegment } from './notePlan.js'
 import { SPACE_ROOT, getOrCreatePersonalVaultId } from '../vault/spaces.js'
+import { frontmatterValue } from '../vault/frontmatter.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
 /** How many unstudied topics a space should keep available. */
@@ -24,23 +25,6 @@ export const MAX_UNREVIEWED = 3
  *  frontmatter is malformed enough to read as zero unreviewed topics must not
  *  turn one click into an unbounded generation run. */
 const MAX_PER_RUN = 3
-
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/
-
-/** Reads one top-level scalar out of the frontmatter block. A deliberate line
- *  read rather than a YAML parse: the only fields needed here are flat
- *  scalars, and pulling in a parser to read one line would mean the server
- *  and the client's editor could disagree about the same file. */
-function frontmatterValue(raw: string, key: string): string | null {
-  const m = raw.match(FRONTMATTER_RE)
-  if (!m) return null
-  for (const line of m[1].split('\n')) {
-    if (/^\s/.test(line)) continue // indented: part of a nested structure
-    const km = line.match(new RegExp(`^${key}\\s*:(.*)$`, 'i'))
-    if (km) return km[1].trim()
-  }
-  return null
-}
 
 function titleFromPath(path: string): string {
   return (path.split('/').pop() ?? '').replace(/\.md$/i, '')
