@@ -190,6 +190,15 @@ export function useScrollReview(
       if (pRef.current < 1) set(0)
     }
 
+    // Being at the end is not only a scroll fact: a viewport resize or the
+    // content reflowing moves the end without firing a scroll event, which
+    // left `armed` asserting the sheet should be up while the reader was
+    // most of a screen short of the bottom. Observe the box and its content
+    // so the answer is recomputed whenever either changes.
+    const ro = new ResizeObserver(onScroll)
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+
     el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener('wheel', onWheel, { passive: false })
     el.addEventListener('touchstart', onTouchStart, { passive: true })
@@ -200,6 +209,7 @@ export function useScrollReview(
 
     return () => {
       if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
       el.removeEventListener('scroll', onScroll)
       el.removeEventListener('wheel', onWheel)
       el.removeEventListener('touchstart', onTouchStart)

@@ -80,7 +80,47 @@
 }
 
 
-/* ── Review sheet ────────────────────────────────────────────────────────
+/* ── Mark reviewed, pointer devices ──────────────────────────────────────
+   A plain button at the end of the note. It sits outside .note-container
+   so it can follow the sheet's place in the DOM, and borrows the reader's
+   column metrics to line up with the prose it belongs to. */
+.review-actions {
+  max-width: var(--note-max, 760px);
+  margin: 0 auto;
+  padding: 0 var(--note-pad-x, 48px) 44px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.review-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 9px 16px;
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-normal);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.review-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); color: var(--accent); }
+.review-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.review-btn:disabled { cursor: default; }
+.review-btn:disabled:not(.is-done) { opacity: 0.55; }
+/* Done is a state, not a disabled control — it should not look greyed out. */
+.review-btn.is-done { color: var(--text-success); border-color: var(--text-success); opacity: 1; }
+.review-hint { color: var(--text-faint); font-size: 12.5px; line-height: 1.5; }
+.review-hint.is-error { color: var(--text-error); }
+
+@media (prefers-reduced-motion: reduce) {
+  .review-btn { transition: none; }
+}
+
+/* ── Review sheet, touch devices ─────────────────────────────────────────
    An orange panel at the foot of the reader that grows as the note is
    swiped up past its end, capped at a fifth of the screen. See
    useScrollReview.ts for the gesture that drives --p (0–1). */
@@ -137,12 +177,38 @@
   overflow: hidden;
   /* Nothing separates the sheet from the text sliding under it but this. */
   box-shadow: 0 -10px 24px -12px hsl(0 0% 0% / 0.55);
+  /* Only at the very end of the note. Anywhere else it is a bar covering
+     the text with an instruction you cannot act on yet, so it rises into
+     place on arrival rather than riding along the whole way down.
+     Hidden by opacity and a small lift, never by removing it from the
+     layout: the slot must keep its 44px, because the gesture is armed by
+     the scroller being at its end and anything that changes the content
+     height at that moment un-arms it. Nor by translateY(100%), which would
+     park it over the bottom nav — the slot cannot clip, since the sheet
+     grows out of it. */
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(14px);
+  pointer-events: none;
+
   /* While a finger is on it, the sheet must track the finger — linear and
      short. The springy curve below takes over the moment it is let go. */
-  transition: --p 0.09s linear, background 0.15s;
+  transition: --p 0.09s linear, background 0.15s, opacity 0.16s, transform 0.2s ease-out, visibility 0s 0.2s;
+}
+.reviewsheet.is-visible {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition: --p 0.09s linear, background 0.15s, opacity 0.16s, transform 0.2s ease-out;
 }
 .reviewsheet:not(.is-pulling) {
-  transition: --p 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.15s;
+  transition: --p 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.15s, opacity 0.16s,
+    transform 0.2s ease-out, visibility 0s 0.2s;
+}
+.reviewsheet.is-visible:not(.is-pulling) {
+  transition: --p 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.15s, opacity 0.16s,
+    transform 0.2s ease-out;
 }
 .reviewsheet.is-armed:not(.is-pulling):not(.is-done) { background: var(--accent-hover, var(--accent)); }
 .reviewsheet:hover:not(:disabled) { background: var(--accent-hover, var(--accent)); }
@@ -208,6 +274,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .reviewsheet,
-  .reviewsheet:not(.is-pulling) { transition: background 0.15s; }
+  .reviewsheet.is-visible,
+  .reviewsheet:not(.is-pulling),
+  .reviewsheet.is-visible:not(.is-pulling) { transition: background 0.15s; }
+  .reviewsheet { transform: none; }
   .rs-fill { transition: none; }
 }

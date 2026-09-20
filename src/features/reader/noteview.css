@@ -1,15 +1,20 @@
 .note-scroll {
   height: 100%;
   overflow-y: auto;
+  /* The reader's column metrics live here rather than on .note-container so
+     the pointer-device review button, which sits outside the container, can
+     line up with the prose without a second copy of the numbers to drift. */
+  --note-max: 760px;
+  --note-pad-x: 48px;
 }
 .note-container {
-  max-width: 760px;
+  max-width: var(--note-max);
   margin: 0 auto;
   /* Was 40vh. That much dead space made sense when the reader ended in a
-     button you scrolled down to find; now the review tab is pinned to the
-     foot and "the end of the note" is a real destination, so half a screen
-     of emptiness before it is just distance to cover. */
-  padding: 36px 48px 56px;
+     button you scrolled down to find; now the end of the note is a real
+     destination, so half a screen of emptiness before it is just distance
+     to cover. */
+  padding: 36px var(--note-pad-x) 56px;
 }
 .note-title {
   font-size: 2.1em;
@@ -27,5 +32,6 @@
 .note-tags .tag { cursor: pointer; }
 
 @media (max-width: 700px) {
-  .note-container { padding: 24px 20px 40px; }
+  .note-scroll { --note-pad-x: 20px; }
+  .note-container { padding: 24px var(--note-pad-x) 40px; }
 }

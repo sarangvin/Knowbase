@@ -1,21 +1,19 @@
-// The review sheet — an orange panel at the foot of the reader that grows
-// as you swipe up past the end of the note, and marks it reviewed when the
-// ring inside it closes.
+// Marking a note reviewed, in the idiom of whatever you are holding.
 //
-// This replaces a "Mark reviewed" button. The button asked for a second,
-// unrelated action after reading: find it, aim, click. The gesture folds the
-// action into the reading — you reach the end of the note, keep pulling, and
-// that is the signal.
+// On a phone it is a swipe: an orange sheet at the very foot of the note
+// that rises as you pull up past the end and locks when the ring inside it
+// closes. Growth is the feedback — the panel rises under your thumb, so how
+// far in you are and how much is left are the same fact, read without
+// looking away from the note. It only exists at the bottom of the note,
+// because that is the only place the gesture means anything.
 //
-// Growth is the feedback. A bar that gets taller under your thumb is the
-// clearest possible statement that the thing you are doing is working and
-// how much of it is left; the ring inside restates the same number for
-// anyone reading rather than feeling. Both are driven by one value.
+// On a laptop it is a button at the end of the note. A pointer can aim, so
+// making someone push a wheel against a threshold buys nothing; it is a
+// gesture borrowed from a device that isn't there. The sheet is also the
+// wrong shape for a mouse — it asks for a sustained push that a wheel emits
+// in discrete clicks.
 //
-// The sheet is still a real button, and pressing it does the same write.
-// That is not a fallback bolted on for compliance — keyboard and screen
-// reader users have no swipe to give, and a gesture with no equivalent
-// control is simply an action they cannot perform.
+// Both write the same thing, through the same code path below.
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, RefObject } from 'react'
 import { useVault } from '../../vault/vaultStore'
@@ -23,20 +21,40 @@ import { setFrontmatterValue } from '../../vault/parse'
 import type { Note } from '../../vault/types'
 import { requestSpaceGrowth } from '../onboarding/onboardingApi'
 import { spaceOfPath } from '../automated-graph/engine'
+import { Check, RotateCw } from '../../ui/icons'
 import { useScrollReview } from './useScrollReview'
 import './score.css'
 
 const MAX_CONFIDENCE = 5
 
-/** How long the completed sheet stays *fully open* before it collapses. Long
- *  enough to read "Review complete", short enough that it never feels like a
- *  dialog waiting to be dismissed. */
+/** How long the finished state stays up before it reverts. Long enough to
+ *  read "Review complete", short enough that it never feels like a dialog
+ *  waiting to be dismissed. */
 const HOLD_MS = 1000
 
-/** The sheet's open transition, matching the CSS. Added to the hold so the
- *  second is a second of the locked state, not a second that the opening
- *  animation spends most of. */
+/** The sheet's open transition, matching the CSS. Added to the hold on
+ *  touch so the second is a second of the locked state, not a second the
+ *  opening animation spends most of. A click has nothing to open. */
 const OPEN_MS = 240
+
+/** Touch-first devices only: a laptop with a touchscreen reports
+ *  `pointer: coarse` too, and it should get the button, so the absence of
+ *  hover is the half of the test that actually decides. */
+const TOUCH_QUERY = '(hover: none) and (pointer: coarse)'
+
+function useTouchPrimary(): boolean {
+  const [touch, setTouch] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(TOUCH_QUERY).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(TOUCH_QUERY)
+    const sync = () => setTouch(mq.matches)
+    sync() // the first paint may predate a device change
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  return touch
+}
 
 /** Local date, not toISOString(). The vault stores plain YYYY-MM-DD and
  *  toISOString() is UTC, so anyone east of Greenwich reviewing in the evening
@@ -45,6 +63,21 @@ function today(): string {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** The note's last_reviewed as a plain YYYY-MM-DD, or null.
+ *
+ *  Defensive about the shape because frontmatter is whatever the YAML
+ *  parser made of it: an unquoted date in YAML is a Date, a quoted one is a
+ *  string, and a hand-edited vault can hold a full timestamp. */
+function lastReviewedDay(fm: Record<string, unknown>): string | null {
+  const raw = fm.last_reviewed
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${raw.getFullYear()}-${pad(raw.getMonth() + 1)}-${pad(raw.getDate())}`
+  }
+  if (typeof raw === 'string') return raw.trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? null
+  return null
 }
 
 function currentConfidence(fm: Record<string, unknown>): number {
@@ -72,6 +105,7 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   const saveNote = useVault((s) => s.saveNote)
   const getNote = useVault((s) => s.getNote)
   const source = useVault((s) => s.source)
+  const touch = useTouchPrimary()
 
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
@@ -85,6 +119,11 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   const conf = currentConfidence(note.frontmatter)
   const next = Math.min(MAX_CONFIDENCE, conf + 1)
   const atMax = conf >= MAX_CONFIDENCE
+  // One review per note per day. A second pass on the same day is not a
+  // second review — spacing is the whole mechanism, and letting confidence
+  // be walked up to 5 in one sitting would make the ranking describe an
+  // afternoon's enthusiasm rather than what has actually stuck.
+  const reviewedToday = lastReviewedDay(note.frontmatter) === today()
 
   // Held in a ref so the gesture's onComplete — attached once, outside
   // React's render cycle — never calls a stale copy of the write.
@@ -92,12 +131,12 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const run = async () => {
-    if (busy || done || !writable || !tracked) return
+    if (busy || done || !writable || !tracked || reviewedToday) return
     setBusy(true)
     setError(null)
-    // Lock the sheet open the moment the ring closes, not when the write
-    // returns: the gesture is finished, and letting the panel sag back while
-    // the network settles would read as a failure.
+    // Show the finished state the moment the gesture completes, not when the
+    // write returns: the user's part is over, and letting the sheet sag back
+    // while the network settles would read as a failure.
     setDone(true)
     try {
       // Re-read rather than trusting the rendered copy: a background draft
@@ -118,7 +157,7 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
       // failure cannot surface here — the review is already saved.
       const space = spaceOfPath(note.path)
       if (space) requestSpaceGrowth(space)
-      holdRef.current = setTimeout(() => setDone(false), OPEN_MS + HOLD_MS)
+      holdRef.current = setTimeout(() => setDone(false), (touch ? OPEN_MS : 0) + HOLD_MS)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setDone(false)
@@ -128,9 +167,11 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   }
   runRef.current = () => void run()
 
-  const active = tracked && writable && !busy && !done
+  const active = tracked && writable && !busy && !done && !reviewedToday
+  // Disabled outright on a pointer device: there, the button is the whole
+  // interaction and a wheel at the end of a note should just be a wheel.
   const { progress, armed } = useScrollReview(scrollRef, {
-    enabled: active,
+    enabled: active && touch,
     onComplete: () => runRef.current(),
   })
 
@@ -145,15 +186,45 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   useEffect(() => () => void (holdRef.current && clearTimeout(holdRef.current)), [])
 
   if (!tracked) return null
-
-  // One number drives height, ring and glyph size. Held at full while the
-  // completed state is up, so the sheet locks instead of deflating.
-  const p = done ? 1 : progress
-  const pulling = p > 0.02
+  // Already done today: no control at all, rather than a disabled one
+  // explaining why. `done` keeps it on screen for the hold that follows a
+  // review just made — the write puts today's date in the frontmatter, so
+  // without this the sheet would vanish mid-"Review complete".
+  if (reviewedToday && !done) return null
 
   const detail = atMax
     ? `Sets last reviewed to today. Confidence stays at ${MAX_CONFIDENCE}/${MAX_CONFIDENCE}.`
     : `Sets last reviewed to today and raises confidence to ${next}/${MAX_CONFIDENCE}.`
+
+  // ── Pointer: a button at the end of the note ─────────────────────────────
+  if (!touch) {
+    return (
+      <div className="review-actions">
+        <button
+          className={'review-btn' + (done ? ' is-done' : '')}
+          disabled={!writable || busy || done}
+          onClick={() => void run()}
+          title={writable ? detail : 'This vault is read-only.'}
+        >
+          {done ? <Check width={15} height={15} /> : <RotateCw width={15} height={15} />}
+          {done ? 'Review complete' : busy ? 'Saving…' : 'Mark reviewed'}
+        </button>
+        <span className={'review-hint' + (error ? ' is-error' : '')}>
+          {error ?? (writable ? detail : 'This vault is read-only.')}
+        </span>
+      </div>
+    )
+  }
+
+  // ── Touch: the swipe-up sheet ────────────────────────────────────────────
+  // One number drives height, ring and glyph size. Held at full while the
+  // finished state is up, so the sheet locks instead of deflating.
+  const p = done ? 1 : progress
+  const pulling = p > 0.02
+  // Nothing to swipe anywhere but the end of the note, so the sheet is not
+  // there anywhere else — it would just be a bar covering the text with an
+  // instruction you cannot follow yet.
+  const visible = armed || pulling || done || !!error
 
   let label: string
   if (error) label = error
@@ -167,18 +238,19 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
         type="button"
         className={
           'reviewsheet' +
-          (armed ? ' is-armed' : '') +
+          (visible ? ' is-visible' : '') +
           (pulling ? ' is-pulling' : '') +
           (done ? ' is-done' : '') +
           (error ? ' is-error' : '') +
           (writable ? '' : ' is-locked')
         }
         style={{ '--p': p } as CSSProperties}
-        disabled={!writable || busy || done}
+        disabled={!writable || busy || done || !visible}
         onClick={() => void run()}
         // The gesture is the discoverable path; assistive tech gets the plain
         // one, described by what it will actually write.
         aria-label={`Mark reviewed. ${detail}`}
+        aria-hidden={!visible}
         title={writable ? detail : 'This vault is read-only.'}
       >
         <Dial progress={progress} done={done} />
