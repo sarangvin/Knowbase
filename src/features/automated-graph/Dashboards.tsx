@@ -107,7 +107,7 @@ export function NextUp({ space }: { space: string }) {
 
       {r.locked.length > 0 && (
         <>
-          <h4 className="dv-h">Locked (prerequisites not yet confident enough)</h4>
+          <h4 className="dv-h">Locked (prerequisites not yet reviewed)</h4>
           <table className="dv-table">
             <thead><tr><th>Topic</th><th>Needs</th></tr></thead>
             <tbody>

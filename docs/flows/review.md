@@ -45,7 +45,9 @@ The gesture lives in `src/features/reader/useScrollReview.ts`:
 2. `setFrontmatterValue(raw, 'last_reviewed', localDay())`.
 3. `confidence + 1`, capped at 5.
 4. `status: 'known'` if confidence has reached the space's
-   `confidence_threshold` (default 3, from `_config`).
+   `confidence_threshold` (default 3, from `_config`). Note this no longer
+   gates anything in the graph — prerequisites unlock on *review*, not
+   confidence — it records that a topic is learned.
 5. Save. If nothing changed, no write — that state is the system already
    being right, not an error.
 6. `requestSpaceGrowth(space)` → `POST /api/onboarding/grow`, fire and forget.
@@ -95,6 +97,12 @@ threshold. Then, indirectly, new `notes` rows from `growSpace`, and
   broke this flow.
 - **Never recommend what cannot be acted on.** The Next Up pick skips
   anything already reviewed today. An empty pick is the honest answer.
+- **A prerequisite is met once it has been reviewed**, not once it has been
+  mastered. Gating on confidence made the graph a ladder you could climb only
+  three reviews per rung, and confidence is self-reported — it measured how
+  generous someone felt rather than what they had covered. Having read the
+  groundwork earns the right to read on; how well it stuck is the review
+  list's job.
 - **The gesture always has a keyboard equivalent.** The sheet is a real
   `<button>`; a gesture with no equivalent control is an action some users
   simply cannot perform.
@@ -109,7 +117,7 @@ this note have a `last_reviewed` date?** Each topic appears in exactly one.
 | List | Contents | Order |
 |---|---|---|
 | **New topics (ready now)** | Never opened, prerequisites met | `importance×1 + unlocks×2 + interest×0.5` |
-| **Locked** | Never opened, a prerequisite below threshold | — |
+| **Locked** | Never opened, a prerequisite not yet reviewed | — |
 | **Review** | Everything opened at least once, any confidence | interest desc, then confidence asc, then oldest `last_reviewed` |
 
 The **pick** is the top new topic, falling back to the top review item not
@@ -132,9 +140,5 @@ order has to be explainable from the columns on screen.
   claims notes are "ready" for a quiz that could not read them.
 - **The Quiz tab is a lander.** Reviewing is currently self-assessment with
   no check on it.
-- **The embedded `dataviewjs` block still implements the old
-  frontier/due-for-review split.** It is never executed in-app — `Next Up.md`
-  renders through `features/automated-graph/register.tsx` — but a vault
-  exported to real Obsidian will disagree with what this app shows.
 - **`status: 'known'` is only written going up.** Lowering confidence below
   the threshold by hand leaves `status: known` behind.

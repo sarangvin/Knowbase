@@ -71,8 +71,11 @@ function prereqPaths(note: Note, index: VaultIndex): string[] {
   return out
 }
 
-function confidenceOf(index: VaultIndex, path: string): number {
-  return num(index.notes.get(path)?.frontmatter.confidence, 0)
+/** Has this note been opened and marked reviewed at least once? The gate on
+ *  prerequisites, and the same question the New/Review split is made on. */
+function isReviewed(index: VaultIndex, path: string): boolean {
+  const fm = index.notes.get(path)?.frontmatter
+  return !!fm && !!lastReviewedDay(fm)
 }
 
 function daysSince(dateVal: unknown): number | null {
@@ -148,8 +151,14 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
   const topics = topicsOfSpace(index, space)
   const frontier = topics.filter((p) => p.frontmatter.status === 'frontier')
 
+  // A prerequisite is met once it has been *read*, not once it has been
+  // mastered. Gating on confidence made the graph a ladder you could only
+  // climb three reviews per rung — and confidence is self-reported anyway,
+  // so it measured how generous someone felt rather than what they had
+  // covered. Having read the groundwork is the real precondition for being
+  // allowed to read on; how well it stuck is what the review list is for.
   const isReady = (p: Note) =>
-    prereqPaths(p, index).every((path) => confidenceOf(index, path) >= cfg.confidence_threshold)
+    prereqPaths(p, index).every((path) => isReviewed(index, path))
   const unlockCount = (p: Note) =>
     frontier.filter((f) => prereqPaths(f, index).includes(p.path)).length
 
@@ -192,7 +201,7 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
       path: p.path,
       title: p.title,
       needs: prereqPaths(p, index)
-        .filter((path) => confidenceOf(index, path) < cfg.confidence_threshold)
+        .filter((path) => !isReviewed(index, path))
         .map((path) => ({ path, title: index.notes.get(path)?.title ?? path })),
     }))
 
