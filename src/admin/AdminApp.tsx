@@ -266,6 +266,7 @@ export function AdminApp() {
             console for the free tier. Windows are rolling: RPM and TPM cover the last
             minute, RPD the last 24 hours.
           </p>
+          <div className="admin-scroll">
           <table className="admin-table">
             <thead>
               <tr>
@@ -294,12 +295,14 @@ export function AdminApp() {
               ))}
             </tbody>
           </table>
+          </div>
           {!loading && (usage?.models.length ?? 0) === 0 && (
             <p className="admin-dim">No model calls logged yet.</p>
           )}
           {(usage?.bySource.length ?? 0) > 0 && (
             <>
               <div className="admin-label" style={{ marginTop: 22 }}>What used it (last 24h)</div>
+              <div className="admin-scroll">
               <table className="admin-table admin-table-compact">
                 <thead><tr><th>Source</th><th>Calls</th></tr></thead>
                 <tbody>
@@ -308,6 +311,7 @@ export function AdminApp() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </>
           )}
         </>
@@ -323,6 +327,7 @@ export function AdminApp() {
             {demo.visits === 1 ? '' : 's'}
             {demo.last_visit ? <> · last {formatDate(demo.last_visit)}</> : null}
           </p>
+          <div className="admin-scroll">
           <table className="admin-table">
             <thead>
               <tr>
@@ -361,6 +366,7 @@ export function AdminApp() {
               ))}
             </tbody>
           </table>
+          </div>
           {!loading && spaces.length === 0 && <p className="admin-dim">No users yet.</p>}
         </>
       ) : tab === 'signins' ? (
@@ -377,6 +383,7 @@ export function AdminApp() {
               <> · <strong className="admin-pending-count">{counts.pending}</strong> waiting on you</>
             )}
           </p>
+          <div className="admin-scroll">
           <table className="admin-table">
             <thead>
               <tr>
@@ -419,11 +426,13 @@ export function AdminApp() {
               ))}
             </tbody>
           </table>
+          </div>
           {!loading && signins.length === 0 && <p className="admin-dim">No sign-ins recorded yet.</p>}
         </>
       ) : (
       <>
       <p className="admin-dim">{total} user{total === 1 ? '' : 's'}</p>
+      <div className="admin-scroll">
       <table className="admin-table">
         <thead>
           <tr>
@@ -450,6 +459,7 @@ export function AdminApp() {
           ))}
         </tbody>
       </table>
+      </div>
       </>
       )}
       {loading && <p className="admin-dim">Loading…</p>}
@@ -481,6 +491,7 @@ export function AdminApp() {
             {selected.recentEvents.length === 0 ? (
               <p className="admin-dim">No activity yet.</p>
             ) : (
+              <div className="admin-scroll">
               <table className="admin-table admin-table-compact">
                 <thead>
                   <tr><th>Event</th><th>Provider</th><th>Model</th><th>Tokens</th><th>Latency</th><th>When</th></tr>
@@ -498,6 +509,7 @@ export function AdminApp() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>

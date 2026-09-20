@@ -149,3 +149,56 @@
 .meter-warn .usage-bar span { background: var(--accent); }
 .meter-danger .usage-bar span { background: var(--text-error); }
 .meter-danger .usage-num { color: var(--text-error); }
+
+/* ── Horizontal scrolling for wide tables ────────────────────────────────
+   These tables carry six or seven columns of emails, dates and meters, and
+   the admin page inherits the app shell's `overflow-x: hidden` — so without
+   a scroll container of their own the right-hand columns were not squeezed,
+   they were simply cut off with no way to reach them. */
+.admin-scroll {
+  overflow-x: auto;
+  /* Stop a horizontal flick at the end of the table from turning into a
+     browser back-navigation, which on a trackpad is very easy to trigger. */
+  overscroll-behavior-x: contain;
+
+  /* Edge cues that appear only on the side there is more table to reach.
+     Two pairs: the `local` covers scroll with the content and sit over the
+     cue when that edge is flush, the `scroll` cues stay pinned to the box.
+     No JS and no resize observer — the browser does the arithmetic.
+     Light rather than the conventional black drop shadow: on a surface this
+     dark a black shadow is invisible, so the cue has to be a highlight. */
+  background:
+    linear-gradient(to right, var(--bg-primary) 30%, transparent) left center,
+    linear-gradient(to left, var(--bg-primary) 30%, transparent) right center,
+    radial-gradient(farthest-side at 0 50%, hsl(30 22% 90% / 0.17), transparent) left center,
+    radial-gradient(farthest-side at 100% 50%, hsl(30 22% 90% / 0.17), transparent) right center;
+  background-repeat: no-repeat;
+  background-size: 36px 100%, 36px 100%, 13px 100%, 13px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* max-content rather than a min-width guess: every column ends up as wide as
+   it needs and no wider, so the two-column tables never scroll while the
+   seven-column ones scroll exactly as far as their content requires.
+   min-width keeps a short table filling the page. */
+.admin-scroll > .admin-table {
+  width: max-content;
+  min-width: 100%;
+  margin-top: 16px;
+}
+.admin-scroll > .admin-table th,
+.admin-scroll > .admin-table td { white-space: nowrap; }
+
+/* The tab strip is the other thing that outgrows a phone. Scroll it rather
+   than wrapping to a second row, which would shift the whole page down. */
+.admin-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.admin-tabs::-webkit-scrollbar { display: none; }
+.admin-tab { flex: none; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .admin-shell { padding: 20px 14px; }
+}
