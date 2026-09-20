@@ -12,12 +12,13 @@
 import { useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { startOnboarding } from './onboardingApi'
+import { randomTopicPlaceholder } from './examples'
 import { Sparkles, ArrowRight } from '../../ui/icons'
 
 export function TopicLauncher({
   title,
   hint,
-  placeholder = 'e.g. Marine biology, Roman history, Kubernetes…',
+  placeholder,
 }: {
   title: string
   hint?: string
@@ -25,6 +26,9 @@ export function TopicLauncher({
 }) {
   const user = useVault((s) => s.user)
   const [topic, setTopic] = useState('')
+  // Rolled once per mount. Re-rolling on render would shuffle the examples
+  // under the cursor while someone is still reading them.
+  const [examples] = useState(randomTopicPlaceholder)
   const [busy, setBusy] = useState(false)
   const [started, setStarted] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -72,7 +76,7 @@ export function TopicLauncher({
       <div className="launcher-row">
         <input
           className="ob-topic-input"
-          placeholder={placeholder}
+          placeholder={placeholder ?? examples}
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void submit()}

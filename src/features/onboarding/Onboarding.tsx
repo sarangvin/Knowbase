@@ -14,6 +14,7 @@ import { FsAccessVaultSource } from '../../vault/source'
 import { requestAccess } from '../../vault/remoteSource'
 import { setPendingTopic, clearPendingTopic } from './pendingTopic'
 import { startOnboarding } from './onboardingApi'
+import { randomTopicPlaceholder } from './examples'
 import { RabbitSolid, Folder, Eye, Cloud, Pencil, Envelope, Check, ArrowRight, Sparkles } from '../../ui/icons'
 import './onboarding.css'
 
@@ -30,6 +31,7 @@ export function Onboarding() {
   const fsSupported = FsAccessVaultSource.isSupported()
 
   const [topic, setTopic] = useState('')
+  const [examples] = useState(randomTopicPlaceholder)
   const [busy, setBusy] = useState(false)
   const [requestedAt, setRequestedAt] = useState<string | null>(user?.accessRequestedAt ?? null)
   const [localError, setLocalError] = useState<string | null>(null)
@@ -118,7 +120,7 @@ export function Onboarding() {
             <input
               className="ob-topic-input"
               autoFocus
-              placeholder="e.g. Quantum computing, French cooking, Kubernetes…"
+              placeholder={examples}
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void start()}

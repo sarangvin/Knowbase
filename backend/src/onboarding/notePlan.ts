@@ -235,8 +235,14 @@ export function buildNextUpNote(space: string): string {
   const lines = [
     `# Next Up — ${space}`,
     '',
-    'Requires the Dataview plugin (with JavaScript queries enabled). Tunable parameters live in [[_config]].',
-    '',
+    // No "requires the Dataview plugin" line. In this app the block below is
+    // rendered natively (features/automated-graph/register.tsx), so that
+    // sentence told the reader to install something they do not need and
+    // cannot use — it was the first thing on the most-visited screen. The
+    // block itself stays faithful so the note still works if the vault is
+    // ever exported to real Obsidian, where the plugin genuinely is needed;
+    // the _config pointer moved to "How this works" at the foot, which is
+    // where someone goes looking to change a threshold.
     '```dataviewjs',
     `const TOPICS_FOLDER = '"Automated Graph/${space}/Topics"';`,
     '',
@@ -343,6 +349,8 @@ export function buildNextUpNote(space: string): string {
     "- **Due for review** — topics you've already learned (confidence >= threshold) that haven't been touched in `review_interval_days`. Update `last_reviewed` (and re-confirm/adjust `confidence`) after you review one.",
     '',
     'To progress a topic: study it, update its `confidence` and `last_reviewed` in frontmatter, and the rankings recalculate automatically.',
+    '',
+    'Thresholds and weights are tunable in [[_config]]. Exported to Obsidian, the block above needs the Dataview plugin with JavaScript queries enabled; here it is rendered natively.',
     '',
   ]
   return lines.join('\n')
