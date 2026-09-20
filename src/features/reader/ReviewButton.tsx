@@ -8,6 +8,8 @@ import { useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { setFrontmatterValue } from '../../vault/parse'
 import type { Note } from '../../vault/types'
+import { requestSpaceGrowth } from '../onboarding/onboardingApi'
+import { spaceOfPath } from '../automated-graph/engine'
 import { Check, RotateCw } from '../../ui/icons'
 import './score.css'
 
@@ -66,6 +68,12 @@ export function ReviewButton({ note }: { note: Note }) {
       // for the system already being right.
       if (raw !== current.raw) await saveNote(note.path, raw)
       setJustSaved(true)
+      // Finishing a topic is exactly when the tree should grow: the server
+      // tops it back up to three unstudied topics, using what they now know
+      // as the prerequisites for what comes next. Not awaited, and its
+      // failure cannot surface here — the review is already saved.
+      const space = spaceOfPath(note.path)
+      if (space) requestSpaceGrowth(space)
       setTimeout(() => setJustSaved(false), 2500)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

@@ -15,6 +15,7 @@ import { onboardingJobs } from '../db/schema.js'
 import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { runOnboarding } from '../onboarding/run.js'
+import { growSpace, MAX_UNREVIEWED } from '../onboarding/grow.js'
 
 export const onboardingRouter = Router()
 onboardingRouter.use(requireAuth)
@@ -93,6 +94,28 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
   res.status(202).json({ job: await currentJob(userId) })
 
   waitUntil(runOnboarding(userId, raw))
+}))
+
+/** Top a space back up after a note is marked reviewed.
+ *
+ *  Answers immediately and grows under waitUntil: the caller is a button that
+ *  has already done its real work (writing the review date), so this must not
+ *  add latency to it, and must not be able to fail it either.
+ *
+ *  Idempotent by construction rather than by locking — growSpace counts the
+ *  unreviewed topics that actually exist each time, so a double click finds
+ *  the cap already met and does nothing. */
+onboardingRouter.post('/grow', asyncHandler(async (req, res) => {
+  const space = typeof req.body?.space === 'string' ? req.body.space.trim() : ''
+  // No slashes: this is one path segment, and a crafted value must not be
+  // able to reach outside the space's own folder.
+  if (!space || space.length > 80 || space.includes('/')) {
+    res.status(400).json({ error: 'body.space (a single space name) required' })
+    return
+  }
+  const userId = req.user!.id
+  res.status(202).json({ ok: true, maxUnreviewed: MAX_UNREVIEWED })
+  waitUntil(growSpace(userId, space))
 }))
 
 onboardingRouter.get('/status', asyncHandler(async (req, res) => {

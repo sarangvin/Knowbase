@@ -68,3 +68,19 @@ export async function ackOnboarding(): Promise<void> {
     /* ignored on purpose — see above */
   }
 }
+
+/** Ask the server to top this space back up after a note was reviewed.
+ *
+ * Fire-and-forget by design: the review itself has already been saved, and a
+ * failure to queue more topics is not something to put in front of someone
+ * who just finished reading. The server decides whether anything is actually
+ * needed — the client does not count anything.
+ */
+export function requestSpaceGrowth(space: string): void {
+  void fetch('/api/onboarding/grow', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ space }),
+  }).catch((err) => console.warn('[grow] could not request more topics:', err))
+}

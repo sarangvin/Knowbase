@@ -186,3 +186,119 @@ export async function generateLearningPlan(topic: string): Promise<ValidatedPlan
   if (lastError instanceof Error) throw lastError
   throw new Error("Couldn't generate a valid learning plan — try again, or try a different topic phrasing.")
 }
+
+// ── Growing an existing space ───────────────────────────────────────────────
+
+const NEXT_SYSTEM_PROMPT = `You are a curriculum designer extending someone's existing learning plan. You will be given
+a subject, the topics already in their plan, and which of those they have already studied.
+Propose the next subtopics for them to learn.
+
+Rules:
+- Respond with ONLY a single JSON object. No markdown code fences, no prose before or after.
+- The JSON object must exactly match this shape:
+{
+  "subtopics": [
+    {
+      "title": string,            // short, specific subtopic name, Title Case
+      "summary": string,          // 1-2 sentence plain-English description of what it covers
+      "prerequisites": string[],  // titles they must know first — may reference EXISTING topics
+                                  // listed in the prompt, or other new subtopics in this list
+      "importance": number,       // 1-5, how core this subtopic is to the overall subject
+      "interest": number          // 1-5, how independently engaging this subtopic tends to be
+    }
+  ]
+}
+- Propose exactly the number of subtopics asked for.
+- They build on what the learner already knows: prefer prerequisites drawn from the topics
+  marked as studied, so the new work is reachable rather than blocked.
+- Do NOT repeat or rephrase any topic already in their plan. These must be genuinely new
+  ground in the same subject.
+- Every prerequisite string must exactly match either an existing topic title given to you or
+  the title of another subtopic in this list. Never invent anything else, and never list a
+  subtopic as its own prerequisite.
+- Keep titles short (a few words) and free of colons, slashes, brackets, or quotation marks.`
+
+function buildNextUserPrompt(space: string, studied: string[], all: string[], count: number): string {
+  const unstudied = all.filter((t) => !studied.includes(t))
+  return `Subject: "${space}"
+
+Topics already in their plan:
+${all.map((t) => `- ${t}${studied.includes(t) ? ' (STUDIED)' : ''}`).join('\n')}
+
+${studied.length ? `They have studied: ${studied.join(', ')}.` : 'They have not finished any topic yet.'}
+${unstudied.length ? `Still unstudied: ${unstudied.join(', ')}.` : ''}
+
+Propose exactly ${count} new subtopic${count === 1 ? '' : 's'} that take${count === 1 ? 's' : ''} them further into "${space}", building on what they have studied.`
+}
+
+/** Validates a "next topics" response against the titles that already exist.
+ *  Separate from parseAndValidate because the shapes genuinely differ: no
+ *  space name, a variable count, and prerequisites that may point at topics
+ *  outside this batch — which is the whole point of growing a tree rather
+ *  than generating a fresh one. */
+export function parseNextTopics(raw: string, existingTitles: string[], want: number): Subtopic[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stripFence(raw))
+  } catch {
+    return null
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null
+  const list = (parsed as { subtopics?: unknown }).subtopics
+  if (!Array.isArray(list) || list.length === 0) return null
+
+  const existingLower = new Set(existingTitles.map((t) => t.toLowerCase()))
+  const seen = new Set<string>()
+  const out: Subtopic[] = []
+
+  for (const r of list as RawSubtopic[]) {
+    const title = typeof r.title === 'string' ? r.title.trim().slice(0, 80) : ''
+    if (!title) continue
+    const lower = title.toLowerCase()
+    // Silently dropping a duplicate is right: the model re-proposing something
+    // they already have is a near miss, not a reason to throw the batch away.
+    if (existingLower.has(lower) || seen.has(lower)) continue
+    seen.add(lower)
+    out.push({
+      title,
+      summary: typeof r.summary === 'string' ? r.summary : '',
+      prerequisites: Array.isArray(r.prerequisites)
+        ? r.prerequisites.filter((p): p is string => typeof p === 'string')
+        : [],
+      importance: clampInt(r.importance, 3, 1, 5),
+      interest: clampInt(r.interest, 3, 1, 5),
+    })
+    if (out.length === want) break
+  }
+  if (out.length === 0) return null
+
+  // A prerequisite may point at an existing topic or at a sibling in this
+  // batch; anything else would be a permanently unresolvable wikilink.
+  const resolvable = new Set([...existingTitles, ...out.map((s) => s.title)])
+  return out.map((s) => ({
+    ...s,
+    prerequisites: [...new Set(s.prerequisites)].filter((p) => resolvable.has(p) && p !== s.title),
+  }))
+}
+
+/** Next subtopics for a space the learner is already working through.
+ *  Returns null rather than throwing: growing a tree is a background nicety,
+ *  and a failure must never surface to someone who simply marked a note read. */
+export async function generateNextTopics(
+  space: string,
+  studied: string[],
+  all: string[],
+  count: number,
+): Promise<Subtopic[] | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const raw = await callModel(NEXT_SYSTEM_PROMPT, buildNextUserPrompt(space, studied, all, count))
+      const parsed = parseNextTopics(raw, all, count)
+      if (parsed) return parsed
+      console.warn('[grow] response failed validation:', raw.slice(0, 400))
+    } catch (err) {
+      console.warn('[grow] request failed:', err)
+    }
+  }
+  return null
+}

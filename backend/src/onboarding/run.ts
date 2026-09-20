@@ -1,9 +1,8 @@
 // "Make this person a space", start to finish, on the server.
 //
 // This is the whole of what TopicOnboarding.tsx used to do in the browser
-// while the user watched a spinner: check the corpus, generate a plan, draft
-// the note they will land on, write the space, then finish the remaining
-// drafts. Every step of it is now behind the response, so the user is in the
+// while the user watched a spinner: check the corpus, generate a plan, write
+// the space, and draft every note in it. Every step of it is now behind the response, so the user is in the
 // app — browsing the demo space — for all of it.
 //
 // Why it moved rather than being made faster: the old flow's floor was one
@@ -162,17 +161,23 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
       // with what it already wrote.
       .onConflictDoNothing({ target: [notes.vaultId, notes.path] })
 
-    await patchJob(userId, {
-      status: 'ready',
-      openPath,
-      error: null,
-      notesDrafted: firstDraft ? 1 : 0,
-    })
+    await patchJob(userId, { openPath, error: null, notesDrafted: firstDraft ? 1 : 0 })
     void logUsageEvent({ userId, eventType: 'note_write', metadata: { vault: 'personal', space, count: entries.length, source: 'onboarding' } })
 
-    // 5. The rest, behind them. Sequential on purpose: the free tier is
-    //    rate-limited per user and five concurrent calls is the fastest way to
-    //    trip it. Nobody is waiting, so latency is not the constraint.
+    // 5. The rest, BEFORE announcing ready. "Ready" now means every note is
+    //    written, not just the landing one: opening a brand-new space and
+    //    finding four of five topics still a single sentence is a poor first
+    //    impression of a tool whose whole promise is the notes.
+    //
+    //    Affordable only because the model changed. On the old thinking model
+    //    one draft took ~53s; on gemini-3.5-flash-lite five take ~14s
+    //    (measured), so the whole run is ~16s against a 60s function limit.
+    //    Anyone reinstating a slow model must revisit this — it is the thing
+    //    that would silently push the run past the limit.
+    //
+    //    Sequential on purpose: the free tier is rate-limited per user and
+    //    five concurrent calls is the fastest way to trip it. Nobody is
+    //    waiting on a spinner, so latency is not the constraint.
     const final = new Map(entries.map((e) => [e.path, e.content]))
     let drafted = firstDraft ? 1 : 0
     if (apiKey) {
@@ -197,6 +202,9 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
         }
       }
     }
+
+    // Now it is genuinely ready.
+    await patchJob(userId, { status: 'ready', openPath, error: null, notesDrafted: drafted })
 
     // 6. Hand the finished drafts to the corpus so the next person asking for
     //    this topic gets step 1 instead of steps 2-5. The client used to do
