@@ -31,3 +31,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Throwaway debug/verification scripts (_pool.mjs, _rt.mjs, ...). These are
+# scratch tools for probing the live database or API; three times now an
+# over-broad `git add -A` has swept one into a commit.
+_*.mjs
+_*.ts
