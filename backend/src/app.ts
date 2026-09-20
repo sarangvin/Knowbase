@@ -11,6 +11,7 @@ import { adminRouter } from './routes/admin.js'
 import { draftNotesRouter } from './routes/draftNotes.js'
 import { onboardingRouter } from './routes/onboarding.js'
 import { demoRouter } from './routes/demo.js'
+import { accountRouter } from './routes/account.js'
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -68,6 +69,7 @@ export function createApp() {
   app.use('/api/vaults', vaultsRouter)
   app.use('/api/llm', llmRouter)
   app.use('/api/billing', billingRouter)
+  app.use('/api/account', accountRouter)
   app.use('/api/admin', adminRouter)
   // Unauthenticated by design — see routes/demo.ts.
   app.use('/api/demo', demoRouter)

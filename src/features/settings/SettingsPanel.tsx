@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
-import { User, LogOut, Cloud, Pencil } from '../../ui/icons'
+import { User, LogOut, Cloud, Pencil, Trash } from '../../ui/icons'
 import './settings.css'
 
 /** `onClose` omitted renders the panel inline as a full pane (the Settings
@@ -18,6 +18,9 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const [subBusy, setSubBusy] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
   const [activating, setActivating] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = () => {
@@ -77,6 +80,64 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
       setSubBusy(false)
     }
   }
+
+  const doReset = async () => {
+    if (resetting) return
+    setResetting(true)
+    setResetError(null)
+    try {
+      const res = await fetch('/api/account/reset', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      })
+      if (!res.ok) throw new Error(`Could not reset the account (${res.status})`)
+      setConfirmOpen(false)
+      // Full reload rather than patching state: the vault, its index, open
+      // tabs and the onboarding job have all just ceased to exist server-side,
+      // and rebuilding that by hand is more ways to get it subtly wrong than
+      // starting clean. Boot then finds an empty vault and offers onboarding.
+      location.assign('/')
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : String(e))
+      setResetting(false)
+    }
+  }
+
+  const confirmDialog = confirmOpen ? (
+    <div
+      className="confirm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reset-title"
+      // Backdrop click cancels; it can only ever cancel, never confirm.
+      onClick={() => !resetting && setConfirmOpen(false)}
+    >
+      <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+        <div className="confirm-title" id="reset-title">Erase your vault?</div>
+        <p className="confirm-body">
+          This <strong>cannot be undone</strong>. There is no backup and no way to recover
+          these notes afterwards.
+        </p>
+        <ul className="confirm-list">
+          <li>Every note in your cloud vault is deleted</li>
+          <li>Your account, sign-in and access are kept</li>
+          <li>Shared notes already in the library are not affected</li>
+        </ul>
+        <div className="confirm-actions">
+          {/* Cancel first and focused: in a dialog whose other option is
+              irreversible, the safe choice should be the easy one. */}
+          <button className="ask-btn" autoFocus disabled={resetting} onClick={() => setConfirmOpen(false)}>
+            Cancel
+          </button>
+          <button className="danger-btn" disabled={resetting} onClick={() => void doReset()}>
+            {resetting ? 'Erasing…' : 'Yes, erase everything'}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
 
   const body = (
     <>
@@ -170,6 +231,20 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
           </p>
         </div>
 
+        {user && (
+          <div className="settings-section settings-danger">
+            <div className="settings-label">Reset account</div>
+            <p className="settings-dim">
+              Deletes every note in your cloud vault and lets you start again with a new
+              topic. Your account, sign-in and access stay as they are.
+            </p>
+            <button className="danger-btn" disabled={resetting} onClick={() => setConfirmOpen(true)}>
+              <Trash width={13} height={13} /> {resetting ? 'Erasing…' : 'Reset my account'}
+            </button>
+            {resetError && <div className="ask-error">{resetError}</div>}
+          </div>
+        )}
+
         {onClose && (
           <div className="settings-foot">
             <button className="ask-btn" onClick={onClose}>Close</button>
@@ -178,12 +253,13 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
     </>
   )
 
-  if (!onClose) return <div className="settings-pane">{body}</div>
+  if (!onClose) return <div className="settings-pane">{body}{confirmDialog}</div>
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
         {body}
       </div>
+      {confirmDialog}
     </div>
   )
 }

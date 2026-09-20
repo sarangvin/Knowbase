@@ -49,3 +49,52 @@
    the edge, which is the failure the bottom-bar popover had. */
 .settings-account-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .settings-account-actions .ask-btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+
+/* ── Danger zone ─────────────────────────────────────────────────────────── */
+.settings-danger {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--divider);
+}
+.settings-danger .settings-label { color: var(--text-error); }
+.danger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-m);
+  background: transparent;
+  /* Outlined rather than filled: it should be findable, not inviting. A solid
+     red button next to ordinary settings reads as the primary action. */
+  border: 1px solid var(--text-error);
+  color: var(--text-error);
+  font-size: 13px;
+}
+.danger-btn:hover:not(:disabled) { background: hsl(354 72% 60% / 0.12); }
+.danger-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* The confirm overlay. Its own scaffold rather than .modal-overlay so the
+   destructive dialog can't inherit a future restyle of ordinary modals. */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: hsl(var(--soil-h, 28) 30% 3% / 0.6);
+}
+.confirm-box {
+  width: min(420px, 100%);
+  padding: 22px;
+  border-radius: var(--radius-l);
+  background: var(--bg-modal);
+  border: 1px solid var(--text-error);
+  box-shadow: var(--shadow-modal);
+}
+.confirm-title { font-size: 16px; font-weight: 650; margin-bottom: 10px; }
+.confirm-body { color: var(--text-muted); font-size: 13.5px; line-height: 1.6; }
+.confirm-body strong { color: var(--text-error); }
+.confirm-list { margin: 10px 0 0; padding-left: 18px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
+.confirm-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 20px; }
