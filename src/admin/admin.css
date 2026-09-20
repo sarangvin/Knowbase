@@ -133,3 +133,19 @@
 }
 .admin-panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .admin-label { font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 14px 0 6px; }
+
+/* ── Model usage meters ──────────────────────────────────────────────────── */
+.usage-meter { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.usage-bar {
+  flex: 1;
+  height: 4px;
+  min-width: 48px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  overflow: hidden;
+}
+.usage-bar span { display: block; height: 100%; background: var(--text-success); }
+.usage-num { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+.meter-warn .usage-bar span { background: var(--accent); }
+.meter-danger .usage-bar span { background: var(--text-error); }
+.meter-danger .usage-num { color: var(--text-error); }

@@ -68,6 +68,26 @@ export interface AdminSpacesResponse {
   demo: { visits: number; last_visit: string | null }
 }
 
+export interface ModelUsageRow {
+  model: string
+  /** Requests in the last rolling minute. */
+  rpm: number
+  /** Tokens (in + out) in the last rolling minute. */
+  tpm: number
+  /** Requests in the last rolling 24 hours. */
+  rpd: number
+  total: number
+  last_call: string | null
+  /** Null for a model we have no transcribed limits for. */
+  limits: { rpm: number; tpm: number; rpd: number } | null
+}
+
+export interface AdminUsageResponse {
+  models: ModelUsageRow[]
+  bySource: { source: string; calls: number }[]
+  activeModel: string
+}
+
 export interface UsageEventRow {
   id: number
   event_type: string
@@ -115,6 +135,10 @@ export function fetchSignins(page: number, pageSize = 20): Promise<AdminSigninsR
 
 export function fetchSpaces(): Promise<AdminSpacesResponse> {
   return api('/api/admin/spaces')
+}
+
+export function fetchUsage(): Promise<AdminUsageResponse> {
+  return api('/api/admin/usage')
 }
 
 export function setApproved(id: string, approved: boolean): Promise<{ access_approved: boolean; access_approved_at: string | null }> {

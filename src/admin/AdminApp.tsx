@@ -3,17 +3,19 @@ import {
   fetchUsers,
   fetchSignins,
   fetchSpaces,
+  fetchUsage,
   setApproved,
   fetchUserDetail,
   fetchCurrentUser,
   type AdminUserRow,
   type AdminSigninRow,
   type AdminSpaceRow,
+  type AdminUsageResponse,
   type AdminUserDetail,
 } from './api'
 import './admin.css'
 
-type Tab = 'users' | 'signins' | 'spaces'
+type Tab = 'users' | 'signins' | 'spaces' | 'usage'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -64,6 +66,22 @@ function AccessCell({ row }: { row: AdminSigninRow }) {
   return <span className="admin-pill admin-pill-unknown">No access</span>
 }
 
+/** used / limit with a bar. Colours only at the point action is needed:
+ *  a quota at 30% is not information, a quota at 90% is. */
+function Meter({ used, limit }: { used: number; limit?: number }) {
+  if (limit == null) return <span className="admin-subtle">{used.toLocaleString()}</span>
+  const pct = Math.min(100, (used / limit) * 100)
+  const level = pct >= 90 ? ' meter-danger' : pct >= 70 ? ' meter-warn' : ''
+  return (
+    <div className={`usage-meter${level}`}>
+      <div className="usage-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></div>
+      <span className="usage-num">
+        {used.toLocaleString()} / {limit.toLocaleString()}
+      </span>
+    </div>
+  )
+}
+
 export function AdminApp() {
   const [authState, setAuthState] = useState<'checking' | 'denied' | 'ok'>('checking')
   const [tab, setTab] = useState<Tab>('users')
@@ -77,6 +95,7 @@ export function AdminApp() {
   const [spaces, setSpaces] = useState<AdminSpaceRow[]>([])
   const [library, setLibrary] = useState({ spaces: 0, notes: 0 })
   const [demo, setDemo] = useState<{ visits: number; last_visit: string | null }>({ visits: 0, last_visit: null })
+  const [usage, setUsage] = useState<AdminUsageResponse | null>(null)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -109,6 +128,11 @@ export function AdminApp() {
         ? fetchUsers(page).then((data) => {
             setRows(data.users)
             setTotal(data.total)
+          })
+        : tab === 'usage'
+        ? fetchUsage().then((data) => {
+            setUsage(data)
+            setTotal(data.models.length)
           })
         : tab === 'spaces'
         ? fetchSpaces().then((data) => {
@@ -222,11 +246,72 @@ export function AdminApp() {
         >
           Vault concepts
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'usage'}
+          className={`admin-tab${tab === 'usage' ? ' admin-tab-active' : ''}`}
+          onClick={() => setTab('usage')}
+        >
+          Model usage
+        </button>
       </div>
 
       {error && <div className="admin-error">{error}</div>}
 
-      {tab === 'spaces' ? (
+      {tab === 'usage' ? (
+        <>
+          <p className="admin-dim">
+            Our own measured consumption, computed from logged model calls — not read from
+            the provider, which exposes no API for it. Limits are transcribed from the
+            console for the free tier. Windows are rolling: RPM and TPM cover the last
+            minute, RPD the last 24 hours.
+          </p>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Requests / min</th>
+                <th>Tokens / min</th>
+                <th>Requests / day</th>
+                <th>All time</th>
+                <th>Last call</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(usage?.models ?? []).map((m) => (
+                <tr key={m.model}>
+                  <td>
+                    {m.model}
+                    {m.model === usage?.activeModel && <span className="admin-badge">active</span>}
+                    {!m.limits && <div className="admin-subtle">no limits on record</div>}
+                  </td>
+                  <td><Meter used={m.rpm} limit={m.limits?.rpm} /></td>
+                  <td><Meter used={m.tpm} limit={m.limits?.tpm} /></td>
+                  <td><Meter used={m.rpd} limit={m.limits?.rpd} /></td>
+                  <td>{m.total}</td>
+                  <td>{formatDate(m.last_call)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!loading && (usage?.models.length ?? 0) === 0 && (
+            <p className="admin-dim">No model calls logged yet.</p>
+          )}
+          {(usage?.bySource.length ?? 0) > 0 && (
+            <>
+              <div className="admin-label" style={{ marginTop: 22 }}>What used it (last 24h)</div>
+              <table className="admin-table admin-table-compact">
+                <thead><tr><th>Source</th><th>Calls</th></tr></thead>
+                <tbody>
+                  {usage!.bySource.map((s) => (
+                    <tr key={s.source}><td>{s.source}</td><td>{s.calls}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </>
+      ) : tab === 'spaces' ? (
         <>
           <p className="admin-dim">
             One row per space in a user's vault. A user with none has signed up but never

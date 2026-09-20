@@ -172,6 +172,59 @@ adminRouter.get('/spaces', asyncHandler(async (_req, res) => {
   res.json({ rows: result.rows, library, demo: demo ?? { visits: 0, last_visit: null } })
 }))
 
+// Model usage against the provider's published limits.
+//
+// Google exposes no API for the figures on its own rate-limit dashboard, so
+// this is OUR measured consumption, computed from usage_events — not a read
+// of Google's counters. It tracks closely because this key has one caller,
+// but it will undercount anything that bypassed the meter and it knows
+// nothing about usage from outside this app.
+//
+// Limits are transcribed from the provider console for the free tier and are
+// not discoverable at runtime either; they change when the tier changes, and
+// a wrong number here is a wrong number on the dashboard.
+const MODEL_LIMITS: Record<string, { rpm: number; tpm: number; rpd: number }> = {
+  'gemini-3.5-flash-lite': { rpm: 15, tpm: 250_000, rpd: 500 },
+  'gemma-4-26b-a4b-it': { rpm: 30, tpm: 16_000, rpd: 14_400 },
+  'gemma-4-31b-it': { rpm: 30, tpm: 16_000, rpd: 14_400 },
+}
+
+adminRouter.get('/usage', asyncHandler(async (_req, res) => {
+  // Rolling windows, not calendar buckets: "requests in the last minute" is
+  // what a per-minute limit actually constrains, and a bucket that resets on
+  // the minute would read as zero right after a burst.
+  const rows = (await db.execute(sql`
+    SELECT
+      COALESCE(model, 'unknown') AS model,
+      count(*) FILTER (WHERE created_at > now() - interval '1 minute')::int  AS rpm,
+      COALESCE(sum(COALESCE(input_tokens,0) + COALESCE(output_tokens,0))
+        FILTER (WHERE created_at > now() - interval '1 minute'), 0)::int      AS tpm,
+      count(*) FILTER (WHERE created_at > now() - interval '24 hours')::int   AS rpd,
+      count(*)::int                                                           AS total,
+      max(created_at)                                                         AS last_call
+    FROM usage_events
+    WHERE event_type = 'llm_call'
+    GROUP BY 1
+    ORDER BY rpd DESC, total DESC
+  `)).rows as { model: string; rpm: number; tpm: number; rpd: number; total: number; last_call: string | null }[]
+
+  // What the calls were for, so a day that burns the quota can be explained
+  // rather than just observed.
+  const bySource = (await db.execute(sql`
+    SELECT COALESCE(metadata->>'source', 'direct') AS source, count(*)::int AS calls
+    FROM usage_events
+    WHERE event_type = 'llm_call' AND created_at > now() - interval '24 hours'
+    GROUP BY 1 ORDER BY calls DESC
+  `)).rows as { source: string; calls: number }[]
+
+  res.json({
+    models: rows.map((r) => ({ ...r, limits: MODEL_LIMITS[r.model] ?? null })),
+    bySource,
+    // So the UI never has to guess which row is the one currently in use.
+    activeModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+  })
+}))
+
 adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {
   const approved = req.body?.approved
   if (typeof approved !== 'boolean') {

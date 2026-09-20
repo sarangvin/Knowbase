@@ -83,7 +83,7 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
     if (!apiKey) return { added: 0, reason: 'no-key' }
     const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
 
-    const fresh = await generateNextTopics(space, studied, all, want)
+    const fresh = await generateNextTopics(space, studied, all, want, userId)
     if (!fresh || fresh.length === 0) return { added: 0, reason: 'generation-failed' }
 
     // Disambiguate against every filename already in the space, not just this
@@ -125,6 +125,8 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
         space,
         { path: paths[i], title: fresh[i].title, summary: fresh[i].summary, placeholder: placeholders[i] },
         siblings,
+        userId,
+        'grow-draft',
       )
       if (!content) continue
       const existing = await db

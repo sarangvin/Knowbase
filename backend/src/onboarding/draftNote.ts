@@ -6,7 +6,7 @@
 // exactly one correct way to fill a generated note and two copies of it would
 // drift — the same reason fillPlaceholder below patches the placeholder in
 // place rather than rebuilding the note from scratch.
-import { streamGeminiChat } from '../llm/providers/gemini.js'
+import { meteredGeminiCall } from '../llm/meter.js'
 
 export interface DraftRequestItem {
   path: string
@@ -35,12 +35,6 @@ Rules:
 - Be concrete. Prefer a specific example or number over a general claim.
 - Do NOT invent URLs, citations, book titles or paper references of any kind.
 - Do not mention that you are an AI or describe what you are doing.`
-
-async function collect(gen: AsyncGenerator<string>): Promise<string> {
-  let out = ''
-  for await (const chunk of gen) out += chunk
-  return out
-}
 
 function stripFence(raw: string): string {
   const t = raw.trim()
@@ -94,6 +88,9 @@ export async function draftOne(
   space: string,
   item: DraftRequestItem,
   siblings: string[],
+  /** Whose quota the call is spent on, for the usage figures in admin. */
+  userId?: string,
+  source = 'draft-note',
 ): Promise<string | null> {
   const others = siblings.filter((t) => t !== item.title)
   const user = `Overall subject: "${space}"
@@ -105,7 +102,7 @@ Write the first-draft study note for "${item.title}" as specified.`
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const raw = await collect(streamGeminiChat(apiKey, NOTE_SYSTEM_PROMPT, user, model))
+      const raw = await meteredGeminiCall(apiKey, NOTE_SYSTEM_PROMPT, user, { userId, source }, model)
       const parsed = JSON.parse(stripFence(raw)) as {
         overview?: unknown
         key_points?: unknown

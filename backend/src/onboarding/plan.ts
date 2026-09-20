@@ -6,23 +6,17 @@
 // keeping; only the transport differs, calling Gemini directly the way
 // routes/draftNotes.ts already does instead of going back out through the
 // app's own /api/llm/free proxy, which would be this process calling itself.
-import { streamGeminiChat, DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
+import { meteredGeminiCall } from '../llm/meter.js'
 import { breakCycles, ensureFoundational, type Subtopic } from './notePlan.js'
 
-async function collect(gen: AsyncGenerator<string>): Promise<string> {
-  let out = ''
-  for await (const chunk of gen) out += chunk
-  return out
-}
-
-function callModel(system: string, user: string): Promise<string> {
+function callModel(system: string, user: string, userId: string | undefined, source: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY
   // Thrown, not returned empty: this is the one failure the user can be told
   // something true about, and generateLearningPlan below deliberately
   // preserves the last real error instead of flattening it to "try another
   // phrasing".
   if (!apiKey) throw new Error('The free tier is not configured on this server (no model key set).')
-  return collect(streamGeminiChat(apiKey, system, user, process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL))
+  return meteredGeminiCall(apiKey, system, user, { userId, source })
 }
 
 const TOPIC_SYSTEM_PROMPT = `You are a curriculum designer helping a complete beginner start learning a brand-new topic
@@ -149,7 +143,7 @@ export function parseAndValidate(raw: string): ValidatedPlan | null {
   return { space, subtopics: repaired }
 }
 
-export async function generateLearningPlan(topic: string): Promise<ValidatedPlan> {
+export async function generateLearningPlan(topic: string, userId?: string): Promise<ValidatedPlan> {
   // A thrown error (network/API failure — the free tier's model is a preview
   // model observed to fail transiently a meaningful fraction of the time, not
   // just theoretically) must fall through to the retry exactly like a
@@ -164,7 +158,7 @@ export async function generateLearningPlan(topic: string): Promise<ValidatedPlan
 
   for (const buildPrompt of [buildUserPrompt, buildRetryUserPrompt]) {
     try {
-      const raw = await callModel(TOPIC_SYSTEM_PROMPT, buildPrompt(topic))
+      const raw = await callModel(TOPIC_SYSTEM_PROMPT, buildPrompt(topic), userId, 'onboarding-plan')
       const validated = parseAndValidate(raw)
       if (validated) return validated
       // Reached the model fine, but the response didn't satisfy the schema.
@@ -289,10 +283,11 @@ export async function generateNextTopics(
   studied: string[],
   all: string[],
   count: number,
+  userId?: string,
 ): Promise<Subtopic[] | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const raw = await callModel(NEXT_SYSTEM_PROMPT, buildNextUserPrompt(space, studied, all, count))
+      const raw = await callModel(NEXT_SYSTEM_PROMPT, buildNextUserPrompt(space, studied, all, count), userId, 'grow-plan')
       const parsed = parseNextTopics(raw, all, count)
       if (parsed) return parsed
       console.warn('[grow] response failed validation:', raw.slice(0, 400))

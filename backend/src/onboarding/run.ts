@@ -103,7 +103,7 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
     // 2. The plan. This throws with a real, user-facing message — a missing
     //    key reads differently from a malformed response — and the catch below
     //    is what puts that message in front of the user.
-    const plan = await generateLearningPlan(topic)
+    const plan = await generateLearningPlan(topic, userId)
 
     const space = disambiguateSpace(plan.space, await listUserSpaces(vaultId))
     const titles = plan.subtopics.map((s) => s.title)
@@ -135,6 +135,8 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
             placeholder: placeholders[firstIdx],
           },
           titles,
+          userId,
+          'onboarding-draft',
         )
       : null
 
@@ -190,6 +192,8 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
           space,
           { path, title: plan.subtopics[i].title, summary: plan.subtopics[i].summary, placeholder: placeholders[i] },
           titles,
+          userId,
+          'onboarding-draft',
         )
         // A subtopic whose draft fails keeps its summary-only body. A partial
         // set of drafted notes is strictly better than failing a space that is
