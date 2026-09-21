@@ -228,6 +228,12 @@
 .collection-bar span { display: block; height: 100%; background: var(--accent); }
 
 .collection-new { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--divider); }
+/* TopicLauncher renders nothing for an account that cannot generate yet, and
+   for the demo vault, which has no account at all. Hide the wrapper with it —
+   otherwise the page ends in a rule across the screen with nothing under it.
+   :empty rather than repeating the approval check here: one condition, in the
+   component that owns it. */
+.collection-new:empty { display: none; }
 
 /* ── Topic launcher ──────────────────────────────────────────────────────── */
 .launcher-title { font-size: 17px; font-weight: 650; margin-bottom: 6px; }

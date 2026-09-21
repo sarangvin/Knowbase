@@ -11,7 +11,6 @@
 // The account lives in Settings — a menu you open a handful of times does not
 // earn permanent space in the chrome.
 import { useVault } from '../vault/vaultStore'
-import { spaceOfPath, listSpaces } from '../features/automated-graph/engine'
 import { Rabbit, Folder, Layers, Carrot, Settings } from '../ui/icons'
 
 type TabId = 'next' | 'files' | 'flashcards' | 'quiz' | 'settings'
@@ -25,29 +24,20 @@ export function BottomNav() {
 
   const notes = index ? [...index.notes.values()] : []
 
-  /** Next Up lives per space, so "next learning" means the Next Up note of
-   * the space you're currently reading in — falling back to the only one, or
-   * the first, when that can't be determined. */
-  const nextUpPath = (): string | null => {
-    const all = notes.filter((n) => /\/Next Up\.md$/i.test(n.path))
-    if (all.length === 0) return null
-    if (view?.kind === 'note') {
-      const space = spaceOfPath(view.path)
-      const inSpace = space && all.find((n) => spaceOfPath(n.path) === space)
-      if (inSpace) return inSpace.path
-    }
-    return all[0].path
-  }
-
   const flashcardsPath = (): string | null =>
     notes.find((n) => /(^|\/)Flashcards\.md$/i.test(n.path))?.path ?? null
 
-  // With more than one collection, Learn goes to the collections home —
-  // otherwise the list is unreachable once a note is open, and there is no
-  // way to move between subjects. With one, that screen would be a pointless
-  // extra tap on the way to the only answer.
-  const spaces = index ? listSpaces(index) : []
-  const multi = spaces.length > 1
+  // Learn always goes to the collections home.
+  //
+  // It used to skip straight to the only space when you had one, to save a
+  // tap. That was reasoning about the screen as a list and nothing else —
+  // but it is also the only place you can start another collection, and the
+  // only place you can reach the "what do you want to learn?" prompt on an
+  // empty vault. So the people it hid that from were exactly the ones who
+  // had never started a second subject, and anyone who had just reset their
+  // account: with no spaces at all, this tab was disabled outright.
+  //
+  // One tap is worth less than being able to find the thing.
 
   const active = ((): TabId | null => {
     if (view?.kind === 'home') return 'next'
@@ -64,7 +54,6 @@ export function BottomNav() {
   // Destinations that depend on a note existing are disabled rather than
   // hidden: a nav bar whose buttons appear and disappear as you move around
   // is disorienting, and the demo vault has all of them anyway.
-  const nextPath = nextUpPath()
   const cardsPath = flashcardsPath()
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }[] = [
@@ -72,8 +61,7 @@ export function BottomNav() {
       id: 'next',
       label: 'Learn',
       icon: <Rabbit />,
-      onClick: () => (multi ? openView({ kind: 'home' }) : nextPath && openNote(nextPath)),
-      disabled: !multi && !nextPath,
+      onClick: () => openView({ kind: 'home' }),
     },
     { id: 'files', label: 'Files', icon: <Folder />, onClick: () => openView({ kind: 'files' }) },
     {
