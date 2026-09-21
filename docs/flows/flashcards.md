@@ -151,12 +151,27 @@ not knowing it in the other.
   card looked at twice reported "0 turned" — the visual face and the fact of
   having seen it are two different things and are now two different pieces
   of state, one local and one on the server.
-- **The bookmark control is a sibling of the card, not a child of a face.**
-  Nesting a button inside the card button is invalid, and one per face
-  would be two controls to keep in step. It sits above both faces, so it is
-  visible whichever way the card is showing and does not rotate with it.
-  40x40, because the card underneath is one enormous tap target and a thumb
-  aiming for a small bookmark would flip the card instead.
+- **One bookmark per face, both bound to the same value.** The duplication
+  is in the DOM, where the flip needs it, and not in the state — two
+  elements reading and writing one `bookmarked` cannot disagree. It sat
+  above both faces first, which kept it out of the animation but also out
+  of the card: it did not turn with it.
+- **The card is a `div` with `role="button"`, not a `<button>`.** A
+  button's content model is phrasing content, so a button inside one is
+  invalid and browsers may reparent it — which breaks a 3D flip in ways
+  that show up in one engine and not another. The bookmark stops click
+  propagation, or every tap on it would also turn the card over.
+- **The face turned away is `aria-hidden`, and its bookmark leaves the tab
+  order with it.** Otherwise a screen reader reads the term and its own
+  definition in one breath, which is the one thing a flashcard must not do.
+  Focusable content inside an `aria-hidden` subtree is worse than either
+  problem alone, hence the paired `tabIndex`.
+- **The text scrolls, the bookmark does not.** An absolutely positioned
+  child of a scrolling box scrolls with it, so an overlong definition would
+  carry the control off the top of the card. The scroll moved to an inner
+  `.fc-face-body`.
+- **40x40**, because the card underneath is one enormous tap target and a
+  thumb aiming for a small bookmark would flip the card instead.
 - **Bookmark state is read from the schedule, never copied onto the deck.**
   `GET /today` sends it alongside the cards. The same fact in two rows is
   the failure this codebase keeps repeating.

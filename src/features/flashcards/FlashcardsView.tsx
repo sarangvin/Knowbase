@@ -16,6 +16,43 @@ import { Layers, RotateCw, ArrowRight, ArrowLeft, Check, Bookmark, BookmarkFille
 import { fetchDeck, dealDeck, turnCard, bookmarkCard, type Deck, type TurnResult } from './flashcardsApi'
 import './flashcards.css'
 
+/** The bookmark, rendered once per face.
+ *
+ *  Two elements, one value: `on` and `onToggle` come from the same state
+ *  either side, so there is nothing to keep in step — the duplication is in
+ *  the DOM, where the flip needs it, and not in the data.
+ */
+function BookmarkButton({
+  on,
+  onToggle,
+  reachable,
+}: {
+  on: boolean
+  onToggle: () => void
+  /** False on the face turned away: it is inside an aria-hidden subtree and
+   *  must not be tabbable from there. */
+  reachable: boolean
+}) {
+  return (
+    <button
+      type="button"
+      className={'fc-bookmark' + (on ? ' is-on' : '')}
+      tabIndex={reachable ? 0 : -1}
+      aria-pressed={on}
+      title={on ? 'Bookmarked — back tomorrow' : 'See this one again tomorrow'}
+      aria-label={on ? 'Remove bookmark' : 'Bookmark to see again tomorrow'}
+      // The card behind is one big flip target; without this every bookmark
+      // tap would also turn the card over.
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggle()
+      }}
+    >
+      {on ? <BookmarkFilled width={17} height={17} /> : <Bookmark width={17} height={17} />}
+    </button>
+  )
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="note-scroll">
@@ -229,45 +266,55 @@ export function FlashcardsView() {
           {at < total - 1 && <span className="fc-stack-edge fc-stack-2" aria-hidden="true" />}
           {at < total - 2 && <span className="fc-stack-edge fc-stack-3" aria-hidden="true" />}
 
-          {/* A sibling of the card, not a child of either face. Nesting a
-              button inside a button is invalid, and duplicating it per face
-              would be two controls to keep in step — this one sits above
-              both and is therefore visible whichever way the card is
-              showing, without moving when it flips. */}
-          <button
-            type="button"
-            className={'fc-bookmark' + (bookmarked ? ' is-on' : '')}
-            aria-pressed={bookmarked}
-            title={bookmarked ? 'Bookmarked — back tomorrow' : 'See this one again tomorrow'}
-            aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark to see again tomorrow'}
-            onClick={toggleBookmark}
-          >
-            {bookmarked ? <BookmarkFilled width={17} height={17} /> : <Bookmark width={17} height={17} />}
-          </button>
+          {/* One bookmark per face, both reading and writing the same
+              `bookmarked` value — so they cannot disagree, and the control
+              rotates with the card instead of hovering over it.
 
-          <button
-            type="button"
+              The card is a div with role="button" rather than a <button>
+              for exactly this: a button's content model is phrasing
+              content, so a button inside one is invalid HTML and browsers
+              are entitled to reparent it, which breaks the 3D flip in ways
+              that only show up in one engine. */}
+          <div
+            role="button"
+            tabIndex={0}
             className={'fc-card' + (isFlipped ? ' is-flipped' : '')}
             onClick={flip}
             aria-label={isFlipped ? 'Show the other side' : 'Reveal the other side'}
           >
             <span className="fc-card-inner">
-              <span className="fc-face fc-front">
-                <span className="fc-kind">{card.front === 'term' ? 'Term' : 'Definition'}</span>
-                <span className={card.front === 'term' ? 'fc-term' : 'fc-def'}>
-                  {card.front === 'term' ? card.term : card.definition}
+              {/* The face turned away is hidden from assistive tech as well
+                  as visually: without this a screen reader reads the term
+                  and its definition in one breath, which is the one thing a
+                  flashcard must not do. Its bookmark leaves the tab order
+                  with it — focusable content inside aria-hidden is worse
+                  than either problem alone. */}
+              <span className="fc-face fc-front" aria-hidden={isFlipped}>
+                <BookmarkButton on={bookmarked} onToggle={toggleBookmark} reachable={!isFlipped} />
+                {/* The text scrolls, the bookmark does not. An absolutely
+                    positioned child of a scrolling box scrolls with it, so
+                    an overlong definition would carry the control off the
+                    top of the card. */}
+                <span className="fc-face-body">
+                  <span className="fc-kind">{card.front === 'term' ? 'Term' : 'Definition'}</span>
+                  <span className={card.front === 'term' ? 'fc-term' : 'fc-def'}>
+                    {card.front === 'term' ? card.term : card.definition}
+                  </span>
+                  <span className="fc-hint">Tap to flip</span>
                 </span>
-                <span className="fc-hint">Tap to flip</span>
               </span>
-              <span className="fc-face fc-back">
-                <span className="fc-kind">{card.front === 'term' ? 'Definition' : 'Term'}</span>
-                <span className={card.front === 'term' ? 'fc-def' : 'fc-term'}>
-                  {card.front === 'term' ? card.definition : card.term}
+              <span className="fc-face fc-back" aria-hidden={!isFlipped}>
+                <BookmarkButton on={bookmarked} onToggle={toggleBookmark} reachable={isFlipped} />
+                <span className="fc-face-body">
+                  <span className="fc-kind">{card.front === 'term' ? 'Definition' : 'Term'}</span>
+                  <span className={card.front === 'term' ? 'fc-def' : 'fc-term'}>
+                    {card.front === 'term' ? card.definition : card.term}
+                  </span>
+                  <span className="fc-hint">{card.noteTitle}</span>
                 </span>
-                <span className="fc-hint">{card.noteTitle}</span>
               </span>
             </span>
-          </button>
+          </div>
         </div>
 
         <div className="fc-controls">

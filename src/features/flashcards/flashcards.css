@@ -133,6 +133,9 @@
   border: 0;
   background: none;
   cursor: pointer;
+  /* A div with role="button" (see the component): a real <button> may not
+     contain one, and the bookmark lives inside the faces now. */
+  user-select: none;
   /* The flip lives on the inner element so the button keeps a normal,
      un-transformed box for hit testing and focus. */
   -webkit-tap-highlight-color: transparent;
@@ -152,12 +155,6 @@
 .fc-face {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 28px 24px;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--bg-primary);
@@ -166,6 +163,19 @@
      mirrored text. */
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+/* The scrolling happens here, not on the face, so the bookmark pinned to
+   the face's corner stays pinned. */
+.fc-face-body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 24px;
+  border-radius: 16px;
   overflow: auto;
 }
 .fc-back { transform: rotateY(180deg); border-color: var(--accent-line); }
@@ -244,9 +254,10 @@
   color: var(--accent);
 }
 
-/* Bookmark: over the card, top right, on top of both faces. It sits outside
-   the flipping element so it neither rotates with the card nor needs a copy
-   on each side. */
+/* Bookmark: top right, one inside each face, so it turns with the card and
+   is drawn by whichever side is showing. Both are bound to the same value,
+   so the duplication is in the DOM — where the flip needs it — and not in
+   the state. */
 .fc-bookmark {
   position: absolute;
   top: 12px;
@@ -267,6 +278,8 @@
   -webkit-tap-highlight-color: transparent;
 }
 .fc-bookmark:hover { background: var(--bg-hover); color: var(--text-normal); }
+/* The card is 16px; the button must not poke past its rounded corner. */
+.fc-bookmark { border-top-right-radius: 12px; }
 .fc-bookmark.is-on { color: var(--accent); }
 .fc-bookmark:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
