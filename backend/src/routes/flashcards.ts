@@ -13,6 +13,7 @@ import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectSources, pickSources, extractTerms, dealDeck, cardsPerDay } from '../flashcards/build.js'
+import { schedulesFor, recordTurn } from '../flashcards/schedule.js'
 
 export const flashcardsRouter = Router()
 flashcardsRouter.use(requireAuth)
@@ -90,7 +91,12 @@ flashcardsRouter.post('/today', asyncHandler(async (req, res) => {
     res.status(502).json({ error: 'Could not put a deck together just now. Try again in a moment.' })
     return
   }
-  const cards = dealDeck(pool, limit)
+  // What they have already turned over, so today's deck can hold those back.
+  const seen = await schedulesFor(
+    userId,
+    pool.map((e) => ({ notePath: e.source.notePath, term: e.term })),
+  )
+  const cards = dealDeck(pool, limit, seen, day)
 
   // onConflictDoNothing then re-read: two tabs pressing Start at the same
   // moment must end up looking at the same deck, not one each.
@@ -104,4 +110,54 @@ flashcardsRouter.post('/today', asyncHandler(async (req, res) => {
     return
   }
   res.json({ deck: view(row) })
+}))
+
+/** Turn a card over.
+ *
+ *  Recorded on the server, not counted in the browser, for two reasons: the
+ *  count has to survive a reload like everything else about the deck, and a
+ *  turn is what advances the spaced-repetition schedule.
+ *
+ *  Idempotent. Turning a card back to look again is looking again, not
+ *  un-seeing it, so `turnedAt` is written once and the schedule advances
+ *  once per day — the same rule as the quiz's first answer standing.
+ */
+flashcardsRouter.post('/turn', asyncHandler(async (req, res) => {
+  const day = dayOf(req.body?.day)
+  const index = Number(req.body?.index)
+  if (!day || !Number.isInteger(index)) {
+    res.status(400).json({ error: 'body.day and body.index required' })
+    return
+  }
+  const userId = req.user!.id
+  const row = await todaysRow(userId, day)
+  if (!row) {
+    res.status(404).json({ error: 'No deck for that day.' })
+    return
+  }
+  const cards = row.cards
+  const card = cards[index]
+  if (!card) {
+    res.status(400).json({ error: 'No such card.' })
+    return
+  }
+
+  const already = card.turnedAt != null
+  if (!already) {
+    card.turnedAt = new Date().toISOString()
+    await db.update(flashcardDecks).set({ cards }).where(eq(flashcardDecks.id, row.id))
+  }
+
+  // Outside the `if`: recordTurn is itself idempotent per day, and a deck
+  // row written before this route existed has no turnedAt to go on.
+  const schedule = await recordTurn(userId, card.notePath, card.term, day)
+
+  res.json({
+    alreadyTurned: already,
+    turned: cards.filter((c) => c.turnedAt != null).length,
+    /** When this card can come back, so the UI can say so. */
+    nextDue: schedule.dueOn,
+    intervalDays: schedule.intervalDays,
+    reps: schedule.reps,
+  })
 }))

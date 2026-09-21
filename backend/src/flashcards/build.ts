@@ -14,6 +14,7 @@ import type { FlashcardRow } from '../db/schema.js'
 import { SPACE_ROOT } from '../vault/spaces.js'
 import { frontmatterValue, frontmatterNumber } from '../vault/frontmatter.js'
 import { meteredGeminiCall } from '../llm/meter.js'
+import { scheduleKey, type CardSchedule } from './schedule.js'
 
 /** The free plan's daily deck.
  *
@@ -260,14 +261,55 @@ export async function extractTerms(
 /**
  * Deal the day's deck from the pool.
  *
- * Two things are being balanced. The cards are weighted by their note, so
- * the shakiest material comes up most; and the sides are balanced rather
- * than flipped independently, because ten coin tosses land all-one-way often
- * enough to matter — the same reason the quiz shuffles its options instead
- * of asking the model to vary them.
+ * Three things are being balanced.
+ *
+ * **Spacing comes first.** A card whose next due date is in the future is
+ * held back, however heavily its note is weighted — otherwise the schedule
+ * is advisory and a card turned yesterday can come back today, which is the
+ * one thing it exists to prevent.
+ *
+ * **Unless there is nothing else.** A vault with fifteen terms and a
+ * ten-card deck runs out of due cards within a week, and a deck of four is
+ * a worse answer than a deck of ten with some early repeats. So a shortfall
+ * is filled from the held-back cards, soonest-due first: the ones closest
+ * to being ready, rather than the ones just seen.
+ *
+ * **Then weight and randomness**, over whatever is left, as before.
+ *
+ * The faces are balanced rather than flipped independently, because ten
+ * coin tosses land all-one-way often enough to matter — the same reason the
+ * quiz shuffles its options instead of asking the model to vary them.
  */
-export function dealDeck(pool: Extracted[], size: number): FlashcardRow[] {
-  const chosen = weightedSample(pool, (e) => e.source.weight, size)
+export function dealDeck(
+  pool: Extracted[],
+  size: number,
+  /** What the user has already seen, from `schedulesFor`. Empty on a first
+   *  deck, which is why this is allowed to be empty rather than optional —
+   *  a caller that forgets it should not silently get no spacing. */
+  seen: Map<string, CardSchedule>,
+  today: string,
+): FlashcardRow[] {
+  const ready: Extracted[] = []
+  const waiting: { card: Extracted; dueOn: string }[] = []
+  for (const e of pool) {
+    const sched = seen.get(scheduleKey(e.source.notePath, e.term))
+    // Never seen, or due today or earlier. String comparison is correct for
+    // ISO dates and is the same comparison the rest of the app makes.
+    if (!sched || sched.dueOn <= today) ready.push(e)
+    else waiting.push({ card: e, dueOn: sched.dueOn })
+  }
+
+  const chosen = weightedSample(ready, (e) => e.source.weight, size)
+  if (chosen.length < size) {
+    const short = size - chosen.length
+    chosen.push(
+      ...waiting
+        .sort((a, b) => (a.dueOn < b.dueOn ? -1 : a.dueOn > b.dueOn ? 1 : 0))
+        .slice(0, short)
+        .map((w) => w.card),
+    )
+  }
+
   const half = Math.ceil(chosen.length / 2)
   const faces = shuffle([
     ...Array<'term'>(half).fill('term'),
@@ -279,5 +321,6 @@ export function dealDeck(pool: Extracted[], size: number): FlashcardRow[] {
     term: e.term,
     definition: e.definition,
     front: faces[i],
+    turnedAt: null,
   }))
 }

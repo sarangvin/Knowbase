@@ -298,4 +298,38 @@ export interface FlashcardRow {
   /** Which face is shown before the first tap. Decided when the deck is
    *  dealt, not at render time, so it survives a reload. */
   front: 'term' | 'definition'
+  /** When it was first turned over, or null. Once set it never changes:
+   *  turning a card back is looking at it again, not un-seeing it. */
+  turnedAt: string | null
 }
+
+/** What the scheduler remembers about one card, across decks.
+ *
+ *  Keyed by note and term rather than by a card id, because the cards are
+ *  extracted afresh each day — there is no stable row to point at. The key
+ *  is normalised (see `termKey`) so "Chemoautotrophs" today and
+ *  "chemoautotroph" tomorrow are the same card rather than a way to be
+ *  asked the same thing twice.
+ */
+export const flashcardReviews = pgTable(
+  'flashcard_reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    notePath: text('note_path').notNull(),
+    /** Normalised. The term as shown lives on the deck row. */
+    termKey: text('term_key').notNull(),
+    /** How many times it has been turned over, one per day at most. */
+    reps: integer('reps').notNull().default(0),
+    /** The gap that produced `dueOn`, in days. Stored rather than derived
+     *  from reps so the curve can change without rewriting history. */
+    intervalDays: integer('interval_days').notNull().default(0),
+    /** Local YYYY-MM-DD, like `day` everywhere else. Text, so the
+     *  comparison is the same string comparison the rest of the app makes
+     *  and no timezone gets a vote. */
+    dueOn: text('due_on').notNull(),
+    lastSeenOn: text('last_seen_on').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('flashcard_reviews_card_unique').on(t.userId, t.notePath, t.termKey)],
+)

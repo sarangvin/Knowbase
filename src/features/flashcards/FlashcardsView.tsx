@@ -12,8 +12,8 @@
 // to one you half-knew is most of how this gets used.
 import { useCallback, useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { Layers, RotateCw, ArrowRight, ArrowLeft } from '../../ui/icons'
-import { fetchDeck, dealDeck, type Deck } from './flashcardsApi'
+import { Layers, RotateCw, ArrowRight, ArrowLeft, Check } from '../../ui/icons'
+import { fetchDeck, dealDeck, turnCard, type Deck, type TurnResult } from './flashcardsApi'
 import './flashcards.css'
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -36,10 +36,15 @@ export function FlashcardsView() {
   const [error, setError] = useState<string | null>(null)
 
   const [at, setAt] = useState(0)
-  // Which cards have been turned over, by index. Kept for the whole deck
-  // rather than reset on move: a card you have already seen the back of
-  // should not pretend otherwise when you come back to it.
+  // Which face is showing, by index. Purely visual and purely local — it is
+  // not the same fact as "has this been turned over", which is the deck's
+  // `turnedAt` and lives on the server. Conflating the two is what made
+  // flipping a card back count as un-seeing it.
   const [flipped, setFlipped] = useState<Record<number, boolean>>({})
+  // The scheduler's reply, by index. Only for cards turned in this sitting —
+  // a card turned on an earlier visit is still marked reviewed, just without
+  // the "back in N days", which is not worth a second request to recover.
+  const [scheduled, setScheduled] = useState<Record<number, TurnResult>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -63,7 +68,29 @@ export function FlashcardsView() {
     (delta: number) => setAt((i) => Math.min(total - 1, Math.max(0, i + delta))),
     [total],
   )
-  const flip = useCallback(() => setFlipped((f) => ({ ...f, [at]: !f[at] })), [at])
+  // Flip is instant and local; recording the turn is a request. The card
+  // must not wait for the network to move, and a failed record must not
+  // leave the user looking at a card that refuses to turn — so the write is
+  // fire-and-forget and the count is corrected from its reply.
+  const flip = useCallback(() => {
+    setFlipped((f) => ({ ...f, [at]: !f[at] }))
+    const card = deck?.cards[at]
+    if (!card || card.turnedAt) return
+    // Optimistic, so the counter moves with the card rather than a beat later.
+    setDeck((d) =>
+      d
+        ? { ...d, cards: d.cards.map((c, i) => (i === at ? { ...c, turnedAt: new Date().toISOString() } : c)) }
+        : d,
+    )
+    void turnCard(at)
+      .then((r) => setScheduled((m) => ({ ...m, [at]: r })))
+      .catch(() => {
+      // Put it back: a card the server does not know was turned will be
+      // dealt again, and the count should say so rather than quietly
+      // disagreeing with tomorrow's deck.
+        setDeck((d) => (d ? { ...d, cards: d.cards.map((c, i) => (i === at ? { ...c, turnedAt: null } : c)) } : d))
+      })
+  }, [at, deck])
 
   // A card you flip with a tap should flip with a key too, and arrows are
   // what a stack of anything is expected to answer to.
@@ -166,7 +193,9 @@ export function FlashcardsView() {
   // The front is whichever side this card was dealt on; the back is the
   // other one. Mixing the direction is what stops the deck being a
   // vocabulary list read in one direction only.
-  const seen = Object.values(flipped).filter(Boolean).length
+  // Counted from the deck, not from `flipped`: turning a card back used to
+  // decrement this, so a card looked at twice reported "0 turned".
+  const seen = deck.cards.filter((c) => c.turnedAt != null).length
 
   return (
     <Shell>
@@ -222,11 +251,21 @@ export function FlashcardsView() {
           </button>
         </div>
 
-        {/* The note is the point: a term you could not place should be one
-            tap from the thing that explains it. */}
-        <button className="fc-source" onClick={() => openNote(card.notePath)}>
-          From {card.noteTitle}
-        </button>
+        <div className="fc-meta">
+          {/* Marked from the first turn and never unmarked — the card has
+              been seen, and flipping it back does not undo that. */}
+          {card.turnedAt && (
+            <span className="fc-reviewed">
+              <Check width={12} height={12} /> Reviewed
+              {scheduled[at] && ` · back in ${scheduled[at].intervalDays} days`}
+            </span>
+          )}
+          {/* The note is the point: a term you could not place should be one
+              tap from the thing that explains it. */}
+          <button className="fc-source" onClick={() => openNote(card.notePath)}>
+            From {card.noteTitle}
+          </button>
+        </div>
 
         {at >= total - 1 && (
           <p className="fc-note">

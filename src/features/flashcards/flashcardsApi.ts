@@ -10,6 +10,9 @@ export interface Flashcard {
   /** Which face the card opens on. Decided when the deck was dealt, so it
    *  is the same after a reload. */
   front: 'term' | 'definition'
+  /** When it was first turned over, or null. Server-owned: turning a card
+   *  back is looking at it again, not un-seeing it. */
+  turnedAt: string | null
 }
 
 export interface Deck {
@@ -48,4 +51,24 @@ export async function dealDeck(): Promise<Deck> {
     body: JSON.stringify({ day: localDay() }),
   })
   return ((await jsonOrThrow(res)) as { deck: Deck }).deck
+}
+
+export interface TurnResult {
+  alreadyTurned: boolean
+  /** How many cards in the deck have been turned, counted by the server. */
+  turned: number
+  /** The day this card can next appear. */
+  nextDue: string
+  intervalDays: number
+  reps: number
+}
+
+export async function turnCard(index: number): Promise<TurnResult> {
+  const res = await fetch('/api/flashcards/turn', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ day: localDay(), index }),
+  })
+  return (await jsonOrThrow(res)) as TurnResult
 }

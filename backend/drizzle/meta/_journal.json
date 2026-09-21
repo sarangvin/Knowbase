@@ -78,6 +78,13 @@
       "when": 1790013974104,
       "tag": "0010_early_sway",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790014662973,
+      "tag": "0011_free_kitty_pryde",
+      "breakpoints": true
     }
   ]
 }
