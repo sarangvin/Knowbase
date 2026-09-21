@@ -192,10 +192,16 @@ export const Carrot = (p: P) => (
   <svg {...base(p)}>
     {/* Upright and only slightly tilted. Drawn on the diagonal — the way most
         carrot glyphs are — the body and its leaves kept crossing each other
-        and the whole thing read as an arrow at 16px. */}
+        and the whole thing read as an arrow at 16px.
+
+        Widened from an 8.8-unit body, which made it the runt of the bottom
+        nav: measured ink of 12.5x17.8 against 18x16 for Folder and 18x20
+        for Layers, about two thirds their area. Same stroke weight and the
+        same tilt, just a carrot that fills its box — 15.5x19.7 now, which
+        sits between Folder and Layers rather than under both. */}
     <g transform="rotate(-14 12 13)">
-      <path d="M7.6 9.8h8.8L12 20.6z" />
-      <path d="M12 9.8V4.4M12 9.8 8.5 5.7M12 9.8 15.5 5.7" />
+      <path d="M6.2 9.6h11.6L12 21.2z" />
+      <path d="M12 9.6V3.8M12 9.6 7.9 5M12 9.6 16.1 5" />
     </g>
   </svg>
 )
