@@ -123,6 +123,12 @@ undercount.
   anything the owner has curated — is never modified.
 - **The global corpus is the owner's.** Users read from it by adoption; they
   never see it as a vault.
+- **The demo vault is only shown to someone with nothing of their own.**
+  While a space is generating there is nothing of theirs to show — for a
+  first run. For anyone who already has collections that is false, and
+  loading the demo on boot threw them out of their own vault on every reload
+  until the job finished. `App.tsx` loads their vault first and falls back to
+  the demo only when it comes back empty.
 - **A `running` job with no progress for two minutes is reported as failed.**
   The run happens under `waitUntil`, after the response — a deployment
   cutover or a hard kill takes it with no error to catch and nothing written

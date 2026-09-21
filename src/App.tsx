@@ -6,6 +6,7 @@ import { Onboarding } from './features/onboarding/Onboarding'
 import { OnboardingBanner } from './features/onboarding/OnboardingBanner'
 import { takePendingTopic, clearPendingTopic } from './features/onboarding/pendingTopic'
 import { resetDemoOverlay } from './vault/source'
+import { listSpaces } from './features/automated-graph/engine'
 import { startOnboarding, fetchOnboardingJob } from './features/onboarding/onboardingApi'
 import { TopBar } from './shell/TopBar'
 import { TabBar } from './shell/TabBar'
@@ -72,6 +73,23 @@ export default function App() {
           return
         }
 
+        // While a space is being generated there is nothing of theirs to show
+        // — for a first run. For anyone who already has collections that is
+        // simply false, and loading the demo threw them out of their own
+        // vault on every reload until the job finished. Show the demo only
+        // when their vault really is empty.
+        const openOwnVaultOrDemo = async (generating: boolean) => {
+          await loadRemote()
+          if (!generating) return
+          // loadFromSource records a failure as status 'error' rather than
+          // throwing, so a vault that would not load has to be checked for,
+          // not caught — and for a first run it is the demo that should win
+          // over a broken empty pane.
+          const { index, status } = useVault.getState()
+          if (status === 'ready' && index && listSpaces(index).length > 0) return
+          await loadSeed()
+        }
+
         const restored = await tryRestoreFolder()
         await checkAuth()
         if (cancelled) return
@@ -89,11 +107,7 @@ export default function App() {
         const job = await fetchOnboardingJob()
         if (job) {
           clearPendingTopic()
-          // Mid-generation, so their own vault is empty or half-written. The
-          // demo space is the honest thing to show; the banner brings them
-          // across the moment theirs is ready.
-          if (job.status === 'running') await loadSeed()
-          else await loadRemote()
+          await openOwnVaultOrDemo(job.status === 'running')
           return
         }
 
@@ -103,7 +117,7 @@ export default function App() {
         if (pending) {
           try {
             await startOnboarding(pending)
-            await loadSeed()
+            await openOwnVaultOrDemo(true)
           } catch {
             // Couldn't start it — fall through to the landing screen, where
             // the input is pre-filled with what they typed, rather than into
