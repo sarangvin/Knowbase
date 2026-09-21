@@ -16,6 +16,18 @@
 import { useVault } from '../vault/vaultStore'
 import { ArrowLeft, ArrowRight, Search, Sparkles, Pencil, Eye } from '../ui/icons'
 
+/** What the top-level folders are called in the breadcrumb.
+ *
+ *  "Automated Graph" is the folder these notes live in, and it is the right
+ *  name on disk — an exported vault should say how the notes were made.
+ *  It is the wrong name to read above one: it describes the machinery
+ *  rather than the thing, and the tab that got you here says Learn. The
+ *  path is untouched; this is a label.
+ */
+const FOLDER_LABELS: Record<string, string> = {
+  'Automated Graph': 'Learn',
+}
+
 export function TopBar() {
   const s = useVault()
   const view = s.activeView()
@@ -40,7 +52,9 @@ export function TopBar() {
           crumbs.map((c, i) => (
             <span key={i}>
               {i > 0 && <span className="crumb-sep">/</span>}
-              <span className={i === crumbs.length - 1 ? 'crumb-current' : 'crumb'}>{c}</span>
+              <span className={i === crumbs.length - 1 ? 'crumb-current' : 'crumb'}>
+                {i === 0 ? (FOLDER_LABELS[c] ?? c) : c}
+              </span>
             </span>
           ))
         ) : (
