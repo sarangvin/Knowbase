@@ -8,18 +8,23 @@ import { FlashcardsView } from '../features/flashcards/FlashcardsView'
 import { SearchPanel } from '../features/search/SearchPanel'
 import { AskPanel } from '../features/ask-ai/AskPanel'
 import { TopicLauncher } from '../features/onboarding/TopicLauncher'
-import { listSpaces } from '../features/automated-graph/engine'
+import { listSpaces, isArchived } from '../features/automated-graph/engine'
+import { CollectionCard } from '../features/automated-graph/CollectionCard'
 import { RabbitSolid } from '../ui/icons'
 
 function HomeView() {
   const index = useVault((s) => s.index)
-  const openNote = useVault((s) => s.openNote)
+  const reload = useVault((s) => s.reload)
   const notes = index ? [...index.notes.values()] : []
 
   // A "collection" is a generated space: Automated Graph/<Space>/Topics/…
   // Nobody should be limited to one subject, so the home screen is a list of
   // them plus a way to add another, rather than a single vault landing page.
-  const spaces = index ? listSpaces(index) : []
+  //
+  // Archived ones are not here. They still exist, and Settings lists them —
+  // "set aside" has to mean something on the screen it was set aside from.
+  const spaces = index ? listSpaces(index).filter((s) => !isArchived(index, s)) : []
+  const archivedCount = index ? listSpaces(index).length - spaces.length : 0
 
   const summary = (space: string) => {
     const topics = notes.filter((n) => n.path.startsWith(`Automated Graph/${space}/Topics/`))
@@ -43,6 +48,14 @@ function HomeView() {
               title="What do you want to learn?"
               hint="Name a topic and Rabbithole digs the tunnels — the subtopics worth knowing, what to study in what order, and a first draft of notes for each."
             />
+            {/* Without this, archiving your last collection drops you on the
+                first-run screen with no sign your notes still exist. */}
+            {archivedCount > 0 && (
+              <p className="home-archived-note">
+                You have {archivedCount} archived collection{archivedCount === 1 ? '' : 's'} — bring
+                them back in Settings.
+              </p>
+            )}
           </div>
         ) : (
           <>
@@ -54,27 +67,21 @@ function HomeView() {
             <div className="collection-grid">
               {spaces.map((space) => {
                 const { total, studied } = summary(space)
-                const path = nextUpOf(space)
                 return (
-                  <button
+                  <CollectionCard
                     key={space}
-                    className="collection-card"
-                    onClick={() => path && openNote(path)}
-                    disabled={!path}
-                  >
-                    <div className="collection-name">{space}</div>
-                    <div className="collection-meta">
-                      {total} topic{total === 1 ? '' : 's'} · {studied} studied
-                    </div>
-                    {total > 0 && (
-                      <div className="collection-bar" aria-hidden="true">
-                        <span style={{ width: `${Math.round((studied / total) * 100)}%` }} />
-                      </div>
-                    )}
-                  </button>
+                    summary={{ space, total, studied, openPath: nextUpOf(space) }}
+                    onChanged={() => void reload()}
+                  />
                 )
               })}
             </div>
+            {archivedCount > 0 && (
+              <p className="home-archived-note">
+                {archivedCount} archived collection{archivedCount === 1 ? '' : 's'} — bring them back
+                in Settings.
+              </p>
+            )}
             <div className="collection-new">
               <TopicLauncher
                 title="Start another collection"

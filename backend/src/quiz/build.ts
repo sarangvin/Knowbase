@@ -15,7 +15,7 @@ import { and, eq, like } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
 import type { QuizQuestionRow } from '../db/schema.js'
-import { SPACE_ROOT } from '../vault/spaces.js'
+import { SPACE_ROOT, spaceOf, archivedSpaces } from '../vault/spaces.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
 import { meteredGeminiCall } from '../llm/meter.js'
 
@@ -73,8 +73,14 @@ export async function collectCandidates(vaultId: string): Promise<Candidate[]> {
     .from(notes)
     .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${SPACE_ROOT}%/Topics/%`)))
 
+  // An archived collection is one the reader has set aside. Testing them on
+  // it would be the app disagreeing with a decision they just made.
+  const archived = await archivedSpaces(vaultId)
+
   const out: Candidate[] = []
   for (const r of rows) {
+    const space = spaceOf(r.path)
+    if (space && archived.has(space)) continue
     // Reviewed only. `last_reviewed` is the same test the ranking and the
     // review control use, so "studied" means one thing across the app.
     if (!frontmatterValue(r.content, 'last_reviewed')) continue

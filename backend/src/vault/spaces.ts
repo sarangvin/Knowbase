@@ -4,9 +4,10 @@
 // is this user's, which space does a path belong to, and do two topic strings
 // mean the same thing. Two copies of the last one in particular would be a
 // real bug — the corpus lookup and the corpus write have to agree on the key.
-import { and, eq } from 'drizzle-orm'
+import { and, eq, like, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { notes, vaults } from '../db/schema.js'
+import { notes, vaults, draftQueue, flashcardReviews } from '../db/schema.js'
+import { frontmatterValue, setFrontmatterValue } from './frontmatter.js'
 
 export const SPACE_ROOT = 'Automated Graph/'
 
@@ -154,4 +155,116 @@ export async function contributeToLibrary(entries: { path: string; content: stri
     // that race must not error or overwrite.
     .onConflictDoNothing({ target: [notes.vaultId, notes.path] })
   return fresh.length
+}
+
+// ─── Archiving and deleting a collection ─────────────────────────────────────
+//
+// "Archived" is a line in the space's own `_config.md`, not a row in a table.
+// The vault is the source of truth everywhere else in this app, and a flag
+// kept beside the notes travels with an export, survives a database reset,
+// and is readable by the client from the index it already holds — no second
+// fetch and no second copy to drift. The cost is that a space with no
+// _config.md needs one written, which is a two-line note.
+
+function configPath(space: string): string {
+  return `${SPACE_ROOT}${space}/_config.md`
+}
+
+/** A minimal config for a space that never had one. Only the flag: every
+ *  other setting has a default in the reader, and writing them out here
+ *  would freeze today's defaults into every archived space. */
+function newConfig(space: string, archived: boolean): string {
+  return `---\narchived: ${archived}\n---\n\n# ${space} — settings\n`
+}
+
+/** Which of this vault's spaces are archived.
+ *
+ *  One query for the whole vault rather than one per space: every caller —
+ *  the quiz builder, the flashcard builder, growth — wants the set, and they
+ *  want it before they know which spaces they care about. */
+export async function archivedSpaces(vaultId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ path: notes.path, content: notes.content })
+    .from(notes)
+    .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${SPACE_ROOT}%/_config.md`)))
+
+  const out = new Set<string>()
+  for (const r of rows) {
+    const space = spaceOf(r.path)
+    if (space && /^true$/i.test(frontmatterValue(r.content, 'archived') ?? '')) out.add(space)
+  }
+  return out
+}
+
+/** Set or clear the flag, creating `_config.md` if the space has none.
+ *  Returns false when there is no such space, so a caller can 404 rather
+ *  than silently create a config for a typo. */
+export async function setSpaceArchived(vaultId: string, space: string, archived: boolean): Promise<boolean> {
+  const prefix = `${SPACE_ROOT}${space}/`
+  const [any] = await db
+    .select({ path: notes.path })
+    .from(notes)
+    .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${prefix}%`)))
+    .limit(1)
+  if (!any) return false
+
+  const path = configPath(space)
+  const [existing] = await db
+    .select({ content: notes.content })
+    .from(notes)
+    .where(and(eq(notes.vaultId, vaultId), eq(notes.path, path)))
+    .limit(1)
+
+  const content = existing
+    ? setFrontmatterValue(existing.content, 'archived', String(archived))
+    : newConfig(space, archived)
+
+  await db
+    .insert(notes)
+    .values({ vaultId, path, content, sizeBytes: Buffer.byteLength(content, 'utf8'), mtime: new Date() })
+    .onConflictDoUpdate({
+      target: [notes.vaultId, notes.path],
+      set: { content, sizeBytes: Buffer.byteLength(content, 'utf8'), mtime: new Date() },
+    })
+  return true
+}
+
+export interface DeleteSpaceResult {
+  deletedNotes: number
+  cancelledJobs: number
+  forgottenCards: number
+}
+
+/**
+ * Delete a collection from one personal vault.
+ *
+ * **The global corpus is untouched.** Everything here is scoped to the vault
+ * id it is given, and that is always the caller's own personal vault — the
+ * library keeps its copy, so the topic can still be adopted instantly by the
+ * next person who asks for it, including this one. Deleting your notes is
+ * not a request to un-write the subject for everybody.
+ *
+ * The queue rows and flashcard schedules go with the notes. Leaving them is
+ * how you get a draft job writing a note back into a space the user deleted,
+ * and a spaced-repetition row for a card that no longer exists.
+ */
+export async function deleteSpace(vaultId: string, userId: string, space: string): Promise<DeleteSpaceResult> {
+  const prefix = `${SPACE_ROOT}${space}/`
+
+  const gone = await db
+    .delete(notes)
+    .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${prefix}%`)))
+    .returning({ path: notes.path })
+
+  const jobs = await db
+    .delete(draftQueue)
+    .where(and(eq(draftQueue.vaultId, vaultId), like(draftQueue.path, `${prefix}%`)))
+    .returning({ id: draftQueue.id })
+
+  const cards = await db
+    .delete(flashcardReviews)
+    .where(and(eq(flashcardReviews.userId, userId), sql`${flashcardReviews.notePath} LIKE ${prefix + '%'}`))
+    .returning({ id: flashcardReviews.id })
+
+  return { deletedNotes: gone.length, cancelledJobs: jobs.length, forgottenCards: cards.length }
 }

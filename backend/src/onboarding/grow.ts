@@ -14,7 +14,7 @@ import { notes } from '../db/schema.js'
 import { generateNextTopics } from './plan.js'
 import { enqueueDrafts } from './queue.js'
 import { buildTopicNote, dedupeSegments, sanitizeSegment } from './notePlan.js'
-import { SPACE_ROOT, getOrCreatePersonalVaultId } from '../vault/spaces.js'
+import { SPACE_ROOT, getOrCreatePersonalVaultId, archivedSpaces } from '../vault/spaces.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
@@ -32,7 +32,7 @@ function titleFromPath(path: string): string {
 
 export interface GrowResult {
   added: number
-  reason?: 'enough-unreviewed' | 'no-space' | 'no-key' | 'generation-failed'
+  reason?: 'enough-unreviewed' | 'archived' | 'no-space' | 'no-key' | 'generation-failed'
 }
 
 /**
@@ -43,6 +43,11 @@ export interface GrowResult {
 export async function growSpace(userId: string, space: string): Promise<GrowResult> {
   try {
     const vaultId = await getOrCreatePersonalVaultId(userId)
+
+    // An archived collection is one the reader has set aside. Growing it
+    // would spend model calls filling a shelf they just closed — and put
+    // "Coming soon" notes into something that is not on screen.
+    if ((await archivedSpaces(vaultId)).has(space)) return { added: 0, reason: 'archived' }
     const prefix = `${SPACE_ROOT}${space}/Topics/`
 
     const rows = await db

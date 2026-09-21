@@ -88,6 +88,16 @@ export const BookmarkFilled = (p: P) => (
     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
   </svg>
 )
+export const MoreVertical = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="5" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="12" cy="19" r="1.2" />
+  </svg>
+)
+export const Archive = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 4h18v4H3z" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" /><path d="M10 12h4" />
+  </svg>
+)
 export const HelpCircle = (p: P) => (
   <svg {...base(p)}>
     <circle cx="12" cy="12" r="9" /><path d="M9.2 9.2a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4" /><path d="M12 17.5h.01" />

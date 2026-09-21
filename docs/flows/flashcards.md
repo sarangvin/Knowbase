@@ -31,7 +31,8 @@ outright on any vault without that file. It is a destination now, like Quiz.
 | 5 | Store the whole deck | `POST /api/flashcards/today` |
 | 6 | Turn a card: mark it reviewed, push out its next due date | `POST /api/flashcards/turn` → `schedule.ts` |
 
-**Source material.** `## AI Notes` on notes whose `last_reviewed` is set —
+**Source material.** `## AI Notes` on notes whose `last_reviewed` is set, in
+collections that are not archived —
 the same test the ranking, the review control and the quiz use. Unlike the
 quiz there is no section that already holds the material, so the terms have
 to be extracted; the definitions must come from the note's own prose rather

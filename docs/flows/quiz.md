@@ -32,7 +32,9 @@ wherever the database thinks it is.
 | 7 | Move that note's confidence ±1 | `quiz/score.ts` → `applyQuizResult` |
 
 **Source questions.** The `## Questions` section of notes whose
-`last_reviewed` is set. Asking about a note someone has never opened tests
+`last_reviewed` is set, in collections that are not archived — archiving is
+a decision to set a subject aside, and testing someone on it anyway is the
+app disagreeing with them. Asking about a note someone has never opened tests
 the generator, not them. `questionsOf` reads **both** shapes found under that
 heading — the generator's `- bullets` and Ask AI's `Q:` blocks. (Sync still
 reads only `Q:`, which is why it finds nothing on a generated vault. See

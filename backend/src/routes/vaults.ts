@@ -19,15 +19,7 @@ import { requireAuth, requireApproved, requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
-import {
-  SPACE_ROOT,
-  spaceOf,
-  normalizeTopic,
-  getOrCreatePersonalVaultId,
-  getGlobalVaultId,
-  adoptSpaceInto,
-  contributeToLibrary,
-} from '../vault/spaces.js'
+import { SPACE_ROOT, spaceOf, normalizeTopic, getOrCreatePersonalVaultId, getGlobalVaultId, adoptSpaceInto, contributeToLibrary, archivedSpaces, setSpaceArchived, deleteSpace } from '../vault/spaces.js'
 
 export const vaultsRouter = Router()
 vaultsRouter.use(requireAuth)
@@ -130,6 +122,76 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
     })
   res.status(204).end()
   void logUsageEvent({ userId: req.user!.id, eventType: 'note_write', metadata: { vault: 'personal', path } })
+}))
+
+/** A collection's name, as a single path segment. Never a path: a slash or
+ *  a traversal here would let one request reach outside the space it names. */
+function spaceParam(v: unknown): string | null {
+  const s = typeof v === 'string' ? v.trim() : ''
+  if (!s || s.length > 80 || s.includes('/') || s.includes('\\') || s.startsWith('.')) return null
+  return s
+}
+
+/** Which of this vault's collections are archived. The client reads the flag
+ *  from `_config.md` in the index it already holds; this is for Settings,
+ *  which wants the list without caring where it came from. */
+vaultsRouter.get('/mine/spaces/archived', asyncHandler(async (req, res) => {
+  const vaultId = await getOrCreatePersonalVaultId(req.user!.id)
+  res.json({ archived: [...(await archivedSpaces(vaultId))].sort() })
+}))
+
+/** Archive a collection, or bring it back.
+ *
+ *  Archiving writes `archived: true` into the space's own `_config.md` —
+ *  nothing is deleted and nothing moves. The collection drops out of the
+ *  home screen and stops feeding quizzes and flashcards; every note stays
+ *  exactly where it was, which is the whole difference from delete. */
+vaultsRouter.post('/mine/space/archive', asyncHandler(async (req, res) => {
+  const space = spaceParam(req.body?.space)
+  const archived = req.body?.archived
+  if (!space || typeof archived !== 'boolean') {
+    res.status(400).json({ error: 'body.space and body.archived (boolean) required' })
+    return
+  }
+  const vaultId = await getOrCreatePersonalVaultId(req.user!.id)
+  if (!(await setSpaceArchived(vaultId, space, archived))) {
+    res.status(404).json({ error: 'No such collection.' })
+    return
+  }
+  res.json({ space, archived })
+  void logUsageEvent({
+    userId: req.user!.id,
+    eventType: 'vault_sync',
+    metadata: { vault: 'personal', space, archived },
+  })
+}))
+
+/** Delete a collection from this user's vault.
+ *
+ *  Scoped to their personal vault and nothing else. The global corpus keeps
+ *  its copy, so the subject can still be adopted instantly by the next
+ *  person who asks for it — including this one, if they change their mind.
+ *  Deleting your own notes is not a request to un-write the topic for
+ *  everybody. */
+vaultsRouter.delete('/mine/space', asyncHandler(async (req, res) => {
+  const space = spaceParam(req.query.space)
+  if (!space) {
+    res.status(400).json({ error: 'space (a single collection name) required' })
+    return
+  }
+  const userId = req.user!.id
+  const vaultId = await getOrCreatePersonalVaultId(userId)
+  const result = await deleteSpace(vaultId, userId, space)
+  if (result.deletedNotes === 0) {
+    res.status(404).json({ error: 'No such collection.' })
+    return
+  }
+  res.json(result)
+  void logUsageEvent({
+    userId,
+    eventType: 'vault_sync',
+    metadata: { vault: 'personal', space, deleted: result.deletedNotes, source: 'delete-space' },
+  })
 }))
 
 // Asset metadata only for now — binary upload/serving lands with the S3-backed

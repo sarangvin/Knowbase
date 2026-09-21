@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
-import { User, LogOut, Cloud, Pencil, Trash, RotateCw } from '../../ui/icons'
+import { User, LogOut, Cloud, Pencil, Trash, RotateCw, Archive } from '../../ui/icons'
+import { fetchArchivedCollections, setCollectionArchived } from '../automated-graph/collectionsApi'
 import { SyncModal } from '../sync/SyncModal'
 import './settings.css'
 
@@ -13,6 +14,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const logout = useVault((s) => s.logout)
   const loadRemote = useVault((s) => s.loadRemote)
   const loadGlobalVault = useVault((s) => s.loadGlobalVault)
+  const reloadVault = useVault((s) => s.reload)
 
 
   const [syncOpen, setSyncOpen] = useState(false)
@@ -23,6 +25,12 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
+  // Fetched rather than read from the vault index: Settings is reachable
+  // with the demo vault loaded, or none at all, and "what have I archived"
+  // is a question about the account either way.
+  const [archived, setArchived] = useState<string[] | null>(null)
+  const [unarchiving, setUnarchiving] = useState<string | null>(null)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = () => {
@@ -34,6 +42,34 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
 
   useEffect(refresh, [user])
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetchArchivedCollections()
+      .then((list) => !cancelled && setArchived(list))
+      .catch(() => !cancelled && setArchived([]))
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  const unarchive = async (space: string) => {
+    setUnarchiving(space)
+    setArchiveError(null)
+    try {
+      await setCollectionArchived(space, false)
+      setArchived((list) => (list ?? []).filter((s) => s !== space))
+      // The vault in memory still has the old flag, and the home screen
+      // reads it from there — without this the collection stays hidden
+      // until something else happens to reload.
+      await reloadVault()
+    } catch (e) {
+      setArchiveError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUnarchiving(null)
+    }
+  }
 
 
   const upgrade = async () => {
@@ -223,6 +259,31 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
               </div>
             )}
             {subError && <div className="ask-error">{subError}</div>}
+          </div>
+        )}
+
+        {user && archived != null && archived.length > 0 && (
+          <div className="settings-section">
+            <div className="settings-label">Archived collections</div>
+            <p className="settings-dim">
+              Set aside, not deleted. Every note is still here; they just stay off the home
+              screen and out of quizzes and flashcards until you bring them back.
+            </p>
+            {archived.map((space) => (
+              <div className="settings-key-row" key={space}>
+                <span className="settings-key-label">
+                  <Archive width={13} height={13} /> {space}
+                </span>
+                <button
+                  className="ask-btn"
+                  disabled={unarchiving != null}
+                  onClick={() => void unarchive(space)}
+                >
+                  {unarchiving === space ? 'Bringing back…' : 'Unarchive'}
+                </button>
+              </div>
+            ))}
+            {archiveError && <div className="ask-error">{archiveError}</div>}
           </div>
         )}
 

@@ -68,6 +68,9 @@ counts reviews, not attempts.
 its only caller is a fire-and-forget request behind an action that already
 succeeded.
 
+- An **archived** collection does not grow. Spending model calls filling a
+  shelf somebody just closed, and putting "Coming soon" notes into a space
+  that is not on screen, are both answers to a question they did not ask.
 - "Studied" is **`last_reviewed` being set**, not confidence — a slider can be
   dragged without reading anything.
 - If fewer than `MAX_UNREVIEWED` (**3**) topics are unstudied, generate more,

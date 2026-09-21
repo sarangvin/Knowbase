@@ -11,7 +11,7 @@ import { and, eq, like } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
 import type { FlashcardRow } from '../db/schema.js'
-import { SPACE_ROOT } from '../vault/spaces.js'
+import { SPACE_ROOT, spaceOf, archivedSpaces } from '../vault/spaces.js'
 import { frontmatterValue, frontmatterNumber } from '../vault/frontmatter.js'
 import { meteredGeminiCall } from '../llm/meter.js'
 import { scheduleKey, type CardSchedule } from './schedule.js'
@@ -115,8 +115,14 @@ export async function collectSources(vaultId: string): Promise<NoteSource[]> {
     .from(notes)
     .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${SPACE_ROOT}%/Topics/%`)))
 
+  // An archived collection is one the reader has set aside; drilling them on
+  // it would be the app disagreeing with a decision they just made.
+  const archived = await archivedSpaces(vaultId)
+
   const out: NoteSource[] = []
   for (const r of rows) {
+    const space = spaceOf(r.path)
+    if (space && archived.has(space)) continue
     // Reviewed only — the same `last_reviewed` test the ranking, the review
     // control and the quiz use. Drilling a note nobody has read is testing
     // the generator.

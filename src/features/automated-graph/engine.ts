@@ -31,6 +31,15 @@ export function spaceOfPath(path: string): string | null {
   return m ? m[1] : null
 }
 
+/** Archived collections are set aside, not deleted: every note stays where
+ *  it was, but the collection drops off the home screen and stops feeding
+ *  quizzes, flashcards and growth. The flag lives in the space's own
+ *  `_config.md` so the vault carries it — the server reads the same line. */
+export function isArchived(index: VaultIndex, space: string): boolean {
+  const v = index.notes.get(`Automated Graph/${space}/_config.md`)?.frontmatter?.archived
+  return v === true || String(v).toLowerCase() === 'true'
+}
+
 export function listSpaces(index: VaultIndex): string[] {
   const spaces = new Set<string>()
   for (const p of index.notes.keys()) {
