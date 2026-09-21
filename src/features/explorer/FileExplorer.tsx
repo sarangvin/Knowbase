@@ -3,6 +3,7 @@ import { useVault } from '../../vault/vaultStore'
 import type { TreeNode } from '../../vault/types'
 import { ChevronRight, FileText, Hash, Plus } from '../../ui/icons'
 import { NewNoteModal } from './NewNoteModal'
+import { folderLabel } from '../../ui/folderLabels'
 import './explorer.css'
 
 function collectFolderPaths(node: TreeNode, acc: Set<string>) {
@@ -34,7 +35,9 @@ function TreeItem({
       <div>
         <div className="tree-row folder" style={{ paddingLeft: pad }} onClick={() => toggle(node.path)}>
           <ChevronRight className={`tree-chevron ${isOpen ? 'open' : ''}`} />
-          <span className="tree-label">{node.name}</span>
+          {/* Top level only — the same rule the breadcrumb follows. A folder
+              of this name nested inside a collection is the user's own. */}
+          <span className="tree-label">{depth === 0 ? folderLabel(node.name) : node.name}</span>
         </div>
         {isOpen &&
           node.children?.map((child) => (
