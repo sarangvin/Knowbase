@@ -135,6 +135,15 @@ undercount.
   through, generate.
 - **Contributing to the corpus is insert-only.** An existing note — including
   anything the owner has curated — is never modified.
+- **`## My Notes` never reaches the corpus.** That section is the one part
+  of a note its owner writes, and the corpus is read by strangers. It used
+  to be safe by circumstance: every caller passed content captured before
+  anyone could edit it, and the route said so in a comment. That is an
+  argument about callers, not a property of the corpus, and it stopped
+  holding the moment My Notes became a box people type into.
+  `contributeToLibrary` empties the section on the way in — the heading
+  survives, so an adopted note still has somewhere to write. It is the only
+  writer to the global vault, which is what makes one check enough.
 - **The global corpus is the owner's.** Users read from it by adoption; they
   never see it as a vault.
 - **The demo vault is only shown to someone with nothing of their own.**

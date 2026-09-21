@@ -35,3 +35,63 @@
   .note-scroll { --note-pad-x: 20px; }
   .note-container { padding: 24px var(--note-pad-x) 40px; }
 }
+
+/* ── My Notes ─────────────────────────────────────────────────────────────
+   The one editable part of a generated note. Styled as a field rather than
+   as prose, so it reads as somewhere to write rather than something to
+   read past. */
+.mynotes { margin: 1.6em 0; }
+.mynotes-input {
+  display: block;
+  width: 100%;
+  /* One line to start with; the height is set from scrollHeight on every
+     change, so this is only the floor. */
+  min-height: 2.6em;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-normal);
+  font: inherit;
+  line-height: 1.65;
+  /* The JS sets an exact height; a scrollbar would mean it is wrong, and
+     resize would let the user fight it. */
+  overflow: hidden;
+  resize: none;
+}
+.mynotes-input::placeholder { color: var(--text-faint); }
+.mynotes-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-primary);
+}
+.mynotes-status { font-size: 12px; color: var(--text-faint); }
+.mynotes-error { color: var(--text-error); }
+.mynotes-readonly { color: var(--text-muted); white-space: pre-wrap; }
+
+/* Status on the left, Save on the right. The row is always present so the
+   note does not shift when a message appears. */
+.mynotes-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  padding-top: 6px;
+}
+.mynotes-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-normal);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mynotes-save:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
+.mynotes-save:disabled { opacity: 0.45; cursor: default; }

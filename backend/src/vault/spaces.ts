@@ -120,6 +120,19 @@ export async function findLibrarySpaceFor(topic: string): Promise<string | null>
   return null
 }
 
+/** Empty out any section of a note that belongs to its author.
+ *
+ *  The heading stays — an adopted note should still have somewhere to write
+ *  — but whatever was under it does not travel. Matched on the heading and
+ *  the next heading, the same shape the client's own section helper uses.
+ */
+export function withoutPrivateSections(content: string): string {
+  return content.replace(
+    /(^|\n)(##\s+My Notes[^\n]*\n)[\s\S]*?(?=\n##\s|$)/i,
+    (_m, lead: string, heading: string) => `${lead}${heading}`,
+  )
+}
+
 /** Add freshly generated notes to the corpus. Insert-only: an existing note —
  *  including anything the owner has curated — is never modified. Returns how
  *  many were actually added.
@@ -128,7 +141,15 @@ export async function findLibrarySpaceFor(topic: string): Promise<string | null>
  *  client input first) and the onboarding pipeline, which contributes what it
  *  just generated. Contributing is always a side benefit: callers treat a
  *  failure here as nothing to report, since the user's own notes are already
- *  saved by the time this runs. */
+ *  saved by the time this runs.
+ *
+ *  **`## My Notes` is stripped on the way in.** That section is the one part
+ *  of a note the user writes, and the corpus is read by strangers. It used
+ *  to be safe by circumstance — the only callers passed content captured
+ *  before anyone could edit it, and the route's comment said so. That is an
+ *  argument about callers, not a property of the corpus, and it stopped
+ *  being true the moment My Notes became a box people type into. Enforced
+ *  here because this is the single door into the global vault. */
 export async function contributeToLibrary(entries: { path: string; content: string }[]): Promise<number> {
   const globalVaultId = await getGlobalVaultId()
   if (!globalVaultId) return 0
@@ -136,7 +157,9 @@ export async function contributeToLibrary(entries: { path: string; content: stri
   const before = new Set(
     (await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, globalVaultId))).map((r) => r.path),
   )
-  const fresh = entries.filter((e) => !before.has(e.path))
+  const fresh = entries
+    .filter((e) => !before.has(e.path))
+    .map((e) => ({ path: e.path, content: withoutPrivateSections(e.content) }))
   if (fresh.length === 0) return 0
 
   await db
