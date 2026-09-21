@@ -78,19 +78,33 @@ export function backlinksOf(index: VaultIndex, path: string): string[] {
 }
 
 /** Build force-graph data. When `focusPath` is set, returns the local neighborhood. */
+/** Generated dashboards, which are scaffolding rather than knowledge.
+ *
+ *  One "Next Up" exists per collection and links to whatever it happens to
+ *  be recommending today, so in the graph it is a hub wired to half the
+ *  vault — an artefact of how the app works, drawn with the same weight as
+ *  a real idea, crowding out the structure the graph is for. */
+const DASHBOARD_RE = /(^|\/)Next Up\.md$/i
+
+function isDashboard(path: string): boolean {
+  return DASHBOARD_RE.test(path)
+}
+
 export function buildGraphData(index: VaultIndex, focusPath?: string, depth = 1): GraphData {
   const includeAll = !focusPath
   let included: Set<string>
   if (includeAll) {
-    included = new Set(index.notes.keys())
+    included = new Set([...index.notes.keys()].filter((p) => !isDashboard(p)))
   } else {
+    // The focus is always in, even if it is a dashboard: someone looking at
+    // that note should still see its neighbourhood rather than a blank pane.
     included = new Set([focusPath!])
     let frontier = new Set([focusPath!])
     for (let d = 0; d < depth; d++) {
       const next = new Set<string>()
       for (const p of frontier) {
-        for (const f of index.forwardlinks.get(p) ?? []) if (!included.has(f)) next.add(f)
-        for (const b of index.backlinks.get(p) ?? []) if (!included.has(b)) next.add(b)
+        for (const f of index.forwardlinks.get(p) ?? []) if (!included.has(f) && !isDashboard(f)) next.add(f)
+        for (const b of index.backlinks.get(p) ?? []) if (!included.has(b) && !isDashboard(b)) next.add(b)
       }
       next.forEach((p) => included.add(p))
       frontier = next
