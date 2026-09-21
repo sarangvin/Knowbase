@@ -66,6 +66,26 @@ async function usedToday(userId: string, space: string, day: string): Promise<nu
   return row?.n ?? 0
 }
 
+/** Which questions on this note the reader wrote themselves.
+ *
+ *  Read from the `custom_questions` ledger, which keeps a row per question
+ *  ever asked — so this is every custom question on the note, not just
+ *  today's. The generated ones are not the reader's to remove, and the
+ *  client needs to know which is which to say so.
+ */
+notesRouter.get('/custom-questions', asyncHandler(async (req, res) => {
+  const path = noteParam(req.query.path)
+  if (!path) {
+    res.status(400).json({ error: 'path required' })
+    return
+  }
+  const rows = await db
+    .select({ question: customQuestions.question })
+    .from(customQuestions)
+    .where(and(eq(customQuestions.userId, req.user!.id), eq(customQuestions.notePath, path)))
+  res.json({ questions: rows.map((r) => r.question) })
+}))
+
 /** What is left in today's allowance for one collection, so the input can
  *  say so before the reader types rather than after. */
 notesRouter.get('/question-allowance', asyncHandler(async (req, res) => {
@@ -175,7 +195,13 @@ notesRouter.post('/answer', asyncHandler(async (req, res) => {
   res.json({ answer, remaining: remainingOf(limit, used) })
 }))
 
-/** Remove a question and its answer from a note.
+/** Remove one of the reader's own questions, and its answer.
+ *
+ *  **Only their own.** A generated question is part of the note the way the
+ *  key points are; letting it be deleted individually makes the note
+ *  something different on every account and leaves the quiz drawing from a
+ *  set that quietly shrinks. Checked here rather than only hidden in the
+ *  UI, because a hidden button is not a rule.
  *
  *  The ledger row stays. Refunding the allowance on delete would make the
  *  daily limit "ask, delete, ask again", which is not a limit — and the
@@ -185,6 +211,21 @@ notesRouter.delete('/question', asyncHandler(async (req, res) => {
   const question = questionParam(req.query.question)
   if (!path || !question) {
     res.status(400).json({ error: 'path and question required' })
+    return
+  }
+  const [own] = await db
+    .select({ id: customQuestions.id })
+    .from(customQuestions)
+    .where(
+      and(
+        eq(customQuestions.userId, req.user!.id),
+        eq(customQuestions.notePath, path),
+        sql`lower(${customQuestions.question}) = lower(${question})`,
+      ),
+    )
+    .limit(1)
+  if (!own) {
+    res.status(403).json({ error: "That question came with the note, so it can't be deleted." })
     return
   }
   const vaultId = await getOrCreatePersonalVaultId(req.user!.id)

@@ -15,7 +15,7 @@ import { useVault } from '../../vault/vaultStore'
 import { slugify } from '../../vault/parse'
 import { spaceOfPath } from '../../vault/collections'
 import { Sparkles, Trash, HelpCircle, Eye } from '../../ui/icons'
-import { answerQuestion, deleteQuestion, fetchAllowance, type Allowance } from './questionsApi'
+import { answerQuestion, deleteQuestion, fetchAllowance, fetchOwnQuestions, type Allowance } from './questionsApi'
 import type { ReaderQuestion } from './questionsFormat'
 import type { Note } from '../../vault/types'
 
@@ -32,6 +32,10 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
   // when the answer is already in the note: a question you can read the
   // answer to without asking is not a question, it is a paragraph.
   const [shown, setShown] = useState<Record<string, boolean>>({})
+  // The reader's own questions, lower-cased for comparison. Only these can
+  // be deleted: a generated question is part of the note the way the key
+  // points are.
+  const [own, setOwn] = useState<Set<string>>(new Set())
   const [allowance, setAllowance] = useState<Allowance | null>(null)
 
   // Every button here calls the server, so all of them need an account —
@@ -46,6 +50,17 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
   // A different note is a different set of questions; nothing should
   // arrive already revealed.
   useEffect(() => setShown({}), [note.path])
+
+  useEffect(() => {
+    if (!canAnswer) return
+    let cancelled = false
+    void fetchOwnQuestions(note.path).then((qs) => {
+      if (!cancelled) setOwn(new Set(qs.map((q) => q.toLowerCase())))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [canAnswer, note.path, items.length])
 
   useEffect(() => {
     if (!canAsk || !space) return
@@ -135,10 +150,10 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
                 </button>
               )
             )}
-            {/* Any question can be removed, not only the reader's own: a
-                generated question that is wrong or dull is noise on a note
-                they have to keep reading. */}
-            {canAnswer && (
+            {/* Only the reader's own. A generated question belongs to the
+                note, and the server refuses to delete one either way — this
+                just stops offering. */}
+            {canAnswer && own.has(q.question.toLowerCase()) && (
               <button
                 className="qa-remove"
                 aria-label={`Delete question: ${q.question}`}

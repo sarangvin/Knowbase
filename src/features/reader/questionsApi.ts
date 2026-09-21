@@ -50,3 +50,18 @@ export async function fetchAllowance(space: string): Promise<Allowance> {
   )
   return (await jsonOrThrow(res)) as Allowance
 }
+
+/** The questions on this note that the reader wrote themselves — the only
+ *  ones they can delete. Empty on any failure: showing no delete buttons is
+ *  the safe way to be wrong. */
+export async function fetchOwnQuestions(path: string): Promise<string[]> {
+  try {
+    const res = await fetch(`/api/notes/custom-questions?path=${encodeURIComponent(path)}`, {
+      credentials: 'include',
+    })
+    if (!res.ok) return []
+    return ((await res.json()) as { questions: string[] }).questions
+  } catch {
+    return []
+  }
+}

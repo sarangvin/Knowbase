@@ -45,7 +45,7 @@ not there.
 | 5 | Add one of your own | the same route, `custom: true` |
 | 6 | Generate the answer from the note | `notes/questions.ts` → `generateAnswer` |
 | 7 | Write it back into the note | `setAnswer` → the `notes` row |
-| 8 | Delete a question and its answer | `DELETE /api/notes/question` |
+| 8 | Delete one of your own questions | `DELETE /api/notes/question` |
 
 **Answers are written with the note, not on demand.** The draft call that
 writes `## AI Notes` now returns `{q, a}` pairs and writes `Q:`/`A:`
@@ -98,8 +98,15 @@ describing it cannot disagree.
   as four questions — and since writing rewrites the whole section, the next
   answer would have reformatted that content into nonsense. Caught in the
   browser on a real note, not by the unit tests, which only had clean input.
-- **Any question can be deleted, not only your own.** A generated question
-  that is wrong or dull is noise on a note you have to keep reading.
+- **Only your own questions can be deleted.** A generated question is part
+  of the note the way the key points are; deleting them one at a time would
+  make the note a different thing on every account and leave the quiz
+  drawing from a set that quietly shrinks. Enforced on the server — the
+  client hides the control, and a hidden control is not a rule.
+- **Which questions are yours comes from the ledger**, not from a marker in
+  the markdown. `custom_questions` already keeps a row per question ever
+  asked, so the note stays plain text and an exported vault carries no
+  bookkeeping.
 - **Every control needs an account, not just a writable vault.** The demo
   vault is writable through a local overlay and has no account; an Answer
   button that 401s is worse than one that is not there.
