@@ -98,11 +98,21 @@ export async function adoptSpaceInto(personalVaultId: string, space: string): Pr
     )
   }
 
+  // Never promise a path the copy does not contain. A corpus space can be
+  // missing its Next Up — one is, because the run that wrote it died before
+  // contributing — and handing that path back gives the adopter a
+  // collection card that opens nothing. The first topic is a worse landing
+  // note than Next Up and a much better one than a 404.
+  const nextUp = `${SPACE_ROOT}${space}/Next Up.md`
+  const landing = wanted.some((r) => r.path === nextUp)
+    ? nextUp
+    : (wanted.map((r) => r.path).filter((p) => p.includes('/Topics/')).sort()[0] ?? wanted[0].path)
+
   return {
     ok: true,
     adopted: toInsert.length,
     skipped: wanted.length - toInsert.length,
-    openPath: `${SPACE_ROOT}${space}/Next Up.md`,
+    openPath: landing,
   }
 }
 
@@ -120,17 +130,37 @@ export async function findLibrarySpaceFor(topic: string): Promise<string | null>
   return null
 }
 
-/** Empty out any section of a note that belongs to its author.
+/** Turn one person's note into a corpus copy.
  *
- *  The heading stays — an adopted note should still have somewhere to write
- *  — but whatever was under it does not travel. Matched on the heading and
- *  the next heading, the same shape the client's own section helper uses.
+ *  Two things belong to the author and must not travel:
+ *
+ *  **`## My Notes`** — the one section they write. The heading stays, so an
+ *  adopted note still has somewhere to write; the content does not.
+ *
+ *  **Their progress** — `confidence`, `last_reviewed` and `status`. The
+ *  corpus is a starting point, and onboarding's own invariant is that a
+ *  generated note must never look reviewed. Without this, adopting a space
+ *  hands you somebody else's study history: Next Up counts their topics as
+ *  studied, the review list shows a date you never set, and the quiz draws
+ *  on notes you have not read. Eleven notes were already in the corpus
+ *  carrying a real `last_reviewed` before this existed.
  */
-export function withoutPrivateSections(content: string): string {
-  return content.replace(
+export function asCorpusCopy(content: string): string {
+  let out = content.replace(
     /(^|\n)(##\s+My Notes[^\n]*\n)[\s\S]*?(?=\n##\s|$)/i,
     (_m, lead: string, heading: string) => `${lead}${heading}`,
   )
+  // Only inside the frontmatter block, so a line of prose that happens to
+  // start with "status:" is left alone.
+  const fm = out.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (fm) {
+    const reset = fm[1]
+      .replace(/^confidence:.*$/im, 'confidence: 0')
+      .replace(/^last_reviewed:.*$/im, 'last_reviewed:')
+      .replace(/^status:.*$/im, 'status: frontier')
+    out = out.slice(0, fm.index! ) + out.slice(fm.index!).replace(fm[1], reset)
+  }
+  return out
 }
 
 /** Add freshly generated notes to the corpus. Insert-only: an existing note —
@@ -143,13 +173,8 @@ export function withoutPrivateSections(content: string): string {
  *  failure here as nothing to report, since the user's own notes are already
  *  saved by the time this runs.
  *
- *  **`## My Notes` is stripped on the way in.** That section is the one part
- *  of a note the user writes, and the corpus is read by strangers. It used
- *  to be safe by circumstance — the only callers passed content captured
- *  before anyone could edit it, and the route's comment said so. That is an
- *  argument about callers, not a property of the corpus, and it stopped
- *  being true the moment My Notes became a box people type into. Enforced
- *  here because this is the single door into the global vault. */
+ *  **Everything personal is stripped on the way in** — see `asCorpusCopy`.
+ *  Enforced here because this is the single door into the global vault. */
 export async function contributeToLibrary(entries: { path: string; content: string }[]): Promise<number> {
   const globalVaultId = await getGlobalVaultId()
   if (!globalVaultId) return 0
@@ -159,7 +184,7 @@ export async function contributeToLibrary(entries: { path: string; content: stri
   )
   const fresh = entries
     .filter((e) => !before.has(e.path))
-    .map((e) => ({ path: e.path, content: withoutPrivateSections(e.content) }))
+    .map((e) => ({ path: e.path, content: asCorpusCopy(e.content) }))
   if (fresh.length === 0) return 0
 
   await db

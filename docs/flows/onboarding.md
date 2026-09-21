@@ -168,15 +168,33 @@ problem is a full shelf sends them away for nothing.
   through, generate.
 - **Contributing to the corpus is insert-only.** An existing note — including
   anything the owner has curated — is never modified.
-- **`## My Notes` never reaches the corpus.** That section is the one part
-  of a note its owner writes, and the corpus is read by strangers. It used
-  to be safe by circumstance: every caller passed content captured before
-  anyone could edit it, and the route said so in a comment. That is an
-  argument about callers, not a property of the corpus, and it stopped
-  holding the moment My Notes became a box people type into.
-  `contributeToLibrary` empties the section on the way in — the heading
-  survives, so an adopted note still has somewhere to write. It is the only
-  writer to the global vault, which is what makes one check enough.
+- **Contribute when the note is written, not at the end of the run.** It
+  used to be the last thing `runOnboarding` did, so an invocation killed
+  before it finished contributed nothing at all — and one was. "System
+  Architecture for PMs" reached the corpus with the three notes the queue
+  drafted, none of the two the run wrote, and no `Next Up.md`.
+- **Adoption never promises a landing note the copy does not have.** That
+  same space had no `Next Up.md`, and `adoptSpaceInto` returned its path
+  regardless — giving the adopter a collection card that opens nothing. It
+  falls back to the first topic.
+- **Nothing personal reaches the corpus.** `asCorpusCopy` is the one
+  sanitiser, applied in `contributeToLibrary`, which is the only writer to
+  the global vault.
+
+  It empties `## My Notes` — the one section its author writes, on a vault
+  strangers read — keeping the heading so an adopted note still has
+  somewhere to write. And it resets `confidence`, `last_reviewed` and
+  `status`, because the corpus is a starting point and onboarding's own
+  invariant is that a generated note must never look reviewed. Without
+  that, adopting a space handed you someone else's study history: Next Up
+  counting their topics as studied, a review date you never set, the quiz
+  drawing on notes you have not read. Frontmatter only, so a line of prose
+  beginning "status:" is left alone.
+
+  Both used to be safe only by circumstance — every caller passed content
+  captured before anyone could edit it, and the route said so in a comment.
+  That is an argument about callers, not a property of the corpus, and it
+  stopped holding the moment notes became editable.
 - **The global corpus is the owner's.** Users read from it by adoption; they
   never see it as a vault.
 - **The demo vault is only shown to someone with nothing of their own.**
@@ -212,10 +230,7 @@ problem is a full shelf sends them away for nothing.
   (`notePlan.ts`, the template literal). Nothing reads it — paths drive
   everything, via `spaceOfPath` — so it is cosmetic, but Properties renders a
   blank row and an exported vault has a field that says nothing.
-- **Adoption copies frontmatter verbatim**, including the owner's
-  `confidence` and `last_reviewed`. Nobody has hit this because the corpus is
-  currently seeded from freshly generated notes, but a user adopting a space
-  the owner has studied would inherit a review history that is not theirs.
+
 - **`## Questions` is generated as bullets**, which no consumer can act on.
   See [review.md](review.md#known-gaps).
 - **500 requests/day** on `gemini-3.5-flash-lite` at ~6 calls per onboarding

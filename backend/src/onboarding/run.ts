@@ -150,7 +150,25 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
 
     void logUsageEvent({ userId, eventType: 'note_write', metadata: { vault: 'personal', space, count: entries.length, source: 'onboarding' } })
 
-    // 5. The rest, on the queue.
+    // 5. Hand what we just wrote to the corpus, here rather than at the end
+    //    of the run — see below for why the queued ones follow separately.
+    //
+    //    It used to be the last thing this function did, which meant an
+    //    invocation killed before it finished contributed nothing at all —
+    //    and one was. "System Architecture for PMs" ended up in the corpus
+    //    with the three notes the queue drafted and none of the two this
+    //    function wrote, no Next Up, and therefore an openPath that does
+    //    not exist. Contributing at the point of writing makes the corpus
+    //    copy survive whatever happens to the rest of the run.
+    //
+    //    Placeholders are filtered out: an empty stub in the corpus would
+    //    be adopted as a finished note and never generated properly. The
+    //    queue contributes each real draft as it lands.
+    await contributeToLibrary(
+      entries.filter((e) => !isPlaceholder(e.content)),
+    ).catch((err) => console.warn('[onboarding] library contribution failed (ignored):', err))
+
+    // 6. The rest, on the queue.
     //
     //    These used to be drafted here, sequentially, before announcing
     //    ready — affordable when five drafts took ~14s in total. They do not
@@ -188,20 +206,6 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
       eventType: 'note_write',
       metadata: { vault: 'personal', space, queued, source: 'onboarding-queue' },
     })
-
-    // 6. Hand the finished drafts to the corpus so the next person asking for
-    //    this topic gets step 1 instead of steps 2-5. The client used to do
-    //    this and could only contribute what it happened to be holding, which
-    //    was never the server-written drafts — so this is the first time the
-    //    notes that cost the most to make are the ones being kept.
-    //
-    //    Only what is actually written: a placeholder in the corpus is worse
-    //    than nothing, because adoption would hand the next person a space of
-    //    one-line stubs and never generate the real thing. The queued notes
-    //    are contributed by the queue as each one lands.
-    await contributeToLibrary(
-      entries.filter((e) => !isPlaceholder(e.content)),
-    ).catch((err) => console.warn('[onboarding] library contribution failed (ignored):', err))
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
