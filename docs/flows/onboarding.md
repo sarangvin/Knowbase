@@ -143,6 +143,14 @@ undercount.
   loading the demo on boot threw them out of their own vault on every reload
   until the job finished. `App.tsx` loads their vault first and falls back to
   the demo only when it comes back empty.
+- **Unwritten notes plus an empty queue triggers a reconcile.** That pair is
+  the stranded case — an invocation died holding work nothing else knew
+  about. `/status` sweeps only then; on every poll it would scan the notes
+  table every five seconds to find nothing.
+- **A stale job that has a space and a landing note is reported ready, not
+  failed.** It built the space and died before saying so. Calling that failed
+  offers a "Try again" that generates the whole thing a second time under a
+  disambiguated name — worse than the state it is recovering from.
 - **A `running` job with no progress for two minutes is reported as failed.**
   The run happens under `waitUntil`, after the response — a deployment
   cutover or a hard kill takes it with no error to catch and nothing written

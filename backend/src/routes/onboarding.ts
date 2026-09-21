@@ -86,6 +86,13 @@ async function currentJob(userId: string): Promise<OnboardingJobView | null> {
   const stale =
     row.status === 'running' && Date.now() - row.updatedAt.getTime() > STALE_JOB_MS
 
+  // A stale job that already has a space and a landing note is not failed —
+  // it built the space and died before saying so. Calling that failed offers
+  // a "Try again" that would generate the whole thing a second time under a
+  // disambiguated name, which is worse than the state it is recovering from.
+  // Ready is the truthful answer, and the queue finishes the notes.
+  const salvageable = stale && !!row.space && !!row.openPath
+
   // Counted, not remembered. Only the landing note is drafted in the run
   // itself; the rest are written by the queue, which has no business writing
   // to this table. A stored counter would need every writer to keep it in
@@ -94,8 +101,8 @@ async function currentJob(userId: string): Promise<OnboardingJobView | null> {
 
   return {
     topic: row.topic,
-    status: stale ? 'failed' : (row.status as OnboardingJobView['status']),
-    error: stale
+    status: salvageable ? 'ready' : stale ? 'failed' : (row.status as OnboardingJobView['status']),
+    error: stale && !salvageable
       ? 'Generation stopped before it finished — nothing was lost, but it needs starting again.'
       : row.error,
     space: row.space,
@@ -195,7 +202,19 @@ onboardingRouter.get('/status', asyncHandler(async (req, res) => {
   const job = await currentJob(req.user!.id)
   const depth = await queueDepth()
   res.json({ job, queue: depth })
-  if (depth.pending > 0 || depth.running > 0) waitUntil(drainQueue())
+
+  if (depth.pending > 0 || depth.running > 0) {
+    waitUntil(drainQueue())
+    return
+  }
+
+  // Notes still unwritten and an empty queue is the stranded case: an
+  // invocation died holding work nothing else knew about. Rare, and the only
+  // moment a reconcile is worth its scan — running it on every poll would
+  // sweep the whole notes table every five seconds to find nothing.
+  if (job && job.notesTotal > 0 && job.notesDrafted < job.notesTotal) {
+    waitUntil(reconcileQueue().then(() => drainQueue()))
+  }
 }))
 
 /** Sweep for work the queue has lost track of, then drain.
