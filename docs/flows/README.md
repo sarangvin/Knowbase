@@ -21,7 +21,8 @@ code answering one question differently, each reasonable alone.
   ranking used a UTC `daysSince` and never asked at all. Result: the app
   recommended a note and then refused to let the user review it.
 - Generated notes wrote their questions as `- bullets`; every consumer that
-  acts on questions looks for `Q:` blocks. The section has never worked.
+  acts on questions looks for `Q:` blocks. The section never worked until
+  [questions.md](questions.md) made everything read both and write one.
 
 None of these are visible from inside either file. They are only visible from
 a description of the whole path, which is what these sheets are.
@@ -34,6 +35,7 @@ a description of the whole path, which is what these sheets are.
 | Review — closing the loop on a note | [review.md](review.md) |
 | Quiz — five questions a day, scored back into the notes | [quiz.md](quiz.md) |
 | Flashcards — ten cards a day, weighted by what has not stuck | [flashcards.md](flashcards.md) |
+| Questions — answering a note's questions, and asking your own | [questions.md](questions.md) |
 
 ## Keeping them true
 

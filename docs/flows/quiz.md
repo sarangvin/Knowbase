@@ -36,9 +36,9 @@ wherever the database thinks it is.
 a decision to set a subject aside, and testing someone on it anyway is the
 app disagreeing with them. Asking about a note someone has never opened tests
 the generator, not them. `questionsOf` reads **both** shapes found under that
-heading — the generator's `- bullets` and Ask AI's `Q:` blocks. (Sync still
-reads only `Q:`, which is why it finds nothing on a generated vault. See
-[review.md](review.md#known-gaps).)
+heading — the generator's `- bullets` and the `Q:` blocks that Ask AI, Sync
+and the Questions section write. See [questions.md](questions.md) for why
+there are two and which one is written now.
 
 **One model call, not five.** Five would be five times the latency and five
 times the rate-limit budget, for a worse answer — the model can see the whole

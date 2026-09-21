@@ -338,3 +338,27 @@ export const flashcardReviews = pgTable(
   },
   (t) => [uniqueIndex('flashcard_reviews_card_unique').on(t.userId, t.notePath, t.termKey)],
 )
+
+/** One row per custom question a user has asked of a note.
+ *
+ *  This is the rate-limit ledger, not the content: the question and its
+ *  answer live in the note itself, like every other question. Rows are kept
+ *  when the user deletes the question from the note — otherwise the daily
+ *  limit is "ask, delete, ask again", which is not a limit.
+ */
+export const customQuestions = pgTable(
+  'custom_questions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** The collection the note belongs to. The limit is per collection, so
+     *  this is the thing being counted against, not the note. */
+    space: text('space').notNull(),
+    /** Local YYYY-MM-DD from the client, like the quiz and the review cap. */
+    day: text('day').notNull(),
+    notePath: text('note_path').notNull(),
+    question: text('question').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('custom_questions_user_space_day_idx').on(t.userId, t.space, t.day)],
+)

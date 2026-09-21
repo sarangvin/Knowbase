@@ -6,6 +6,8 @@ import { Properties } from './Properties'
 import { ReviewBar } from './ReviewBar'
 import { Editor } from '../editor/Editor'
 import { MyNotes } from './MyNotes'
+import { Questions } from './Questions'
+import { parseQuestions, questionsSection } from './questionsFormat'
 import { extractSection } from '../sync/sync'
 import './noteview.css'
 
@@ -56,10 +58,20 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
   // rendered body rather than the raw note so the offsets line up with what
   // MarkdownView is given — the frontmatter and any stripped title are
   // already gone from this string.
+  // Two sections are components rather than markdown: My Notes is an editor,
+  // and Questions has a button per question. Both draw their own heading, so
+  // each split stops where its heading starts.
   const mine = extractSection(body, 'My Notes')
-  // The heading line itself belongs to the editor, which draws its own, so
-  // `before` stops where the heading starts.
-  const headingStart = mine ? body.lastIndexOf('##', mine.contentStart) : -1
+  const mineStart = mine ? body.lastIndexOf('##', mine.contentStart) : -1
+  const qs = questionsSection(body)
+  const qsStart = qs ? body.lastIndexOf('##', qs.start) : -1
+  const questions = qs ? parseQuestions(body) : []
+
+  // Rendered in document order. Questions follows My Notes in the template,
+  // and a note that has been edited by hand could have them either way
+  // round — so the middle slice is whatever sits between them.
+  const hasBoth = mineStart >= 0 && qsStart >= 0
+  const mineFirst = hasBoth ? mineStart < qsStart : mineStart >= 0
 
   return (
     <div className="note-scroll" ref={scrollRef}>
@@ -75,11 +87,35 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
           </div>
         )}
         <Properties frontmatter={note.frontmatter} notePath={note.path} />
-        {mine && headingStart >= 0 ? (
+        {hasBoth ? (
+          mineFirst ? (
+            <>
+              <MarkdownView content={body.slice(0, mineStart)} notePath={note.path} />
+              <MyNotes note={note} initial={mine!.text.trim()} />
+              <MarkdownView content={body.slice(mine!.contentEnd, qsStart)} notePath={note.path} />
+              <Questions note={note} items={questions} />
+              <MarkdownView content={body.slice(qs!.end)} notePath={note.path} />
+            </>
+          ) : (
+            <>
+              <MarkdownView content={body.slice(0, qsStart)} notePath={note.path} />
+              <Questions note={note} items={questions} />
+              <MarkdownView content={body.slice(qs!.end, mineStart)} notePath={note.path} />
+              <MyNotes note={note} initial={mine!.text.trim()} />
+              <MarkdownView content={body.slice(mine!.contentEnd)} notePath={note.path} />
+            </>
+          )
+        ) : mineStart >= 0 ? (
           <>
-            <MarkdownView content={body.slice(0, headingStart)} notePath={note.path} />
-            <MyNotes note={note} initial={mine.text.trim()} />
-            <MarkdownView content={body.slice(mine.contentEnd)} notePath={note.path} />
+            <MarkdownView content={body.slice(0, mineStart)} notePath={note.path} />
+            <MyNotes note={note} initial={mine!.text.trim()} />
+            <MarkdownView content={body.slice(mine!.contentEnd)} notePath={note.path} />
+          </>
+        ) : qsStart >= 0 ? (
+          <>
+            <MarkdownView content={body.slice(0, qsStart)} notePath={note.path} />
+            <Questions note={note} items={questions} />
+            <MarkdownView content={body.slice(qs!.end)} notePath={note.path} />
           </>
         ) : (
           <MarkdownView content={body} notePath={note.path} />

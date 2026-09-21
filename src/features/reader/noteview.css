@@ -95,3 +95,107 @@
 }
 .mynotes-save:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
 .mynotes-save:disabled { opacity: 0.45; cursor: default; }
+
+/* ── Questions ────────────────────────────────────────────────────────────
+   A question, its answer once there is one, and the button that gets one. */
+.qa { margin: 1.6em 0; }
+.qa-empty { color: var(--text-faint); font-size: 13.5px; }
+.qa-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+
+.qa-item {
+  position: relative;
+  /* Room for the delete control, so a long question never runs under it. */
+  padding: 12px 40px 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+.qa-q { font-weight: 600; line-height: 1.55; }
+.qa-a {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+  color: var(--text-muted);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.qa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin-top: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-normal);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.qa-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
+.qa-btn:disabled { opacity: 0.5; cursor: default; }
+.qa-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  margin-top: 0;
+}
+.qa-btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.qa-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.qa-remove:hover:not(:disabled) { background: hsl(354 60% 45% / 0.15); color: var(--text-error); }
+.qa-remove:disabled { opacity: 0.4; cursor: default; }
+
+/* Asking your own. Set apart from the list above: it is a different act. */
+.qa-ask {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+.qa-ask-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.qa-ask-input {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-normal);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+.qa-ask-input:focus { outline: none; border-color: var(--accent); background: var(--bg-primary); }
+.qa-ask-input::placeholder { color: var(--text-faint); }
+.qa-ask-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+.qa-ask-note { font-size: 12px; color: var(--text-faint); }
+.qa-error { margin-top: 10px; font-size: 12.5px; color: var(--text-error); }
