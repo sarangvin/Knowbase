@@ -14,7 +14,7 @@
 // What is left is what has no other way in: search, Ask AI, and the
 // read/edit toggle.
 import { useVault } from '../vault/vaultStore'
-import { ArrowLeft, ArrowRight, Search, Sparkles, Pencil, Eye } from '../ui/icons'
+import { ArrowLeft, ArrowRight, Search, Pencil, Eye } from '../ui/icons'
 import { folderLabel } from '../ui/folderLabels'
 
 export function TopBar() {
@@ -54,9 +54,6 @@ export function TopBar() {
       <div className="topbar-right">
         <button className="icon-btn" title="Search (⌘⇧F)" onClick={() => s.openView({ kind: 'search' })}>
           <Search />
-        </button>
-        <button className="icon-btn" title="Ask AI" onClick={() => s.openView({ kind: 'ask' })}>
-          <Sparkles />
         </button>
         {view?.kind === 'note' && (
           <button

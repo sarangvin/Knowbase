@@ -1,0 +1,50 @@
+/* Shared form controls.
+ *
+ * These four lived in features/ask-ai/ask.css and were loaded only because
+ * the Ask AI panel happened to import it. Settings, Sync, the new-note
+ * modal, the archive overlay and the Questions section all use `.ask-btn`,
+ * so deleting the panel would have quietly unstyled five screens. They keep
+ * their names: renaming them is a separate change, and a rename spread
+ * across five files is how a cleanup becomes a bug.
+ */
+
+.ask-model {
+  margin-left: auto;
+  max-width: 130px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  font-size: 11px;
+  padding: 2px 4px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ask-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-normal);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.ask-btn:hover { background: var(--bg-hover); }
+.ask-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+.ask-btn.primary:hover { background: var(--accent-hover); }
+.ask-btn:disabled { opacity: 0.5; cursor: default; }
+.ask-spin { width: 15px; height: 15px; border-width: 2px; }
+.ask-error {
+  margin: 0 8px;
+  padding: 8px 10px;
+  background: hsl(354 72% 60% / 0.12);
+  border: 1px solid var(--text-error);
+  color: var(--text-error);
+  border-radius: var(--radius-m);
+  font-size: 12.5px;
+}

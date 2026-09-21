@@ -14,6 +14,7 @@ import { MainPane } from './shell/MainPane'
 import { BottomNav } from './shell/BottomNav'
 import { CommandPalette } from './features/palette/CommandPalette'
 import { QuickSwitcher } from './features/palette/QuickSwitcher'
+import './ui/controls.css'
 import './App.css'
 
 // Register native dashboard renderers (Dataview replacement) once.

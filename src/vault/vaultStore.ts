@@ -23,7 +23,6 @@ export type View =
   | { kind: 'graph' }
   | { kind: 'files' }
   | { kind: 'search' }
-  | { kind: 'ask' }
   | { kind: 'quiz' }
   | { kind: 'flashcards' }
   | { kind: 'settings' }

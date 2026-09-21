@@ -6,7 +6,6 @@ import { SettingsPanel } from '../features/settings/SettingsPanel'
 import { QuizView } from '../features/quiz/QuizView'
 import { FlashcardsView } from '../features/flashcards/FlashcardsView'
 import { SearchPanel } from '../features/search/SearchPanel'
-import { AskPanel } from '../features/ask-ai/AskPanel'
 import { TopicLauncher } from '../features/onboarding/TopicLauncher'
 import { listSpaces, isArchived } from '../features/automated-graph/engine'
 import { CollectionCard } from '../features/automated-graph/CollectionCard'
@@ -112,7 +111,6 @@ export function MainPane() {
   // rather than being deleted with it — and a full pane suits both far
   // better than a 290px strip, especially on a phone.
   if (view.kind === 'search') return <div className="side-pane"><SearchPanel /></div>
-  if (view.kind === 'ask') return <div className="side-pane"><AskPanel /></div>
   if (view.kind === 'settings') return <SettingsPanel />
   return <HomeView />
 }
