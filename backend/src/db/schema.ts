@@ -362,3 +362,27 @@ export const customQuestions = pgTable(
   },
   (t) => [index('custom_questions_user_space_day_idx').on(t.userId, t.space, t.day)],
 )
+
+/** One row per collection a user starts.
+ *
+ *  The rate-limit ledger for "how many new collections today". Kept even
+ *  after the collection is deleted or archived, for the same reason the
+ *  custom-question ledger is: a daily limit you can reset by deleting what
+ *  you made is not a limit. The *active* cap is counted from the vault
+ *  itself, not from here — that one is about what you have, and deleting
+ *  really should free it.
+ */
+export const collectionStarts = pgTable(
+  'collection_starts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** The topic as typed. The space name is only decided later, by the
+     *  planner, and this row is written before that happens. */
+    topic: text('topic').notNull(),
+    /** Local YYYY-MM-DD from the client, like every other limit here. */
+    day: text('day').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('collection_starts_user_day_idx').on(t.userId, t.day)],
+)

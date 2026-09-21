@@ -17,6 +17,8 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { runOnboarding } from '../onboarding/run.js'
 import { growSpace, MAX_UNREVIEWED } from '../onboarding/grow.js'
 import { drainQueue, queueDepth, reconcileQueue } from '../onboarding/queue.js'
+import { collectionAllowance, recordCollectionStart } from '../onboarding/limits.js'
+import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 
 export const onboardingRouter = Router()
 onboardingRouter.use(requireAuth)
@@ -46,6 +48,12 @@ const STALE_JOB_MS = 2 * 60_000
  *  side, and the platform's own overhead — a deadline set at the ceiling is
  *  not a deadline. */
 const INVOCATION_BUDGET_MS = 50_000
+
+/** Local YYYY-MM-DD as the client keeps it — the same day the review cap,
+ *  the quiz, the flashcard deck and the question allowance all use. */
+function dayOf(v: unknown): string | null {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null
+}
 
 export interface OnboardingJobView {
   topic: string
@@ -143,6 +151,24 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
     return
   }
 
+  // Checked here, before anything is written, because this is the only door
+  // that creates a collection — adoption from the corpus happens inside the
+  // run below, so it is covered too. A day the client supplies, like every
+  // other limit in this app; the alternative is a fourth definition of what
+  // a day is.
+  const day = dayOf(req.body?.day)
+  const vaultId = await getOrCreatePersonalVaultId(userId)
+  const allowance = await collectionAllowance(userId, vaultId, day ?? '', req.user!.planTier)
+  if (allowance.blocked) {
+    res.status(429).json({
+      error: allowance.blocked,
+      activeCount: allowance.activeCount,
+      startedToday: allowance.startedToday,
+      limits: allowance.limits,
+    })
+    return
+  }
+
   // Upsert: a retry after a failure, or a different topic, replaces the row.
   // There is one first-run job per user, so a history here would only raise
   // the question of which row the notification means.
@@ -164,9 +190,21 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
       },
     })
 
+  if (day) await recordCollectionStart(userId, raw, day)
+
   res.status(202).json({ job: await currentJob(userId) })
 
   waitUntil(runOnboarding(userId, raw))
+}))
+
+/** What the caller may still start today. The home screen can work the
+ *  active count out from the vault it already holds, but not the daily one,
+ *  and a launcher that accepts a topic and then refuses it is worse than one
+ *  that says so up front. */
+onboardingRouter.get('/allowance', asyncHandler(async (req, res) => {
+  const day = dayOf(req.query.day) ?? ''
+  const vaultId = await getOrCreatePersonalVaultId(req.user!.id)
+  res.json(await collectionAllowance(req.user!.id, vaultId, day, req.user!.planTier))
 }))
 
 /** Top a space back up after a note is marked reviewed.

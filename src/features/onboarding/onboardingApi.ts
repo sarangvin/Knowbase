@@ -5,6 +5,7 @@
 // the note format — is gone, not moved. It lives in backend/src/onboarding/,
 // because work that only happens while a tab is open is work that silently
 // doesn't happen when someone locks their phone.
+import { localDay } from '../automated-graph/engine'
 
 export interface OnboardingJob {
   topic: string
@@ -37,7 +38,9 @@ export async function startOnboarding(topic: string): Promise<OnboardingJob> {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic }),
+    // The day goes with it: the daily cap is counted in the user's own
+    // calendar day, like every other limit here.
+    body: JSON.stringify({ topic, day: localDay() }),
   })
   if (!res.ok) throw new Error(await readError(res, `Could not start building your space (${res.status}).`))
   const { job } = (await res.json()) as { job: OnboardingJob }
@@ -107,4 +110,27 @@ export function requestSpaceGrowth(space: string): void {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ space }),
   }).catch((err) => console.warn('[grow] could not request more topics:', err))
+}
+
+export interface CollectionAllowance {
+  limits: { active: number; perDay: number }
+  activeCount: number
+  startedToday: number
+  /** Null when they may start one; otherwise why not, ready to show. */
+  blocked: string | null
+}
+
+/** Null when the question cannot be answered — not signed in, not approved,
+ *  offline. The launcher treats that as "let them try": being refused by the
+ *  server is a better outcome than being blocked by a failed lookup. */
+export async function fetchCollectionAllowance(): Promise<CollectionAllowance | null> {
+  try {
+    const res = await fetch(`/api/onboarding/allowance?day=${encodeURIComponent(localDay())}`, {
+      credentials: 'include',
+    })
+    if (!res.ok) return null
+    return (await res.json()) as CollectionAllowance
+  } catch {
+    return null
+  }
 }

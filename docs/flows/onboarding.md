@@ -106,6 +106,39 @@ undercount.
 
 ---
 
+## Limits
+
+Free plan, in `onboarding/limits.ts` — one table, so a number and the copy
+describing it cannot disagree.
+
+| | |
+|---|---|
+| Active collections | **5** |
+| New collections per day | **3** |
+
+Two different questions, answered from two different places on purpose.
+
+**Active** is about what you have, so it is counted from the vault:
+collections that exist, minus archived ones. Archiving is how you make room
+under the cap without losing anything, which is most of why that feature
+earns its place. Deleting frees a slot too.
+
+**Per day** is about what you spend, so it is counted from
+`collection_starts`, a ledger that outlives what it paid for. A daily limit
+you can reset by deleting this morning's collection is not a limit, and
+each collection is six model calls against a ceiling everyone shares.
+
+Both are checked at `POST /api/onboarding/start`, which is the only door
+that creates one — adoption from the corpus happens inside the run behind
+it, so it is covered by the same check. The row is written only once the
+job is actually created, so a refused request never counts against the day.
+
+When both are hit the **active** message is shown, because it is the one
+the reader can act on now; telling them to come back tomorrow when the real
+problem is a full shelf sends them away for nothing.
+
+---
+
 ## Invariants
 
 - **`confidence: 0` and an empty `last_reviewed`.** "Brand new" is a product

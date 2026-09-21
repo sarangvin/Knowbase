@@ -9,9 +9,9 @@
 // It does not wait for anything. Generation is server-side, so the moment the
 // job is accepted the user can carry on reading; OnboardingBanner tells them
 // when the space is ready, from wherever they happen to be.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { startOnboarding } from './onboardingApi'
+import { startOnboarding, fetchCollectionAllowance, type CollectionAllowance } from './onboardingApi'
 import { randomTopicPlaceholder } from './examples'
 import { Sparkles, ArrowRight } from '../../ui/icons'
 
@@ -32,11 +32,28 @@ export function TopicLauncher({
   const [busy, setBusy] = useState(false)
   const [started, setStarted] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Null means "we could not ask" as well as "not asked yet", and both are
+  // treated as permission: the server refuses for real, and a failed lookup
+  // must not be what stops somebody starting a collection.
+  const [allowance, setAllowance] = useState<CollectionAllowance | null>(null)
+
+  const approved = !!user?.accessApproved
+
+  // Re-read after every start, because starting one is exactly what uses
+  // the allowance up.
+  useEffect(() => {
+    if (!approved) return
+    let cancelled = false
+    void fetchCollectionAllowance().then((a) => !cancelled && setAllowance(a))
+    return () => {
+      cancelled = true
+    }
+  }, [approved, started])
 
   // Generation spends the owner's model key, so the server refuses an
   // unapproved account. Saying so here beats letting them type a topic and
   // then handing back a 403.
-  if (!user?.accessApproved) return null
+  if (!approved) return null
 
   const submit = async () => {
     const t = topic.trim()
@@ -69,6 +86,17 @@ export function TopicLauncher({
     )
   }
 
+  // Said before they type, not after. Being asked for a topic and then
+  // refused is the shape of a form that wasted your time.
+  if (allowance?.blocked) {
+    return (
+      <div className="launcher">
+        <div className="launcher-title">{title}</div>
+        <p className="launcher-hint">{allowance.blocked}</p>
+      </div>
+    )
+  }
+
   return (
     <div className="launcher">
       <div className="launcher-title">{title}</div>
@@ -87,6 +115,11 @@ export function TopicLauncher({
         </button>
       </div>
       {error && <div className="ob-error launcher-error">{error}</div>}
+      {allowance && allowance.limits.perDay - allowance.startedToday <= 1 && (
+        <p className="launcher-hint">
+          {allowance.limits.perDay - allowance.startedToday} new collection left today.
+        </p>
+      )}
     </div>
   )
 }
