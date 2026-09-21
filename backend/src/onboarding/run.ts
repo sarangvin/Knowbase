@@ -13,7 +13,7 @@
 // Progress is written to onboarding_jobs as it goes, because once nobody is
 // watching a spinner the only way to tell someone their space is ready is to
 // have recorded that it is.
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes, onboardingJobs } from '../db/schema.js'
 import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
@@ -51,28 +51,6 @@ async function patchJob(userId: string, patch: JobPatch): Promise<void> {
  *  queue.ts's own check — both answer "has this note been written yet?" */
 function isPlaceholder(content: string): boolean {
   return /_A fuller draft of this note is being written/.test(content)
-}
-
-/** Writes the note only if it still holds exactly the text we created it with.
- *  Anything else is the user's own writing — they have had the space open the
- *  whole time this was running, so this is a live race, not a theoretical one. */
-async function replaceIfUntouched(
-  vaultId: string,
-  path: string,
-  placeholder: string,
-  content: string,
-): Promise<boolean> {
-  const existing = await db
-    .select({ content: notes.content })
-    .from(notes)
-    .where(and(eq(notes.vaultId, vaultId), eq(notes.path, path)))
-    .limit(1)
-  if (!existing[0] || existing[0].content !== placeholder) return false
-  await db
-    .update(notes)
-    .set({ content, sizeBytes: Buffer.byteLength(content, 'utf8'), mtime: new Date() })
-    .where(and(eq(notes.vaultId, vaultId), eq(notes.path, path)))
-  return true
 }
 
 /**

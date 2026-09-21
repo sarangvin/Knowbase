@@ -25,6 +25,7 @@ export type View =
   | { kind: 'search' }
   | { kind: 'ask' }
   | { kind: 'quiz' }
+  | { kind: 'flashcards' }
   | { kind: 'settings' }
   | { kind: 'home' }
 

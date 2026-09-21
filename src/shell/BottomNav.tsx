@@ -18,14 +18,8 @@ type TabId = 'next' | 'files' | 'flashcards' | 'quiz' | 'settings'
 export function BottomNav() {
   const view = useVault((s) => s.activeView())
   const index = useVault((s) => s.index)
-  const openNote = useVault((s) => s.openNote)
   const openView = useVault((s) => s.openView)
   const getNote = useVault((s) => s.getNote)
-
-  const notes = index ? [...index.notes.values()] : []
-
-  const flashcardsPath = (): string | null =>
-    notes.find((n) => /(^|\/)Flashcards\.md$/i.test(n.path))?.path ?? null
 
   // Learn always goes to the collections home.
   //
@@ -43,18 +37,17 @@ export function BottomNav() {
     if (view?.kind === 'home') return 'next'
     if (view?.kind === 'files') return 'files'
     if (view?.kind === 'quiz') return 'quiz'
+    if (view?.kind === 'flashcards') return 'flashcards'
     if (view?.kind === 'settings') return 'settings'
     if (view?.kind === 'note') {
       if (/\/Next Up\.md$/i.test(view.path)) return 'next'
+      // The vault's own Flashcards.md dashboard still exists and is still
+      // openable from Files; the tab no longer points at it, but landing on
+      // it should still light this tab up rather than none.
       if (/(^|\/)Flashcards\.md$/i.test(view.path)) return 'flashcards'
     }
     return null
   })()
-
-  // Destinations that depend on a note existing are disabled rather than
-  // hidden: a nav bar whose buttons appear and disappear as you move around
-  // is disorienting, and the demo vault has all of them anyway.
-  const cardsPath = flashcardsPath()
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }[] = [
     {
@@ -64,13 +57,11 @@ export function BottomNav() {
       onClick: () => openView({ kind: 'home' }),
     },
     { id: 'files', label: 'Files', icon: <Folder />, onClick: () => openView({ kind: 'files' }) },
-    {
-      id: 'flashcards',
-      label: 'Flashcards',
-      icon: <Layers />,
-      onClick: () => cardsPath && openNote(cardsPath),
-      disabled: !cardsPath,
-    },
+    // Was a link to the vault's Flashcards.md dashboard, and so was disabled
+    // on any vault that happened not to have that file. It is a destination
+    // now, like Quiz: the cards are dealt by the server from reviewed notes,
+    // not read out of a note.
+    { id: 'flashcards', label: 'Flashcards', icon: <Layers />, onClick: () => openView({ kind: 'flashcards' }) },
     { id: 'quiz', label: 'Quiz', icon: <Carrot />, onClick: () => openView({ kind: 'quiz' }) },
     { id: 'settings', label: 'Settings', icon: <Settings />, onClick: () => openView({ kind: 'settings' }) },
   ]

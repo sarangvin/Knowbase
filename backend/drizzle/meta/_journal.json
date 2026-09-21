@@ -71,6 +71,13 @@
       "when": 1789920141249,
       "tag": "0009_thin_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790013974104,
+      "tag": "0010_early_sway",
+      "breakpoints": true
     }
   ]
 }

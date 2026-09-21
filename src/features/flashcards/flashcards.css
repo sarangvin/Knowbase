@@ -1,0 +1,226 @@
+/* The flashcards tab. Mobile-first, like the quiz: the card fills the width,
+   and every control is a real touch target. */
+
+.fc-wrap { max-width: 640px; }
+
+/* ── Empty / deal ────────────────────────────────────────────────────────── */
+.fc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 8vh 0 0;
+  color: var(--text-muted);
+}
+/* The same burrow mark as the quiz and the landing screen — three hero
+   icons in one product should read as one family. */
+.fc-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, hsl(var(--accent-h) 80% 50% / 0.2), var(--bg-deep) 96%);
+  border: 1px solid var(--accent-line);
+  box-shadow: 0 0 0 7px hsl(var(--accent-h) 70% 45% / 0.06);
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.fc-empty h1 { font-size: 1.55em; margin: 0; color: var(--text-normal); }
+.fc-empty p { margin: 0; max-width: 42ch; line-height: 1.6; font-size: 14px; }
+
+.fc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-normal);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fc-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
+.fc-btn:disabled { opacity: 0.4; cursor: default; }
+.fc-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  margin-top: 6px;
+}
+.fc-btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.fc-error {
+  padding: 8px 12px;
+  border: 1px solid hsl(354 60% 45%);
+  border-radius: 8px;
+  color: var(--text-error);
+  font-size: 13px;
+}
+
+.fc-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+/* ── The stack ───────────────────────────────────────────────────────────── */
+.fc-run { display: flex; flex-direction: column; align-items: center; gap: 18px; padding-top: 4px; }
+
+.fc-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.fc-progress-bar {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.fc-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+.fc-progress-seen { color: var(--text-faint); }
+
+/* The container is what owns the size. The card is absolutely positioned
+   inside it so the two faces can occupy the same space without the taller
+   one deciding the height on its own. */
+.fc-stack {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  /* Room for the edges below, so they are not sitting on the controls. */
+  margin-bottom: 10px;
+  perspective: 1200px;
+}
+
+/* Static edges behind the card: "there are more of these", without an
+   animation that would fight the flip. */
+.fc-stack-edge {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-secondary);
+}
+/* scaleX, not scale: a uniform scale shrinks the box vertically too and
+   eats most of the offset — at translateY(8px) scale(0.975) the edge peeked
+   4.3px, measured, which reads as a rendering artefact rather than a stack. */
+.fc-stack-2 { transform: translateY(8px) scaleX(0.97); opacity: 0.8; }
+.fc-stack-3 { transform: translateY(16px) scaleX(0.94); opacity: 0.5; }
+
+.fc-card {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  /* The flip lives on the inner element so the button keeps a normal,
+     un-transformed box for hit testing and focus. */
+  -webkit-tap-highlight-color: transparent;
+}
+.fc-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 16px; }
+
+.fc-card-inner {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.fc-card.is-flipped .fc-card-inner { transform: rotateY(180deg); }
+
+.fc-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-primary);
+  box-shadow: 0 6px 20px hsl(0 0% 0% / 0.25);
+  /* Without this both faces paint and the back shows through the front as
+     mirrored text. */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: auto;
+}
+.fc-back { transform: rotateY(180deg); border-color: var(--accent-line); }
+
+.fc-kind {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+/* A term is short and is the thing being recalled, so it gets the weight.
+   A definition is a sentence and is read, so it gets line height. */
+.fc-term {
+  font-size: 1.7em;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--text-normal);
+  text-wrap: balance;
+}
+.fc-def {
+  font-size: 1.02em;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--text-normal);
+  max-width: 40ch;
+  text-wrap: pretty;
+}
+.fc-hint { font-size: 11.5px; color: var(--text-faint); }
+
+.fc-controls { display: flex; gap: 10px; width: 100%; }
+.fc-controls .fc-btn { flex: 1; }
+
+.fc-source {
+  border: 0;
+  background: none;
+  padding: 2px 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+}
+.fc-source:hover { color: var(--accent); }
+
+/* Taller cards on a phone: a definition that scrolls inside the card is
+   worse than one that fits, and there is more vertical room than width. */
+@media (max-width: 560px) {
+  .fc-stack { height: 340px; }
+  .fc-term { font-size: 1.5em; }
+}
+
+/* A flip is decoration; the content change is the information. */
+@media (prefers-reduced-motion: reduce) {
+  .fc-card-inner { transition: none; }
+  .fc-progress-bar > span { transition: none; }
+}

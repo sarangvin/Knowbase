@@ -266,3 +266,36 @@ export interface QuizQuestionRow {
   /** Index into options, or null while unanswered. */
   chosen: number | null
 }
+
+/** One deck of flashcards per user per day.
+ *
+ *  Same shape and same reasoning as `quizzes`: the row is the whole deck, so
+ *  reopening the tab shows the cards you were given rather than quietly
+ *  dealing a new hand, and the daily limit is a unique index rather than
+ *  something the client is trusted to honour. Which side each card opens on
+ *  is stored too — a card that flips to a different face on reload is a
+ *  different card.
+ */
+export const flashcardDecks = pgTable(
+  'flashcard_decks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** Local YYYY-MM-DD from the client, like the quiz and the review cap. */
+    day: text('day').notNull(),
+    /** [{ notePath, noteTitle, term, definition, front }] */
+    cards: jsonb('cards').$type<FlashcardRow[]>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('flashcard_decks_user_day_unique').on(t.userId, t.day)],
+)
+
+export interface FlashcardRow {
+  notePath: string
+  noteTitle: string
+  term: string
+  definition: string
+  /** Which face is shown before the first tap. Decided when the deck is
+   *  dealt, not at render time, so it survives a reload. */
+  front: 'term' | 'definition'
+}
