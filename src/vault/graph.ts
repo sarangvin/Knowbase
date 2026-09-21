@@ -4,6 +4,7 @@
 // preferring an exact-path match when the link includes folders.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { GraphData, Note, VaultIndex } from './types'
+import { archivedSpaces, spaceOfPath } from './collections'
 
 function norm(s: string): string {
   return s.trim().toLowerCase()
@@ -78,38 +79,54 @@ export function backlinksOf(index: VaultIndex, path: string): string[] {
 }
 
 /** Build force-graph data. When `focusPath` is set, returns the local neighborhood. */
-/** Generated scaffolding, which is not knowledge and does not belong in a
- *  graph of what the vault is about.
+/** Generated scaffolding: dashboards, settings and boilerplate. None of it
+ *  is knowledge, and none of it belongs in a graph of what a vault is
+ *  about.
  *
- *  - **Next Up** — one per collection, linked to whatever it happens to be
- *    recommending today, so it is a hub wired to half the vault. An
- *    artefact of how the app works, drawn with the same weight as a real
- *    idea and crowding out the structure the graph is for.
- *  - **_config** — a settings file. It was already a stray unconnected dot
- *    in every collection that had one, and archiving now *writes* one for
- *    any collection that did not, so setting a subject aside would have
- *    added a node to the graph. */
-const DASHBOARD_RE = /(^|\/)(Next Up|_config)\.md$/i
+ *  Next Up is the worst of them — one per collection, linked to whatever it
+ *  is recommending today, so it is a hub wired to half the vault, drawn
+ *  with the same weight as a real idea. _config is a settings file, and
+ *  archiving *writes* one for any collection that lacks it, so setting a
+ *  subject aside would otherwise add a node. The rest are stray dots. */
+const SCAFFOLD_NAMES = /^(Next Up|_config|Today|Quiz|Flashcards|README|Topic Note|Welcome)\.md$/i
 
-function isDashboard(path: string): boolean {
-  return DASHBOARD_RE.test(path)
+function isScaffold(path: string): boolean {
+  // Never anything under Topics/. That folder is the vault's actual
+  // content, and a topic note is a topic note whatever it is called — a
+  // subject with a note named "Welcome" or "Quiz" is not far-fetched, and
+  // silently dropping it from the graph would be a worse bug than the one
+  // being fixed.
+  if (path.includes('/Topics/')) return false
+  return SCAFFOLD_NAMES.test(path.split('/').pop() ?? '')
 }
 
 export function buildGraphData(index: VaultIndex, focusPath?: string, depth = 1): GraphData {
+  // A collection that has been set aside is not part of the picture of what
+  // this vault is about. Its notes are all still there — Files still lists
+  // them — but the graph answers "how does this subject hang together", and
+  // a subject you have shelved is not one of the answers.
+  const archived = archivedSpaces(index)
+  const hidden = (p: string): boolean => {
+    if (isScaffold(p)) return true
+    const space = spaceOfPath(p)
+    return space != null && archived.has(space)
+  }
+
   const includeAll = !focusPath
   let included: Set<string>
   if (includeAll) {
-    included = new Set([...index.notes.keys()].filter((p) => !isDashboard(p)))
+    included = new Set([...index.notes.keys()].filter((p) => !hidden(p)))
   } else {
-    // The focus is always in, even if it is a dashboard: someone looking at
-    // that note should still see its neighbourhood rather than a blank pane.
+    // The focus is always in, even if it is hidden by the rules above:
+    // someone looking at a note — in an archived collection, or a dashboard
+    // — should see its neighbourhood rather than a blank pane.
     included = new Set([focusPath!])
     let frontier = new Set([focusPath!])
     for (let d = 0; d < depth; d++) {
       const next = new Set<string>()
       for (const p of frontier) {
-        for (const f of index.forwardlinks.get(p) ?? []) if (!included.has(f) && !isDashboard(f)) next.add(f)
-        for (const b of index.backlinks.get(p) ?? []) if (!included.has(b) && !isDashboard(b)) next.add(b)
+        for (const f of index.forwardlinks.get(p) ?? []) if (!included.has(f) && !hidden(f)) next.add(f)
+        for (const b of index.backlinks.get(p) ?? []) if (!included.has(b) && !hidden(b)) next.add(b)
       }
       next.forEach((p) => included.add(p))
       frontier = next

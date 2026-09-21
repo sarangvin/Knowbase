@@ -3,6 +3,7 @@
 // real .md files exactly. Pure — no React, no store.
 import type { Note, VaultIndex } from '../../vault/types'
 import { resolveTarget } from '../../vault/graph'
+import { spaceOfPath } from '../../vault/collections'
 
 export interface SpaceConfig {
   confidence_threshold: number
@@ -25,20 +26,11 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
-/** "Automated Graph/<Space>/..." -> "<Space>". */
-export function spaceOfPath(path: string): string | null {
-  const m = path.match(/^Automated Graph\/([^/]+)\//)
-  return m ? m[1] : null
-}
-
-/** Archived collections are set aside, not deleted: every note stays where
- *  it was, but the collection drops off the home screen and stops feeding
- *  quizzes, flashcards and growth. The flag lives in the space's own
- *  `_config.md` so the vault carries it — the server reads the same line. */
-export function isArchived(index: VaultIndex, space: string): boolean {
-  const v = index.notes.get(`Automated Graph/${space}/_config.md`)?.frontmatter?.archived
-  return v === true || String(v).toLowerCase() === 'true'
-}
+// Moved to vault/collections.ts so vault/graph.ts can use them too — it
+// cannot import this file, which imports it. Re-exported because most
+// callers think of these as part of the graph engine.
+export { isArchived, archivedSpaces } from '../../vault/collections'
+export { spaceOfPath }
 
 export function listSpaces(index: VaultIndex): string[] {
   const spaces = new Set<string>()
