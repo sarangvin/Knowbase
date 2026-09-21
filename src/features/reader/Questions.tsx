@@ -14,13 +14,13 @@ import { useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { slugify } from '../../vault/parse'
 import { spaceOfPath } from '../../vault/collections'
-import { Sparkles, Trash, HelpCircle } from '../../ui/icons'
+import { Sparkles, Trash, HelpCircle, Eye } from '../../ui/icons'
 import { answerQuestion, deleteQuestion, fetchAllowance, type Allowance } from './questionsApi'
 import type { ReaderQuestion } from './questionsFormat'
 import type { Note } from '../../vault/types'
 
 export function Questions({ note, items }: { note: Note; items: ReaderQuestion[] }) {
-  const reload = useVault((s) => s.reload)
+  const refreshNote = useVault((s) => s.refreshNote)
   const writable = useVault((s) => s.writable)
   const user = useVault((s) => s.user)
 
@@ -28,6 +28,10 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  // Which answers the reader has chosen to see. Collapsed by default even
+  // when the answer is already in the note: a question you can read the
+  // answer to without asking is not a question, it is a paragraph.
+  const [shown, setShown] = useState<Record<string, boolean>>({})
   const [allowance, setAllowance] = useState<Allowance | null>(null)
 
   // Every button here calls the server, so all of them need an account —
@@ -38,6 +42,10 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
   // Asking your own also needs a collection, because the allowance is
   // counted per collection.
   const canAsk = canAnswer && !!space
+
+  // A different note is a different set of questions; nothing should
+  // arrive already revealed.
+  useEffect(() => setShown({}), [note.path])
 
   useEffect(() => {
     if (!canAsk || !space) return
@@ -55,10 +63,10 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
     setError(null)
     try {
       await fn()
-      // The note changed on the server. Re-read rather than patching: the
-      // answer was written into the markdown, and this component renders
-      // what the markdown says.
-      await reload()
+      // One note changed on the server, so re-read that one. A full
+      // reload() would show the "Digging the tunnels…" screen and drop the
+      // reader back on Next Up, which is what it used to do here.
+      await refreshNote(note.path)
       if (canAsk && space) setAllowance(await fetchAllowance(space).catch(() => allowance ?? null))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -72,6 +80,10 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
     if (q.length < 5) return
     void run('new', async () => {
       await answerQuestion(note.path, q, true)
+      // Shown straight away: they asked it a second ago and watched it
+      // spin. Making them press Answer on their own question would be
+      // asking twice.
+      setShown((m) => ({ ...m, [q]: true }))
       setDraft('')
     })
   }
@@ -95,14 +107,28 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
         {items.map((q) => (
           <li key={q.question} className="qa-item">
             <div className="qa-q">{q.question}</div>
-            {q.answer ? (
+            {shown[q.question] && q.answer ? (
               <div className="qa-a">{q.answer}</div>
+            ) : q.answer ? (
+              // Already written, by the note's own draft. Revealing it is
+              // instant and costs nothing — no spinner, no model call.
+              <button className="qa-btn" onClick={() => setShown((m) => ({ ...m, [q.question]: true }))}>
+                <Eye width={13} height={13} /> Answer
+              </button>
             ) : (
               canAnswer && (
+                // Older notes were drafted before answers were written with
+                // them, so these still have to be generated. Same button,
+                // and the only one that waits.
                 <button
                   className="qa-btn"
                   disabled={busy != null}
-                  onClick={() => void run(q.question, () => answerQuestion(note.path, q.question, false))}
+                  onClick={() =>
+                    void run(q.question, async () => {
+                      await answerQuestion(note.path, q.question, false)
+                      setShown((m) => ({ ...m, [q.question]: true }))
+                    })
+                  }
                 >
                   {busy === q.question ? <span className="spinner" /> : <Sparkles width={13} height={13} />}
                   {busy === q.question ? 'Answering…' : 'Answer'}

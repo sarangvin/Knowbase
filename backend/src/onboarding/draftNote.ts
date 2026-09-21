@@ -28,9 +28,16 @@ Rules:
   "overview": string,     // 2-3 short paragraphs of plain prose explaining what this subtopic
                           // is and why it matters. Markdown emphasis is fine; no headings.
   "key_points": string[], // 4-6 concrete, specific things worth knowing. Each one sentence.
-  "questions": string[]   // 3 questions the learner should be able to answer once they know
-                          // this. Real comprehension questions, not "what is X?".
+  "questions": [          // 3 of them. Real comprehension questions, not "what is X?".
+    {
+      "q": string,        // a question the learner should be able to answer once they know this
+      "a": string         // the answer, 2-4 sentences, answered from what you wrote above
+    }
+  ]
 }
+- Every question comes with its answer. The reader sees the question first and
+  reveals the answer when they want it, so the answer must stand on its own and
+  must not be a restatement of the question.
 - Write for a beginner: define jargon the first time you use it.
 - Be concrete. Prefer a specific example or number over a general claim.
 - Do NOT invent URLs, citations, book titles or paper references of any kind.
@@ -65,7 +72,17 @@ function sanitizeInline(t: string): string {
  *  the whole note here would duplicate the client's frontmatter logic and let
  *  the two drift; the placeholder already has correct frontmatter, title and
  *  section skeleton, so only the body it was holding open needs filling. */
-function fillPlaceholder(placeholder: string, overview: string, keyPoints: string[], questions: string[]): string {
+interface DraftQuestion {
+  q: string
+  a: string
+}
+
+function fillPlaceholder(
+  placeholder: string,
+  overview: string,
+  keyPoints: string[],
+  questions: DraftQuestion[],
+): string {
   const ai =
     sanitizeBlock(overview) +
     (keyPoints.length ? '\n\n**Key points**\n\n' + keyPoints.map((k) => `- ${sanitizeInline(k)}`).join('\n') : '')
@@ -78,8 +95,16 @@ function fillPlaceholder(placeholder: string, overview: string, keyPoints: strin
   // this is what makes the "(Coming soon)" marker disappear on its own.
   out = out.replace(/^pending:\s*true[ \t]*\r?\n/m, '')
   if (questions.length) {
+    // `Q:` / `A:` blocks, not bullets. The bullet shape is why this section
+    // did nothing for months: everything that acts on a question looks for
+    // `Q:`. Writing the answer here as well is what makes the reader's
+    // Answer button a reveal rather than a model call — see
+    // docs/flows/questions.md.
     out = out.replace(/(^## Questions\n\n)([\s\S]*)$/m, (_m, head: string) => {
-      return `${head}${questions.map((q) => `- ${sanitizeInline(q)}`).join('\n')}\n`
+      const blocks = questions.map((q) =>
+        q.a ? `Q: ${sanitizeInline(q.q)}\n\nA: ${sanitizeInline(q.a)}` : `Q: ${sanitizeInline(q.q)}`,
+      )
+      return `${head}${blocks.join('\n\n')}\n`
     })
   }
   return out
@@ -115,7 +140,22 @@ Write the first-draft study note for "${item.title}" as specified.`
       if (!overview) continue
       const strings = (v: unknown) =>
         Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter(Boolean) : []
-      return fillPlaceholder(item.placeholder, overview, strings(parsed.key_points), strings(parsed.questions))
+      // Tolerates the old shape — a bare string — so a model that ignores
+      // the schema still yields a question, just without its answer. The
+      // reader's Answer button falls back to generating one.
+      const questions: DraftQuestion[] = Array.isArray(parsed.questions)
+        ? parsed.questions
+            .map((x): DraftQuestion => {
+              if (typeof x === 'string') return { q: x.trim(), a: '' }
+              const o = (x ?? {}) as { q?: unknown; a?: unknown }
+              return {
+                q: typeof o.q === 'string' ? o.q.trim() : '',
+                a: typeof o.a === 'string' ? o.a.trim() : '',
+              }
+            })
+            .filter((x) => x.q)
+        : []
+      return fillPlaceholder(item.placeholder, overview, strings(parsed.key_points), questions)
     } catch (err) {
       console.warn(`[draft-notes] "${item.title}" attempt ${attempt + 1} failed:`, err)
     }

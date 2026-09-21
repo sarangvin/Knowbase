@@ -38,12 +38,25 @@ not there.
 
 | # | Step | Owner |
 |---|---|---|
-| 1 | Parse the section for display | `reader/questionsFormat.ts` |
-| 2 | Answer a question | `POST /api/notes/answer` |
-| 3 | Add one of your own | the same route, `custom: true` |
-| 4 | Generate the answer from the note | `notes/questions.ts` → `generateAnswer` |
-| 5 | Write it back into the note | `setAnswer` → the `notes` row |
-| 6 | Delete a question and its answer | `DELETE /api/notes/question` |
+| 1 | Write the questions **and their answers** with the note's first draft | `onboarding/draftNote.ts` |
+| 2 | Parse the section for display | `reader/questionsFormat.ts` |
+| 3 | Reveal an answer already in the note | the client, no request |
+| 4 | Answer one that has none | `POST /api/notes/answer` |
+| 5 | Add one of your own | the same route, `custom: true` |
+| 6 | Generate the answer from the note | `notes/questions.ts` → `generateAnswer` |
+| 7 | Write it back into the note | `setAnswer` → the `notes` row |
+| 8 | Delete a question and its answer | `DELETE /api/notes/question` |
+
+**Answers are written with the note, not on demand.** The draft call that
+writes `## AI Notes` now returns `{q, a}` pairs and writes `Q:`/`A:`
+blocks, at the same cost and the same latency — measured at 3.5s for a note
+with three answered questions. So Answer is a *reveal*: instant, free, and
+available offline. Only a note drafted before this change has to generate
+one, and the button falls back to doing that with a spinner.
+
+Collapsed by default even though the answer is sitting in the markdown. A
+question you can read the answer to without asking is not a question, it is
+a paragraph.
 
 **Grounded in `## AI Notes`**, not in what the model knows about the title,
 and capped at 4,000 characters. Measured at ~1s for a 3-sentence answer.
@@ -61,8 +74,13 @@ describing it cannot disagree.
 
 - **The server owns every write.** Answers cost a model call and custom
   questions are rate-limited; a limit the client enforces is not a limit.
-  The client re-reads the vault afterwards rather than patching state, so
-  what is on screen is what is in the note.
+- **One note changed means one note re-read.** `refreshNote(path)` re-parses
+  and re-indexes that note alone. Calling `reload()` here — which is what
+  this did at first — goes through `loadFromSource`, which sets status to
+  `loading` and rebuilds the tab stack: the reader got the full-screen
+  "Digging the tunnels…" and landed back on Next Up after pressing Answer.
+  `reload()` is still right for a change to the *vault* — a collection
+  archived, deleted or newly built — and wrong for a change to one note.
 - **A non-custom question must already be on the note.** Otherwise the
   route is a general-purpose model proxy with a note path attached.
 - **A failed generation charges nothing and writes nothing.** The ledger
@@ -103,6 +121,10 @@ content.
 ---
 
 ## Known gaps
+
+- **Old notes have no preloaded answers.** Anything drafted before answers
+  were written with the note still generates on demand. There is no
+  backfill; they fill in as people press the button.
 
 - **Sync still folds `## My Notes` into `## AI Notes`.** That was harmless
   while nothing wrote to My Notes; now it is a real editor, running Sync

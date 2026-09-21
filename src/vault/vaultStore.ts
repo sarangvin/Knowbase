@@ -77,6 +77,7 @@ interface VaultState {
   pickFolder: () => Promise<void>
   tryRestoreFolder: () => Promise<boolean>
   reload: () => Promise<void>
+  refreshNote: (path: string) => Promise<void>
 
   // ── actions: auth + cloud vault ──
   checkAuth: () => Promise<void>
@@ -298,6 +299,25 @@ export const useVault = create<VaultState>((set, get) => {
     reload: async () => {
       const src = get().source
       if (src) await loadFromSource(src)
+    },
+
+    /** Re-read one note and re-index, leaving everything else alone.
+     *
+     *  `reload()` is the wrong tool when the server has changed a single
+     *  note: it goes through loadFromSource, which sets status to 'loading'
+     *  — the full-screen "Digging the tunnels…" — and rebuilds `tabs` from
+     *  scratch, which lands the reader back on Next Up. Answering a question
+     *  did exactly that. This is saveNote's cheap local re-index without the
+     *  write, because the write already happened on the server. */
+    refreshNote: async (path) => {
+      const { source, index } = get()
+      if (!source || !index) return
+      const text = await source.readText(path)
+      const note = parseNote(path, text, Date.now())
+      const all = [...index.notes.values()].filter((n) => n.path !== path)
+      all.push(note)
+      _searchIndex = buildSearch(all)
+      set({ index: buildIndex(all) })
     },
 
     checkAuth: async () => {
