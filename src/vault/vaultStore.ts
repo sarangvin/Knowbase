@@ -12,6 +12,7 @@ import { RemoteVaultSource, fetchCurrentUser, signInWithGoogle, signOut, type Re
 import { parseNote } from './parse'
 import { buildIndex, resolveTarget } from './graph'
 import { buildTree } from './tree'
+import { spaceOfPath } from '../features/automated-graph/engine'
 
 // Sections reachable from the bottom nav are views, not a parallel routing
 // concept: that way back/forward, tabs and the command palette all work on
@@ -149,6 +150,43 @@ function snippetFor(note: Note, query: string): string {
   return (start > 0 ? '…' : '') + text.slice(start, start + 160).trim() + '…'
 }
 
+
+// ─── Where you were ──────────────────────────────────────────────────────────
+// The landing note used to be the first "Next Up.md" in file order, which is
+// the oldest collection — so someone with three collections was returned to
+// whichever one they made first, forever. Remember the last one they actually
+// opened instead.
+//
+// Per-device by design: this is "where I left off on this machine", not a
+// preference worth syncing, and localStorage needs no round-trip before the
+// first paint. Keyed by user id so signing in as someone else on a shared
+// browser does not inherit their place. Every access is wrapped — storage
+// throws outright in a locked-down browser, and losing the memory is a worse
+// landing note, not an error.
+const LAST_SPACE_KEY = 'kb:last-space'
+
+function lastSpaceKey(userId?: string | null): string {
+  return `${LAST_SPACE_KEY}:${userId ?? 'local'}`
+}
+
+function readLastSpace(userId?: string | null): string | null {
+  try {
+    return localStorage.getItem(lastSpaceKey(userId))
+  } catch {
+    return null
+  }
+}
+
+function rememberSpace(userId: string | null | undefined, path: string): void {
+  const space = spaceOfPath(path)
+  if (!space) return
+  try {
+    localStorage.setItem(lastSpaceKey(userId), space)
+  } catch {
+    // Private mode, blocked storage. Nothing downstream depends on this.
+  }
+}
+
 export const useVault = create<VaultState>((set, get) => {
   async function loadFromSource(source: VaultSource) {
     set({ status: 'loading', error: null, source, sourceName: source.name, writable: source.writable })
@@ -166,7 +204,13 @@ export const useVault = create<VaultState>((set, get) => {
       // because it answers the question the product exists to answer — what
       // should I study now — whereas Welcome is boilerplate the reader has
       // already seen once.
+      // Landing preference, most specific first: the collection you last
+      // opened, then any Next Up, then the boilerplate.
+      const remembered = readLastSpace(get().user?.id)
       const preferred =
+        (remembered
+          ? parsed.find((n) => n.path === `Automated Graph/${remembered}/Next Up.md`)
+          : undefined) ??
         parsed.find((n) => /\/Next Up\.md$/i.test(n.path)) ??
         parsed.find((n) => /(^|\/)Welcome\.md$/i.test(n.path)) ??
         parsed.find((n) => /(^|\/)Today\.md$/i.test(n.path)) ??
@@ -276,8 +320,13 @@ export const useVault = create<VaultState>((set, get) => {
     loadRemote: async () => loadFromSource(new RemoteVaultSource('personal')),
     loadGlobalVault: async () => loadFromSource(new RemoteVaultSource('global')),
 
-    openNote: (path, opts) =>
-      pushView({ kind: 'note', path, heading: opts?.heading }, opts),
+    openNote: (path, opts) => {
+      // Every route into a note funnels through here — collection cards, Next
+      // Up, wikilinks, search, the review hand-off — so this is the one place
+      // that sees which collection someone is actually in.
+      rememberSpace(get().user?.id, path)
+      pushView({ kind: 'note', path, heading: opts?.heading }, opts)
+    },
     openView: (view, opts) => pushView(view, opts),
     back: () =>
       mutateActiveTab((tab) => (tab.pos > 0 ? { ...tab, pos: tab.pos - 1 } : tab)),
