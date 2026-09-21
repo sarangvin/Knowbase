@@ -163,6 +163,16 @@
      mirrored text. */
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  /* And without a transform of its own, the face hides but its children do
+     not: `transform-style: preserve-3d` on .fc-card-inner puts every
+     descendant in the same 3D space, where backface-visibility is decided
+     per element. The bookmark inside the turned-away face kept painting —
+     and kept answering clicks — at the mirrored corner, so a flipped card
+     showed two.
+     A transform here makes the face flatten its own children into its
+     plane, and they are hidden with it. Setting backface-visibility on the
+     bookmark instead does NOT work; measured, both ways. */
+  transform: translateZ(0.01px);
 }
 /* The scrolling happens here, not on the face, so the bookmark pinned to
    the face's corner stays pinned. */
@@ -178,7 +188,7 @@
   border-radius: 16px;
   overflow: auto;
 }
-.fc-back { transform: rotateY(180deg); border-color: var(--accent-line); }
+.fc-back { transform: rotateY(180deg) translateZ(0.01px); border-color: var(--accent-line); }
 
 .fc-kind {
   font-size: 11px;

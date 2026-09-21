@@ -156,6 +156,14 @@ not knowing it in the other.
   elements reading and writing one `bookmarked` cannot disagree. It sat
   above both faces first, which kept it out of the animation but also out
   of the card: it did not turn with it.
+- **Each face carries a transform of its own**, or its children ignore its
+  `backface-visibility`. `transform-style: preserve-3d` on the card puts
+  every descendant in one 3D space, where backface-visibility is decided
+  per element — so the face hid and the bookmark inside it did not, and a
+  flipped card showed two, the ghost one live to clicks at the mirrored
+  corner. A transform makes the face flatten its children into its own
+  plane and they hide with it. Setting `backface-visibility: hidden` on the
+  bookmark instead does **nothing**; both were measured.
 - **The card is a `div` with `role="button"`, not a `<button>`.** A
   button's content model is phrasing content, so a button inside one is
   invalid and browsers may reparent it — which breaks a 3D flip in ways
