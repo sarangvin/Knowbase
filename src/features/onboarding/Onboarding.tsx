@@ -10,25 +10,22 @@
 // about what they actually wanted.
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { FsAccessVaultSource } from '../../vault/source'
 import { requestAccess } from '../../vault/remoteSource'
 import { setPendingTopic, clearPendingTopic, peekPendingTopic } from './pendingTopic'
 import { startOnboarding } from './onboardingApi'
 import { randomTopicPlaceholder } from './examples'
-import { RabbitSolid, Folder, Eye, Cloud, Pencil, Envelope, Check, ArrowRight, Sparkles } from '../../ui/icons'
+import { RabbitSolid, Eye, Cloud, Pencil, Envelope, Check, ArrowRight, Sparkles, User } from '../../ui/icons'
 import './onboarding.css'
 
 export function Onboarding() {
   const status = useVault((s) => s.status)
   const error = useVault((s) => s.error)
   const loadSeed = useVault((s) => s.loadSeed)
-  const pickFolder = useVault((s) => s.pickFolder)
   const loadRemote = useVault((s) => s.loadRemote)
   const loadGlobalVault = useVault((s) => s.loadGlobalVault)
   const loginWithGoogle = useVault((s) => s.loginWithGoogle)
   const logout = useVault((s) => s.logout)
   const user = useVault((s) => s.user)
-  const fsSupported = FsAccessVaultSource.isSupported()
 
   // Pre-filled from the handoff, so coming back from Google never shows an
   // empty box. The automatic start below usually means this is never seen,
@@ -120,7 +117,22 @@ export function Onboarding() {
     )
   }
 
-  const startLabel = user == null ? 'Sign in and start digging' : awaitingApproval ? 'Request early access' : 'Start digging'
+  // "Sign up", because that is what the button does for someone who has
+  // never been here: it takes a topic and makes an account to hang it on.
+  // Signing in to an account you already have is the link below, which
+  // carries no topic.
+  const startLabel = user == null ? 'Sign up and start digging' : awaitingApproval ? 'Request early access' : 'Start digging'
+
+  // Google either way — there is one identity provider and it decides for
+  // itself whether this is a new account. The difference that matters to
+  // the user is what happens next: a new topic, or the vault they left.
+  // Clearing the handoff is the whole of it: without that, whatever is in
+  // the box would start generating on arrival for someone who only wanted
+  // to get back in.
+  const logIn = () => {
+    clearPendingTopic()
+    loginWithGoogle()
+  }
 
   return (
     <div className="onboarding">
@@ -163,7 +175,7 @@ export function Onboarding() {
               {busy ? <span className="spinner" /> : <ArrowRight />} {startLabel}
             </button>
             {user == null && (
-              <p className="ob-hint">You'll sign in with Google so your space is saved to your account.</p>
+              <p className="ob-hint">You'll sign up with Google so your space is saved to your account.</p>
             )}
             {user != null && !awaitingApproval && (
               <p className="ob-hint">
@@ -181,6 +193,11 @@ export function Onboarding() {
         {/* Everything below is deliberately secondary: these are the escape
             hatches and the returning-user paths, not the main road. */}
         <div className="ob-secondary">
+          {user == null && (
+            <button className="ob-linklike" onClick={logIn}>
+              <User /> Log in to an existing account
+            </button>
+          )}
           <button className="ob-linklike" onClick={() => void loadSeed()}>
             <Eye /> Explore a finished warren
           </button>
@@ -194,18 +211,8 @@ export function Onboarding() {
               <Pencil /> Edit the global vault
             </button>
           )}
-          {fsSupported && (
-            <button className="ob-linklike" onClick={() => void pickFolder()}>
-              <Folder /> Open my own folder
-            </button>
-          )}
         </div>
 
-        {!fsSupported && (
-          <p className="ob-note">
-            Tip: open in Chrome or Edge to load your own folder with read/write access.
-          </p>
-        )}
         {user && (
           <p className="ob-note">
             Signed in as {user.email} ·{' '}
