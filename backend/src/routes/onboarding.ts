@@ -8,7 +8,7 @@
 // notification, because nothing is being built for them, and implying
 // otherwise would be worse than the honest wall.
 import { Router } from 'express'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { waitUntil } from '@vercel/functions'
 import { db } from '../db/client.js'
 import { onboardingJobs } from '../db/schema.js'
@@ -52,6 +52,26 @@ export interface OnboardingJobView {
   acknowledged: boolean
 }
 
+/** How many of a space's topic notes actually hold a draft, straight from the
+ *  notes table. The placeholder sentence is the same one queue.ts tests for —
+ *  "has this note been written yet?" has one answer, in one place, however
+ *  many paths write the notes. */
+async function draftedCount(userId: string, space: string): Promise<{ drafted: number; total: number }> {
+  const prefix = `${'Automated Graph/'}${space}/Topics/`
+  const rows = await db.execute(sql`
+    SELECT count(*)::int AS total,
+           count(*) FILTER (
+             WHERE n.content NOT LIKE '%fuller draft of this note is being written%'
+           )::int AS drafted
+    FROM notes n
+    JOIN vaults v ON v.id = n.vault_id
+    WHERE v.owner_user_id = ${userId} AND v.kind = 'personal'
+      AND starts_with(n.path, ${prefix})
+  `)
+  const r = rows.rows[0] as { total: number; drafted: number }
+  return { drafted: r?.drafted ?? 0, total: r?.total ?? 0 }
+}
+
 async function currentJob(userId: string): Promise<OnboardingJobView | null> {
   const rows = await db.select().from(onboardingJobs).where(eq(onboardingJobs.userId, userId)).limit(1)
   const row = rows[0]
@@ -66,6 +86,12 @@ async function currentJob(userId: string): Promise<OnboardingJobView | null> {
   const stale =
     row.status === 'running' && Date.now() - row.updatedAt.getTime() > STALE_JOB_MS
 
+  // Counted, not remembered. Only the landing note is drafted in the run
+  // itself; the rest are written by the queue, which has no business writing
+  // to this table. A stored counter would need every writer to keep it in
+  // step, and the thing it counts is already on disk.
+  const progress = row.space ? await draftedCount(userId, row.space) : null
+
   return {
     topic: row.topic,
     status: stale ? 'failed' : (row.status as OnboardingJobView['status']),
@@ -74,8 +100,8 @@ async function currentJob(userId: string): Promise<OnboardingJobView | null> {
       : row.error,
     space: row.space,
     openPath: row.openPath,
-    notesTotal: row.notesTotal,
-    notesDrafted: row.notesDrafted,
+    notesTotal: progress?.total || row.notesTotal,
+    notesDrafted: progress ? progress.drafted : row.notesDrafted,
     acknowledged: row.acknowledgedAt !== null,
   }
 }

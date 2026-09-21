@@ -29,6 +29,7 @@ import {
   contributeToLibrary,
 } from '../vault/spaces.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { enqueueDrafts } from './queue.js'
 
 type JobPatch = Partial<{
   status: string
@@ -44,6 +45,12 @@ async function patchJob(userId: string, patch: JobPatch): Promise<void> {
     .update(onboardingJobs)
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(onboardingJobs.userId, userId))
+}
+
+/** The sentence every placeholder body carries. Kept in step with
+ *  queue.ts's own check — both answer "has this note been written yet?" */
+function isPlaceholder(content: string): boolean {
+  return /_A fuller draft of this note is being written/.test(content)
 }
 
 /** Writes the note only if it still holds exactly the text we created it with.
@@ -163,61 +170,61 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
       // with what it already wrote.
       .onConflictDoNothing({ target: [notes.vaultId, notes.path] })
 
-    await patchJob(userId, { openPath, error: null, notesDrafted: firstDraft ? 1 : 0 })
     void logUsageEvent({ userId, eventType: 'note_write', metadata: { vault: 'personal', space, count: entries.length, source: 'onboarding' } })
 
-    // 5. The rest, BEFORE announcing ready. "Ready" now means every note is
-    //    written, not just the landing one: opening a brand-new space and
-    //    finding four of five topics still a single sentence is a poor first
-    //    impression of a tool whose whole promise is the notes.
+    // 5. The rest, on the queue.
     //
-    //    Affordable only because the model changed. On the old thinking model
-    //    one draft took ~53s; on gemini-3.5-flash-lite five take ~14s
-    //    (measured), so the whole run is ~16s against a 60s function limit.
-    //    Anyone reinstating a slow model must revisit this — it is the thing
-    //    that would silently push the run past the limit.
+    //    These used to be drafted here, sequentially, before announcing
+    //    ready — affordable when five drafts took ~14s in total. They do not
+    //    any more: on the run that prompted this change the plan took 12.5s
+    //    and the first two drafts 17.4s and 8.2s, so the invocation was
+    //    killed by the 60s ceiling with three notes unwritten, and there was
+    //    nothing anywhere that knew to finish them. Onboarding was the last
+    //    path still drafting inline, and it lost work the same way /grow did.
     //
-    //    Sequential on purpose: the free tier is rate-limited per user and
-    //    five concurrent calls is the fastest way to trip it. Nobody is
-    //    waiting on a spinner, so latency is not the constraint.
-    const final = new Map(entries.map((e) => [e.path, e.content]))
-    let drafted = firstDraft ? 1 : 0
-    if (apiKey) {
-      for (let i = 0; i < plan.subtopics.length; i++) {
-        if (i === firstIdx) continue
-        const path = pathOf(i)
-        const content = await draftOne(
-          apiKey,
-          model,
-          space,
-          { path, title: plan.subtopics[i].title, summary: plan.subtopics[i].summary, placeholder: placeholders[i] },
-          titles,
+    //    Queued work is visible in admin, retried, and swept up if its
+    //    invocation dies. "Ready" therefore means the space exists and the
+    //    note you land on is written — the banner already says "n of 5
+    //    notes written" for the rest, which is the honest version of a
+    //    promise this run can no longer keep in one invocation.
+    const queued = await enqueueDrafts(
+      plan.subtopics
+        .map((s, i) => ({ s, i }))
+        .filter(({ i }) => i !== firstIdx)
+        .map(({ s, i }) => ({
           userId,
-          'onboarding-draft',
-        )
-        // A subtopic whose draft fails keeps its summary-only body. A partial
-        // set of drafted notes is strictly better than failing a space that is
-        // otherwise complete and valid.
-        if (!content) continue
-        if (await replaceIfUntouched(vaultId, path, placeholders[i], content)) {
-          final.set(path, content)
-          drafted++
-          await patchJob(userId, { notesDrafted: drafted })
-        }
-      }
-    }
+          vaultId,
+          path: pathOf(i),
+          space,
+          title: s.title,
+          summary: s.summary,
+          siblings: titles,
+          source: 'onboarding',
+        })),
+    )
 
-    // Now it is genuinely ready.
+    const drafted = firstDraft ? 1 : 0
     await patchJob(userId, { status: 'ready', openPath, error: null, notesDrafted: drafted })
+    void logUsageEvent({
+      userId,
+      eventType: 'note_write',
+      metadata: { vault: 'personal', space, queued, source: 'onboarding-queue' },
+    })
 
     // 6. Hand the finished drafts to the corpus so the next person asking for
     //    this topic gets step 1 instead of steps 2-5. The client used to do
     //    this and could only contribute what it happened to be holding, which
     //    was never the server-written drafts — so this is the first time the
     //    notes that cost the most to make are the ones being kept.
-    await contributeToLibrary([...final].map(([path, content]) => ({ path, content }))).catch((err) =>
-      console.warn('[onboarding] library contribution failed (ignored):', err),
-    )
+    //
+    //    Only what is actually written: a placeholder in the corpus is worse
+    //    than nothing, because adoption would hand the next person a space of
+    //    one-line stubs and never generate the real thing. The queued notes
+    //    are contributed by the queue as each one lands.
+    await contributeToLibrary(
+      entries.filter((e) => !isPlaceholder(e.content)),
+    ).catch((err) => console.warn('[onboarding] library contribution failed (ignored):', err))
+
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[onboarding] run failed', err)

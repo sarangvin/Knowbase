@@ -111,10 +111,24 @@ undercount.
 - **`confidence: 0` and an empty `last_reviewed`.** "Brand new" is a product
   invariant, so these are hardcoded rather than trusted from generated data.
   A generated note must never look reviewed.
-- **`status: 'ready'` means every note is drafted**, not just the landing one.
-  Opening a new space and finding four of five topics still a single sentence
-  would make "ready" a lie. This costs ~14s on `gemini-3.5-flash-lite` and was
-  not affordable on the old thinking model (~53s for one draft).
+- **`status: 'ready'` means the space exists and the note you land on is
+  written.** It used to mean all five were, drafted inline before the run
+  announced itself — affordable while five drafts took ~14s in total. They do
+  not: on the run that changed this the plan took 12.5s and the first two
+  drafts 17.4s and 8.2s, and the invocation was killed by the 60s ceiling
+  with three notes unwritten and nothing anywhere that knew to finish them.
+  The rest are **queued** now, like `/grow`'s, so they are visible in admin,
+  retried, and swept up when an invocation dies. The banner says "n of 5
+  notes written" — the honest version of a promise one invocation can no
+  longer keep.
+- **Draft progress is counted, never stored.** `notes_drafted` on the row is
+  only what the run itself wrote; the queue writes the rest and has no
+  business updating that table. `/status` counts topic notes that no longer
+  hold the placeholder sentence — the same test `queue.ts` makes.
+- **Only written notes reach the corpus.** A placeholder there is worse than
+  nothing: adoption would hand the next person a space of one-line stubs and
+  never generate the real thing. The run contributes what it drafted; the
+  queue contributes each note as it lands.
 - **The space is written in a single insert.** No partially-built folder is
   ever observable.
 - **Corpus lookup is an optimisation, never a dependency.** If the copy falls
