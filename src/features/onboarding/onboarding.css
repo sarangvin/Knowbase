@@ -266,4 +266,7 @@
   .ob-banner > svg, .ob-banner .spinner { order: 0; }
   .ob-banner-btn { order: 2; margin-left: auto; }
   .ob-banner-dismiss { order: 3; }
+  /* While building there is no action button to push it right, and a close
+     control hard against the text reads as part of the sentence. */
+  .ob-banner.building .ob-banner-dismiss { margin-left: auto; }
 }

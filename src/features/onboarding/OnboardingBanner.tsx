@@ -18,6 +18,28 @@ import './onboarding.css'
  *  nothing, and catches up the moment it's picked up. */
 const POLL_MS = 5000
 
+/** Dismissal is per job *and per state*, not a single "hide the banner" flag.
+ *
+ *  Closing the spinner says "stop telling me it is building", which is a
+ *  reasonable thing to want for something that runs for a minute in the
+ *  corner of every screen. It does not say "never tell me it is ready" —
+ *  that message is the entire reason the banner exists, and it carries the
+ *  button that takes them to the space.
+ *
+ *  sessionStorage, so a reload mid-build does not put it back, and a new tab
+ *  or a new day starts clean. Wrapped: storage throws outright in a
+ *  locked-down browser, and the cost of losing this is a banner the user has
+ *  to close twice. */
+const DISMISS_KEY = 'kb:onboarding-dismissed'
+
+function readDismissed(): string | null {
+  try {
+    return sessionStorage.getItem(DISMISS_KEY)
+  } catch {
+    return null
+  }
+}
+
 export function OnboardingBanner() {
   const user = useVault((s) => s.user)
   const source = useVault((s) => s.source)
@@ -25,7 +47,7 @@ export function OnboardingBanner() {
   const openNote = useVault((s) => s.openNote)
 
   const [job, setJob] = useState<OnboardingJob | null>(null)
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissed, setDismissed] = useState<string | null>(readDismissed)
   const [busy, setBusy] = useState(false)
   // Survives re-renders so the interval below is never stacked twice.
   const timer = useRef<number | null>(null)
@@ -85,7 +107,18 @@ export function OnboardingBanner() {
     }
   }, [approved])
 
-  if (!job || dismissed) return null
+  const dismissKey = job ? `${job.topic}|${job.status}` : ''
+  const dismiss = () => {
+    setDismissed(dismissKey)
+    try {
+      sessionStorage.setItem(DISMISS_KEY, dismissKey)
+    } catch {
+      // Nothing else depends on it; the in-memory state still holds for this
+      // render tree, which is the part the user just asked for.
+    }
+  }
+
+  if (!job || dismissed === dismissKey) return null
   // Already delivered: they've been to the space, so this is history.
   if (job.status === 'ready' && job.acknowledged) return null
 
@@ -121,12 +154,17 @@ export function OnboardingBanner() {
 
   if (job.status === 'running') {
     return (
-      <div className="ob-banner" role="status">
+      <div className="ob-banner building" role="status">
         <span className="spinner" />
         <div className="ob-banner-text">
           <strong>Building your space on {job.topic}</strong>
           <span>Have a look around this one meanwhile — we'll tell you when yours is ready.</span>
         </div>
+        {/* Closing this only hides the spinner. The work carries on server
+            side, and the banner comes back to say it is ready. */}
+        <button className="ob-banner-dismiss" aria-label="Hide until it's ready" onClick={dismiss}>
+          <X />
+        </button>
       </div>
     )
   }
@@ -141,7 +179,7 @@ export function OnboardingBanner() {
         <button className="ob-banner-btn" onClick={() => void retry()} disabled={busy}>
           <RotateCw /> Try again
         </button>
-        <button className="ob-banner-dismiss" aria-label="Dismiss" onClick={() => setDismissed(true)}>
+        <button className="ob-banner-dismiss" aria-label="Dismiss" onClick={dismiss}>
           <X />
         </button>
       </div>
@@ -167,7 +205,7 @@ export function OnboardingBanner() {
       <button className="ob-banner-btn primary" onClick={() => void openSpace()} disabled={busy}>
         {busy ? <span className="spinner" /> : <ArrowRight />} Open it
       </button>
-      <button className="ob-banner-dismiss" aria-label="Dismiss" onClick={() => setDismissed(true)}>
+      <button className="ob-banner-dismiss" aria-label="Dismiss" onClick={dismiss}>
         <X />
       </button>
     </div>
