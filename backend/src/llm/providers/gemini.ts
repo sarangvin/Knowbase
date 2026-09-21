@@ -39,10 +39,16 @@ export async function* streamGeminiChat(
   user: string,
   model: string,
   onUsage?: (usage: Usage) => void,
+  /** Aborts the request *and the stream it is reading*. Passing it to fetch
+   *  is what makes a timeout real: without it the socket stays open, the
+   *  body keeps arriving, and a caller that "gave up" is still holding the
+   *  invocation it was trying to release. */
+  signal?: AbortSignal,
 ): AsyncGenerator<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${apiKey}`
   const res = await fetch(url, {
     method: 'POST',
+    signal,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },

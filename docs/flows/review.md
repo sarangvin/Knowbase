@@ -114,6 +114,31 @@ free tier's 15 rpm. The concurrency guard is also the rate limiter, which
 beats a second throttle that has to be kept in step with Google's numbers by
 hand.
 
+**Every model call has a deadline of its own** (`llm/meter.ts`, one table
+keyed by source: 20s for a plan, 25–30s for a draft). A draft was measured
+at 55.6s — it did not fail, it ran until the platform killed the invocation
+holding it, and the queue row then sat 'running' for the full five-minute
+reclaim before anything retried it. A call that gives up at 30s fails inside
+a process still alive to write that down. `WORST_CASE_JOB_MS` is derived
+from that timeout rather than guessed from past latencies, which is what
+made it wrong: it said 30s against a worst observed 28s, and the next
+sample was 55.6s.
+
+The deadline is enforced twice, because the two mechanisms fail differently.
+The abort signal reaches `fetch` and closes the socket, so the work actually
+stops. The `Promise.race` releases the *caller* on time regardless — an
+abort only helps if the transport honours it, and a promise that never
+settles is the exact failure being designed out.
+
+A timeout is charged an attempt, unlike a 429: a model too slow to answer in
+30s will still be too slow on the next poll, and three free retries a minute
+is how a quota gets spent on nothing. Three attempts, then it lands in
+admin › Draft queue with a Retry button and a human decides.
+
+**Drains take an absolute deadline, not their own start time.** `/grow`
+plans before it drains, and a drain measuring only its own elapsed time
+cannot see the 20s the invocation already spent.
+
 Each write re-checks that the note is still a placeholder, immediately before
 committing: a draft call takes seconds, and the user may have opened and
 edited the note during them. Their text always wins.

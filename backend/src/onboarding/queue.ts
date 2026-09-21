@@ -20,6 +20,7 @@ import { and, eq, inArray, like, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { draftQueue, notes } from '../db/schema.js'
 import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
+import { timeoutFor } from '../llm/meter.js'
 import { draftOne } from './draftNote.js'
 import { SPACE_ROOT, contributeToLibrary } from '../vault/spaces.js'
 
@@ -32,17 +33,25 @@ import { SPACE_ROOT, contributeToLibrary } from '../vault/spaces.js'
  *  doing one small piece, rather than one invocation gambling on latency. */
 const BATCH = 1
 
-/** The wall this has to stay inside: the function's maxDuration in
- *  vercel.json, less the time the request itself already spent. */
-const TIME_BUDGET_MS = 40_000
+/** The wall this has to stay inside when no caller supplies one: the
+ *  function's maxDuration in vercel.json, less the response and the
+ *  bookkeeping either side of the draft. A caller that already spent part of
+ *  the invocation passes its own deadline instead. */
+const TIME_BUDGET_MS = 45_000
 
-/** The slowest single draft worth planning for. Typical is ~4s; the worst
- *  seen in production is 28s, under load from overlapping drains.
+/** The slowest single job worth planning for: the draft call's own timeout
+ *  (30s, in llm/meter.ts) plus the reads and the write around it.
  *
- *  The budget is checked against elapsed + THIS, not elapsed alone. Checking
+ *  It used to be a guess at how slow the model might be — 30s, against a
+ *  worst observed 28s. Then one answered in 55.6s and took the invocation
+ *  with it. A guess is the wrong instrument: the call now has a deadline of
+ *  its own, so this is derived from that deadline rather than from a sample
+ *  of past latencies that the next model change invalidates.
+ *
+ *  The budget is checked against now + THIS, not elapsed alone. Checking
  *  elapsed alone is the bug that killed /grow: a job could legally start at
  *  39.9s and then run for 28 more, half a minute past the ceiling. */
-const WORST_CASE_JOB_MS = 30_000
+const WORST_CASE_JOB_MS = timeoutFor('queue-draft') + 5_000
 
 /** How long a claimed job is treated as still in flight.
  *
@@ -226,8 +235,12 @@ export interface DrainResult {
  * Never throws: every caller is a fire-and-forget `waitUntil` behind a
  * response that has already been sent.
  */
-export async function drainQueue(limit = BATCH): Promise<DrainResult> {
-  const started = Date.now()
+export async function drainQueue(limit = BATCH, deadline?: number): Promise<DrainResult> {
+  // An absolute wall-clock deadline, not "time since this function started".
+  // /grow calls a plan first and then this, and a drain that measures only
+  // its own elapsed time cannot see the 20s already spent by the invocation
+  // it shares — which is how a plan plus a draft used to overrun 60s.
+  const endBy = deadline ?? Date.now() + TIME_BUDGET_MS
   const out: DrainResult = { claimed: 0, drafted: 0, failed: 0, skipped: false }
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return out
@@ -242,7 +255,7 @@ export async function drainQueue(limit = BATCH): Promise<DrainResult> {
     const finished: { path: string; content: string }[] = []
 
     for (const job of jobs) {
-      if (Date.now() - started + WORST_CASE_JOB_MS > TIME_BUDGET_MS) {
+      if (Date.now() + WORST_CASE_JOB_MS > endBy) {
         // Hand it back rather than starting a call we cannot finish. The
         // next drain picks it up; there is always a next drain.
         await finish(job.id, 'pending')
@@ -303,6 +316,12 @@ export async function drainQueue(limit = BATCH): Promise<DrainResult> {
         }
         // Out of attempts means stop, not loop. Whatever is wrong here is not
         // going to fix itself on the fourth try.
+        // A timeout is charged an attempt like any other failure, unlike a
+        // 429. It is not the job's fault either, but a model too slow to
+        // answer in 30s will still be too slow on the next poll, and three
+        // free retries a minute is how a quota gets spent on nothing. Three
+        // attempts, then it lands in admin with a Retry button and a human
+        // decides.
         await finish(job.id, job.attempts >= MAX_ATTEMPTS ? 'failed' : 'pending', message)
         if (job.attempts >= MAX_ATTEMPTS) out.failed++
         console.warn(`[queue] ${job.path} attempt ${job.attempts} failed:`, message)

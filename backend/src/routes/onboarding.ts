@@ -41,6 +41,12 @@ const MAX_TOPIC_LEN = 200
  *  permanently. */
 const STALE_JOB_MS = 2 * 60_000
 
+/** What one invocation may spend on background work, against the 60s
+ *  maxDuration in vercel.json. The slack is the response, the queries either
+ *  side, and the platform's own overhead — a deadline set at the ceiling is
+ *  not a deadline. */
+const INVOCATION_BUDGET_MS = 50_000
+
 export interface OnboardingJobView {
   topic: string
   status: 'running' | 'ready' | 'failed'
@@ -181,12 +187,16 @@ onboardingRouter.post('/grow', asyncHandler(async (req, res) => {
     return
   }
   const userId = req.user!.id
+  // Fixed at the top of the request, before any of the work: the drain has
+  // to know how much of the invocation the plan before it already spent,
+  // and it cannot work that out from its own start time.
+  const deadline = Date.now() + INVOCATION_BUDGET_MS
   res.status(202).json({ ok: true, maxUnreviewed: MAX_UNREVIEWED })
   // Plan the topics, then take one draft off the queue — one, because the
   // batch is one, so the worst case here is a plan call plus a single draft
   // rather than the plan plus three that used to overrun the 60s ceiling.
-  // The rest drain from the status poll below.
-  waitUntil(growSpace(userId, space).then(() => drainQueue()))
+  // If the plan ate the budget the drain declines and the poll picks it up.
+  waitUntil(growSpace(userId, space).then(() => drainQueue(undefined, deadline)))
 }))
 
 /** The job's state, and the heartbeat that keeps the draft queue moving.

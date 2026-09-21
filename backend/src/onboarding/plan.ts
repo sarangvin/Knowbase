@@ -6,7 +6,7 @@
 // keeping; only the transport differs, calling Gemini directly the way
 // routes/draftNotes.ts already does instead of going back out through the
 // app's own /api/llm/free proxy, which would be this process calling itself.
-import { meteredGeminiCall } from '../llm/meter.js'
+import { meteredGeminiCall, ModelTimeoutError } from '../llm/meter.js'
 import { breakCycles, ensureFoundational, type Subtopic } from './notePlan.js'
 
 function callModel(system: string, user: string, userId: string | undefined, source: string): Promise<string> {
@@ -171,6 +171,11 @@ export async function generateLearningPlan(topic: string, userId?: string): Prom
     } catch (err) {
       console.warn('[learning-plan] request failed:', err)
       lastError = err
+      // A second attempt after a timeout spends another 20s of the same
+      // invocation to learn what the first one just established. Whatever
+      // made the model slow is still true; stop and let the caller retry in
+      // a fresh one.
+      if (err instanceof ModelTimeoutError) break
     }
   }
 
@@ -293,6 +298,7 @@ export async function generateNextTopics(
       console.warn('[grow] response failed validation:', raw.slice(0, 400))
     } catch (err) {
       console.warn('[grow] request failed:', err)
+      if (err instanceof ModelTimeoutError) break
     }
   }
   return null
