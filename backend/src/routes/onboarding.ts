@@ -24,6 +24,23 @@ onboardingRouter.use(requireApproved)
 
 const MAX_TOPIC_LEN = 200
 
+/** How long a job may sit on 'running' without progress before we call it
+ *  dead.
+ *
+ *  A whole run — plan plus five drafts — is ~25s measured, and every step
+ *  patches the row on its way through, so two minutes of silence is not a
+ *  slow run: it is an invocation that is not coming back. That happens. The
+ *  work runs under `waitUntil` after the response has been sent, and a
+ *  deployment cutover or a hard kill takes it with no error to catch and
+ *  nothing written down.
+ *
+ *  Without this the row is wedged: nothing reclaims a stale 'running' job the
+ *  way the draft queue reclaims its own, and /start refuses to act while one
+ *  is running — so the spinner never resolves and "Try again" silently does
+ *  nothing. One killed invocation ended onboarding for that account
+ *  permanently. */
+const STALE_JOB_MS = 2 * 60_000
+
 export interface OnboardingJobView {
   topic: string
   status: 'running' | 'ready' | 'failed'
@@ -39,12 +56,24 @@ async function currentJob(userId: string): Promise<OnboardingJobView | null> {
   const rows = await db.select().from(onboardingJobs).where(eq(onboardingJobs.userId, userId)).limit(1)
   const row = rows[0]
   if (!row) return null
+
+  // Reported, not written back. The row keeps saying 'running' and the reader
+  // is told 'failed', which is the honest answer to both questions this
+  // function serves: the banner gets a state it can offer a retry from, and
+  // /start below stops refusing. Writing it back would need this read path to
+  // take a write, and there is nothing it would buy — the next /start
+  // overwrites the row anyway.
+  const stale =
+    row.status === 'running' && Date.now() - row.updatedAt.getTime() > STALE_JOB_MS
+
   return {
     topic: row.topic,
-    status: row.status as OnboardingJobView['status'],
+    status: stale ? 'failed' : (row.status as OnboardingJobView['status']),
+    error: stale
+      ? 'Generation stopped before it finished — nothing was lost, but it needs starting again.'
+      : row.error,
     space: row.space,
     openPath: row.openPath,
-    error: row.error,
     notesTotal: row.notesTotal,
     notesDrafted: row.notesDrafted,
     acknowledged: row.acknowledgedAt !== null,
@@ -65,6 +94,10 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
   // A job already running is left alone: double-submitting the form, or a
   // reload landing back on the landing screen, must not start a second
   // generation spending a second set of model calls on the same person.
+  //
+  // "Running" here means running *and recently alive* — currentJob reports a
+  // job with no progress for STALE_JOB_MS as failed, so a killed invocation
+  // no longer blocks the retry it needs.
   const existing = await currentJob(userId)
   if (existing?.status === 'running') {
     res.status(202).json({ job: existing })

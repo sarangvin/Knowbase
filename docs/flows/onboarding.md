@@ -123,6 +123,16 @@ undercount.
   anything the owner has curated — is never modified.
 - **The global corpus is the owner's.** Users read from it by adoption; they
   never see it as a vault.
+- **A `running` job with no progress for two minutes is reported as failed.**
+  The run happens under `waitUntil`, after the response — a deployment
+  cutover or a hard kill takes it with no error to catch and nothing written
+  down. Nothing reclaimed a stale row the way the draft queue reclaims its
+  own, and `/start` refuses to act while a job is running, so the spinner
+  never resolved and "Try again" was a silent no-op: one killed invocation
+  ended onboarding for that account permanently. Two minutes is not a slow
+  run — the whole thing is ~25s and every step patches the row on its way
+  through. The staleness is *reported*, not written back; the next `/start`
+  overwrites the row anyway, and this keeps a read path from taking a write.
 
 ---
 
