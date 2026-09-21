@@ -15,10 +15,8 @@ import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { collectionStarts } from '../db/schema.js'
 import { listUserSpaces, archivedSpaces } from '../vault/spaces.js'
+import { limitsFor } from '../plans.js'
 
-/** One table, so a limit and the copy describing it cannot disagree. Every
- *  account is on `free` today; the shape is here so a paid tier is a number
- *  rather than a refactor. */
 interface PlanLimits {
   /** Collections that are not archived. */
   active: number
@@ -26,13 +24,10 @@ interface PlanLimits {
   perDay: number
 }
 
-const BY_PLAN: Record<string, PlanLimits> = {
-  free: { active: 5, perDay: 3 },
-}
-const DEFAULT_LIMITS: PlanLimits = { active: 5, perDay: 3 }
-
+/** Both numbers come from plans.ts, where every limit lives together. */
 export function collectionLimits(planTier?: string | null): PlanLimits {
-  return BY_PLAN[planTier ?? 'free'] ?? DEFAULT_LIMITS
+  const l = limitsFor(planTier)
+  return { active: l.activeCollections, perDay: l.newCollectionsPerDay }
 }
 
 export interface CollectionAllowance {
@@ -68,6 +63,10 @@ export async function collectionAllowance(
   // Active first: it is the one they can do something about right now, and
   // telling someone to come back tomorrow when the real problem is a full
   // shelf sends them away for no reason.
+  //
+  // A plan with no cap has Infinity here, so neither comparison holds and
+  // nothing is ever blocked — which is why these messages can name the free
+  // plan without checking which plan the reader is on.
   let blocked: string | null = null
   if (activeCount >= limits.active) {
     blocked = `You have ${activeCount} collections on the go, which is the most on the free plan. Archive or delete one to start another.`

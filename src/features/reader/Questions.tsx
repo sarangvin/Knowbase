@@ -76,7 +76,11 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
     })
   }
 
+  // null is "no cap on this plan". Folding it to 0 would tell a pro account
+  // it had used up an allowance it does not have.
+  const uncapped = allowance != null && allowance.remaining == null
   const remaining = allowance?.remaining ?? 0
+  const canAskNow = uncapped || remaining > 0
 
   return (
     <section className="qa">
@@ -127,7 +131,7 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
           <div className="qa-ask-label">
             <HelpCircle width={13} height={13} /> Ask your own
           </div>
-          {remaining > 0 ? (
+          {canAskNow ? (
             <>
               <textarea
                 className="qa-ask-input"
@@ -142,8 +146,8 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
               />
               <div className="qa-ask-foot">
                 <span className="qa-ask-note">
-                  Answered from this note. {remaining} left today
-                  {space ? ` on ${space}` : ''}.
+                  Answered from this note.
+                  {uncapped ? '' : ` ${remaining} left today${space ? ` on ${space}` : ''}.`}
                 </span>
                 <button className="qa-btn primary" disabled={draft.trim().length < 5 || busy != null} onClick={ask}>
                   {busy === 'new' ? <span className="spinner" /> : <Sparkles width={13} height={13} />}

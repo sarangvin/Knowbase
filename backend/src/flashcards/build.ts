@@ -14,20 +14,14 @@ import type { FlashcardRow } from '../db/schema.js'
 import { SPACE_ROOT, spaceOf, archivedSpaces } from '../vault/spaces.js'
 import { frontmatterValue, frontmatterNumber } from '../vault/frontmatter.js'
 import { meteredGeminiCall } from '../llm/meter.js'
+import { limitsFor } from '../plans.js'
 import { scheduleKey, type CardSchedule } from './schedule.js'
 
-/** The free plan's daily deck.
- *
- *  One number, in one place, because a limit that lives at the call site is
- *  a limit that disagrees with the copy describing it. When tiers arrive
- *  this becomes a lookup on the plan and nothing else moves; until then
- *  every account is on the free plan and gets the same ten.
- */
-const DAILY_CARDS_BY_PLAN: Record<string, number> = { free: 10 }
-const DEFAULT_DAILY_CARDS = 10
-
+/** The day's deck size for this plan. See backend/src/plans.ts — the
+ *  numbers for every limit live together there, because they used to live
+ *  in three files and had to be edited in step. */
 export function cardsPerDay(planTier?: string | null): number {
-  return DAILY_CARDS_BY_PLAN[planTier ?? 'free'] ?? DEFAULT_DAILY_CARDS
+  return limitsFor(planTier).flashcardsPerDay
 }
 
 /** How many notes the extraction call is shown. Enough that ten cards can be

@@ -204,7 +204,18 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
 onboardingRouter.get('/allowance', asyncHandler(async (req, res) => {
   const day = dayOf(req.query.day) ?? ''
   const vaultId = await getOrCreatePersonalVaultId(req.user!.id)
-  res.json(await collectionAllowance(req.user!.id, vaultId, day, req.user!.planTier))
+  const a = await collectionAllowance(req.user!.id, vaultId, day, req.user!.planTier)
+  // An unlimited limit is Infinity, and JSON.stringify turns that into null
+  // silently — so the client would read "no limit" as the number zero and
+  // count down from it. Say null on purpose, and document that it means
+  // unlimited, rather than relying on an accident of serialisation.
+  res.json({
+    ...a,
+    limits: {
+      active: Number.isFinite(a.limits.active) ? a.limits.active : null,
+      perDay: Number.isFinite(a.limits.perDay) ? a.limits.perDay : null,
+    },
+  })
 }))
 
 /** Top a space back up after a note is marked reviewed.

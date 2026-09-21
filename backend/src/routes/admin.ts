@@ -11,6 +11,7 @@ import { waitUntil } from '@vercel/functions'
 import { runOnboarding } from '../onboarding/run.js'
 import { queueDepth, drainQueue, reconcileQueue } from '../onboarding/queue.js'
 import { requireOwner } from '../auth/session.js'
+import { isPlanTier, PLAN_TIERS } from '../plans.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 
 export const adminRouter = Router()
@@ -313,6 +314,33 @@ adminRouter.post('/queue/retry', asyncHandler(async (_req, res) => {
   `)
   waitUntil(drainQueue())
   res.json({ requeued: rows.rows.length, depth: await queueDepth() })
+}))
+
+/** Set a user's plan by hand.
+ *
+ *  `users.plan_tier` is normally written by the Razorpay webhook from the
+ *  `subscriptions` row. This writes it directly, which is the right tool for
+ *  an owner account and a comped one, and the wrong tool for a real paying
+ *  customer: the webhook is still the source of truth and will overwrite
+ *  this on the next subscription event. The subscriptions row is left alone
+ *  deliberately — inventing a fake one to make the override stick would put
+ *  a lie in the table billing reads. */
+adminRouter.post('/users/:id/plan', asyncHandler(async (req, res) => {
+  const planTier = req.body?.planTier
+  if (!isPlanTier(planTier)) {
+    res.status(400).json({ error: `body.planTier must be one of: ${PLAN_TIERS.join(', ')}` })
+    return
+  }
+  const [updated] = await db
+    .update(users)
+    .set({ planTier })
+    .where(eq(users.id, req.params.id))
+    .returning({ id: users.id, email: users.email, planTier: users.planTier })
+  if (!updated) {
+    res.status(404).json({ error: 'user not found' })
+    return
+  }
+  res.json(updated)
 }))
 
 adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {

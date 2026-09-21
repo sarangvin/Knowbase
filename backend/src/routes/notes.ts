@@ -11,6 +11,7 @@ import { customQuestions } from '../db/schema.js'
 import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId, spaceOf } from '../vault/spaces.js'
+import { limitsFor, isUnlimited, remainingOf } from '../plans.js'
 import {
   parseQuestions,
   setAnswer,
@@ -26,18 +27,14 @@ export const notesRouter = Router()
 notesRouter.use(requireAuth)
 notesRouter.use(requireApproved)
 
-/** How many questions of their own a reader may ask per day, per collection.
- *
- *  Per collection rather than per note: a collection is the unit someone
- *  studies in, and per-note would scale the allowance with how many notes
- *  the generator happened to produce — which is not a decision the reader
- *  made. One number here, as with the flashcard deck, so the limit and the
- *  copy describing it cannot disagree. */
-const CUSTOM_PER_DAY_BY_PLAN: Record<string, number> = { free: 1 }
-const DEFAULT_CUSTOM_PER_DAY = 1
-
+/** How many questions of their own a reader may ask per day, per
+ *  collection. Per collection rather than per note: a collection is the
+ *  unit somebody studies in, and a per-note allowance would scale with
+ *  however many notes the generator happened to produce — which is not a
+ *  decision the reader made. The number itself lives in plans.ts with every
+ *  other limit. */
 function customPerDay(planTier?: string | null): number {
-  return CUSTOM_PER_DAY_BY_PLAN[planTier ?? 'free'] ?? DEFAULT_CUSTOM_PER_DAY
+  return limitsFor(planTier).customQuestionsPerDay
 }
 
 function dayOf(v: unknown): string | null {
@@ -80,7 +77,9 @@ notesRouter.get('/question-allowance', asyncHandler(async (req, res) => {
   }
   const limit = customPerDay(req.user!.planTier)
   const used = await usedToday(req.user!.id, space, day)
-  res.json({ limit, used, remaining: Math.max(0, limit - used) })
+  // remaining is null for a plan with no cap, so the copy can say "ask
+  // away" rather than counting down from infinity.
+  res.json({ limit: isUnlimited(limit) ? null : limit, used, remaining: remainingOf(limit, used) })
 }))
 
 /**
@@ -173,7 +172,7 @@ notesRouter.post('/answer', asyncHandler(async (req, res) => {
 
   const limit = customPerDay(req.user!.planTier)
   const used = space && day ? await usedToday(userId, space, day) : 0
-  res.json({ answer, remaining: Math.max(0, limit - used) })
+  res.json({ answer, remaining: remainingOf(limit, used) })
 }))
 
 /** Remove a question and its answer from a note.

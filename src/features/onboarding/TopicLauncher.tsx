@@ -115,9 +115,11 @@ export function TopicLauncher({
         </button>
       </div>
       {error && <div className="ob-error launcher-error">{error}</div>}
-      {allowance && allowance.limits.perDay - allowance.startedToday <= 1 && (
+      {/* Only when there is a cap at all: null is "no limit", and counting
+          down from it would print a negative number. */}
+      {allowance?.limits.perDay != null && allowance.limits.perDay - allowance.startedToday <= 1 && (
         <p className="launcher-hint">
-          {allowance.limits.perDay - allowance.startedToday} new collection left today.
+          {Math.max(0, allowance.limits.perDay - allowance.startedToday)} new collection left today.
         </p>
       )}
     </div>

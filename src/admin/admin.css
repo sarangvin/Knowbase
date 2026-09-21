@@ -222,3 +222,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Plan toggle in the Users table. A button that shows the current value and
+   swaps it — two states, so a dropdown would be a menu with one useful
+   item in it. */
+.admin-plan {
+  min-width: 56px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.admin-plan:hover:not(:disabled) { border-color: var(--accent); color: var(--text-normal); }
+.admin-plan:disabled { opacity: 0.5; cursor: default; }
+.admin-plan.is-pro { border-color: var(--accent); color: var(--accent); font-weight: 600; }

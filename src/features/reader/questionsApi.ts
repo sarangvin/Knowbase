@@ -13,8 +13,8 @@ async function jsonOrThrow(res: Response): Promise<unknown> {
 export interface AnswerResult {
   answer: string
   alreadyAnswered?: boolean
-  /** Custom questions left today for this collection. */
-  remaining?: number
+  /** Custom questions left today for this collection; null when uncapped. */
+  remaining?: number | null
 }
 
 export async function answerQuestion(path: string, question: string, custom: boolean): Promise<AnswerResult> {
@@ -36,9 +36,11 @@ export async function deleteQuestion(path: string, question: string): Promise<vo
 }
 
 export interface Allowance {
-  limit: number
+  /** null on a plan with no cap. */
+  limit: number | null
   used: number
-  remaining: number
+  /** null means "as many as you like", not "none left". */
+  remaining: number | null
 }
 
 export async function fetchAllowance(space: string): Promise<Allowance> {

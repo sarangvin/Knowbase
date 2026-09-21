@@ -113,7 +113,8 @@ export function requestSpaceGrowth(space: string): void {
 }
 
 export interface CollectionAllowance {
-  limits: { active: number; perDay: number }
+  /** null means no limit on this plan, not zero. */
+  limits: { active: number | null; perDay: number | null }
   activeCount: number
   startedToday: number
   /** Null when they may start one; otherwise why not, ready to show. */

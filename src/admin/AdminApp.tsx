@@ -8,6 +8,7 @@ import {
   drainQueueNow,
   retryFailedJobs,
   setApproved,
+  setPlan,
   fetchUserDetail,
   fetchCurrentUser,
   type AdminUserRow,
@@ -380,6 +381,26 @@ export function AdminApp() {
     }
   }
 
+  /** Optimism would be wrong here: the row is the record of what the
+   *  server thinks, and the whole point of the control is to change that. */
+  const togglePlan = async (row: AdminUserRow) => {
+    const next = row.plan_tier === 'pro' ? 'free' : 'pro'
+    setBusy((b) => new Set(b).add(row.id))
+    setError(null)
+    try {
+      const updated = await setPlan(row.id, next)
+      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, plan_tier: updated.planTier } : r)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy((b) => {
+        const n = new Set(b)
+        n.delete(row.id)
+        return n
+      })
+    }
+  }
+
   const openDetail = (id: string) => {
     setSelected(null)
     fetchUserDetail(id)
@@ -673,7 +694,18 @@ export function AdminApp() {
           {rows.map((u) => (
             <tr key={u.id} onClick={() => openDetail(u.id)} className="admin-row">
               <td>{u.email}{u.role === 'owner' && <span className="admin-badge">owner</span>}</td>
-              <td>{u.plan_tier}</td>
+              {/* Stops the row click from opening the detail panel behind
+                  the toggle — the two are different intentions. */}
+              <td onClick={(e) => e.stopPropagation()}>
+                <button
+                  className={'admin-plan' + (u.plan_tier === 'pro' ? ' is-pro' : '')}
+                  disabled={busy.has(u.id)}
+                  title={u.plan_tier === 'pro' ? 'Switch to free' : 'Switch to pro'}
+                  onClick={() => void togglePlan(u)}
+                >
+                  {u.plan_tier}
+                </button>
+              </td>
               <td>{u.note_count}</td>
               <td>{formatBytes(u.storage_bytes)}</td>
               <td>{u.llm_calls_this_month}</td>
