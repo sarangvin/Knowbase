@@ -106,3 +106,41 @@
   gap: 7px;
   margin: 4px 0 8px;
 }
+
+/* The archive overlay: a row per collection, its name on the left and what
+   you can do with it on the right. Wider than a confirm box because the
+   rows carry two buttons and a name that can be long. */
+.archive-box { max-width: 520px; }
+.archive-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* A long archive scrolls inside the box rather than pushing Close off
+     the bottom of the screen. */
+  max-height: 46vh;
+  overflow: auto;
+}
+.archive-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+.archive-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.archive-actions { display: inline-flex; gap: 8px; flex: 0 0 auto; }

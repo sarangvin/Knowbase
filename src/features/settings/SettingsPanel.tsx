@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
 import { User, LogOut, Cloud, Pencil, Trash, RotateCw, Archive } from '../../ui/icons'
-import { fetchArchivedCollections, setCollectionArchived } from '../automated-graph/collectionsApi'
+import { fetchArchivedCollections, setCollectionArchived, deleteCollection } from '../automated-graph/collectionsApi'
 import { SyncModal } from '../sync/SyncModal'
 import './settings.css'
 
@@ -29,7 +29,10 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   // with the demo vault loaded, or none at all, and "what have I archived"
   // is a question about the account either way.
   const [archived, setArchived] = useState<string[] | null>(null)
-  const [unarchiving, setUnarchiving] = useState<string | null>(null)
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  // The name of the collection being acted on, so only its own row goes
+  // busy rather than the whole list.
+  const [archiveBusy, setArchiveBusy] = useState<string | null>(null)
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -54,21 +57,35 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
     }
   }, [user])
 
-  const unarchive = async (space: string) => {
-    setUnarchiving(space)
+  const actOnArchived = async (space: string, fn: () => Promise<unknown>) => {
+    setArchiveBusy(space)
     setArchiveError(null)
     try {
-      await setCollectionArchived(space, false)
+      await fn()
       setArchived((list) => (list ?? []).filter((s) => s !== space))
-      // The vault in memory still has the old flag, and the home screen
-      // reads it from there — without this the collection stays hidden
-      // until something else happens to reload.
+      // The vault in memory still holds the old flag, or the deleted notes,
+      // and the home screen reads it from there — without this the change
+      // does not show up until something else happens to reload.
       await reloadVault()
     } catch (e) {
       setArchiveError(e instanceof Error ? e.message : String(e))
     } finally {
-      setUnarchiving(null)
+      setArchiveBusy(null)
     }
+  }
+
+  const unarchive = (space: string) => void actOnArchived(space, () => setCollectionArchived(space, false))
+
+  const deleteArchived = (space: string) => {
+    // Same wall as the home screen's menu. Being archived makes a
+    // collection easier to forget, not less real.
+    const ok = confirm(
+      `Delete "${space}" and all of its notes?\n\n` +
+        `This cannot be undone. Your progress on them goes too.\n\n` +
+        `It can stay archived instead — nothing is lost while it is.`,
+    )
+    if (!ok) return
+    void actOnArchived(space, () => deleteCollection(space))
   }
 
 
@@ -262,28 +279,17 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
           </div>
         )}
 
-        {user && archived != null && archived.length > 0 && (
+        {user && (
           <div className="settings-section">
             <div className="settings-label">Archived collections</div>
             <p className="settings-dim">
               Set aside, not deleted. Every note is still here; they just stay off the home
               screen and out of quizzes and flashcards until you bring them back.
             </p>
-            {archived.map((space) => (
-              <div className="settings-key-row" key={space}>
-                <span className="settings-key-label">
-                  <Archive width={13} height={13} /> {space}
-                </span>
-                <button
-                  className="ask-btn"
-                  disabled={unarchiving != null}
-                  onClick={() => void unarchive(space)}
-                >
-                  {unarchiving === space ? 'Bringing back…' : 'Unarchive'}
-                </button>
-              </div>
-            ))}
-            {archiveError && <div className="ask-error">{archiveError}</div>}
+            <button className="ask-btn settings-sync-btn" onClick={() => setArchiveOpen(true)}>
+              <Archive width={14} height={14} /> Check archive
+              {archived != null && archived.length > 0 && ` (${archived.length})`}
+            </button>
           </div>
         )}
 
@@ -326,15 +332,80 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
     </>
   )
 
+  /** The archive, as a list you open rather than a list that is always
+   *  there. Archiving is a thing you do rarely and undo rarely, so the
+   *  collections you set aside should not take up room in Settings beside
+   *  the things you change. */
+  const archiveDialog = archiveOpen ? (
+    <div
+      className="confirm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="archive-title"
+      onClick={() => archiveBusy == null && setArchiveOpen(false)}
+    >
+      <div className="confirm-box archive-box" onClick={(e) => e.stopPropagation()}>
+        <div className="confirm-title" id="archive-title">Archived collections</div>
+        {archived == null ? (
+          <p className="confirm-body">Loading…</p>
+        ) : archived.length === 0 ? (
+          <p className="confirm-body">
+            Nothing archived. Use the ⋮ menu on a collection to set it aside — it keeps every
+            note and just stops appearing on the home screen, in quizzes and in flashcards.
+          </p>
+        ) : (
+          <>
+            <p className="confirm-body">
+              Every note in these is still here. Bring one back and it returns to the home
+              screen and starts feeding quizzes and flashcards again.
+            </p>
+            <ul className="archive-list">
+              {archived.map((space) => (
+                <li key={space}>
+                  <span className="archive-name">
+                    <Archive width={14} height={14} /> {space}
+                  </span>
+                  <span className="archive-actions">
+                    <button
+                      className="ask-btn"
+                      disabled={archiveBusy != null}
+                      onClick={() => unarchive(space)}
+                    >
+                      {archiveBusy === space ? 'Working…' : 'Unarchive'}
+                    </button>
+                    <button
+                      className="danger-btn"
+                      disabled={archiveBusy != null}
+                      onClick={() => deleteArchived(space)}
+                    >
+                      <Trash width={13} height={13} /> Delete
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {archiveError && <div className="ask-error">{archiveError}</div>}
+        <div className="confirm-actions">
+          <button className="ask-btn" autoFocus disabled={archiveBusy != null} onClick={() => setArchiveOpen(false)}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   const sync = syncOpen ? <SyncModal onClose={() => setSyncOpen(false)} /> : null
 
-  if (!onClose) return <div className="settings-pane">{body}{confirmDialog}{sync}</div>
+  if (!onClose) return <div className="settings-pane">{body}{confirmDialog}{archiveDialog}{sync}</div>
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
         {body}
       </div>
       {confirmDialog}
+      {archiveDialog}
       {sync}
     </div>
   )

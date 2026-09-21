@@ -78,13 +78,18 @@ export function backlinksOf(index: VaultIndex, path: string): string[] {
 }
 
 /** Build force-graph data. When `focusPath` is set, returns the local neighborhood. */
-/** Generated dashboards, which are scaffolding rather than knowledge.
+/** Generated scaffolding, which is not knowledge and does not belong in a
+ *  graph of what the vault is about.
  *
- *  One "Next Up" exists per collection and links to whatever it happens to
- *  be recommending today, so in the graph it is a hub wired to half the
- *  vault — an artefact of how the app works, drawn with the same weight as
- *  a real idea, crowding out the structure the graph is for. */
-const DASHBOARD_RE = /(^|\/)Next Up\.md$/i
+ *  - **Next Up** — one per collection, linked to whatever it happens to be
+ *    recommending today, so it is a hub wired to half the vault. An
+ *    artefact of how the app works, drawn with the same weight as a real
+ *    idea and crowding out the structure the graph is for.
+ *  - **_config** — a settings file. It was already a stray unconnected dot
+ *    in every collection that had one, and archiving now *writes* one for
+ *    any collection that did not, so setting a subject aside would have
+ *    added a node to the graph. */
+const DASHBOARD_RE = /(^|\/)(Next Up|_config)\.md$/i
 
 function isDashboard(path: string): boolean {
   return DASHBOARD_RE.test(path)
