@@ -1,0 +1,130 @@
+/* The review dialog. Bottom-sheet on a phone, centred card on a laptop —
+   it is opened by a swipe from the bottom of the screen on touch, so
+   arriving from the bottom is the movement the hand just made. */
+
+.rd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: hsl(var(--soil-h) 30% 3% / 0.62);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 0;
+}
+
+.rd-panel {
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--bg-modal);
+  border-top: 1px solid var(--border-strong);
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  box-shadow: 0 -16px 40px -18px hsl(0 0% 0% / 0.7);
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  outline: none;
+}
+.rd-panel:focus-visible { outline: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .rd-panel { animation: rd-rise 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+}
+@keyframes rd-rise {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (min-width: 620px) {
+  .rd-overlay { align-items: center; padding: 24px; }
+  .rd-panel {
+    width: min(460px, 100%);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-l);
+    padding: 20px;
+  }
+}
+
+.rd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.rd-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 3px;
+}
+.rd-title { font-size: 1.15em; font-weight: 650; margin: 0; color: var(--text-normal); line-height: 1.3; }
+.rd-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s);
+  color: var(--text-faint);
+}
+.rd-close:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-normal); }
+
+.rd-rows { display: flex; flex-direction: column; gap: 18px; }
+.rd-row-head { display: flex; flex-direction: column; gap: 1px; margin-bottom: 8px; }
+.rd-label { font-size: 13.5px; font-weight: 650; color: var(--text-normal); }
+.rd-hint { font-size: 12px; color: var(--text-faint); }
+
+.rd-scale { display: flex; gap: 8px; }
+.rd-dot {
+  flex: 1;
+  /* 44px: the smallest target a thumb hits reliably. These are the only
+     thing on the screen you have to hit, so they get the whole width. */
+  min-height: 44px;
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.rd-dot:hover:not(:disabled) { border-color: var(--accent-line); color: var(--text-normal); }
+.rd-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rd-dot.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+.rd-dot:disabled { opacity: 0.6; cursor: default; }
+
+.rd-error {
+  margin-top: 14px;
+  color: var(--text-error);
+  font-size: 13px;
+  border: 1px solid var(--text-error);
+  border-radius: var(--radius-m);
+  padding: 8px 12px;
+}
+
+.rd-foot { display: flex; gap: 10px; margin-top: 22px; }
+.rd-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 46px;
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-normal);
+  font-size: 14px;
+  font-weight: 650;
+}
+/* Submit is the reason the sheet is open, so it gets the weight and the
+   larger share of the row. */
+.rd-btn.primary { flex: 2; background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+.rd-btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.rd-btn:disabled { opacity: 0.6; cursor: default; }
+.rd-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-dot { transition: none; }
+}

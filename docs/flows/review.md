@@ -40,20 +40,27 @@ The gesture lives in `src/features/reader/useScrollReview.ts`:
 
 ## Steps
 
-1. `run()` in `ReviewBar.tsx` re-reads the note from the store — a background
+1. The gesture (or the button) opens `ReviewDialog` — it writes nothing by
+   itself. Three rows of taps: confidence 0-5, importance and interest 1-5,
+   pre-filled from the note so an untouched row keeps its value.
+2. On submit, `ReviewBar.tsx` re-reads the note from the store — a background
    draft may have rewritten it since it was displayed.
-2. `setFrontmatterValue(raw, 'last_reviewed', localDay())`.
-3. `confidence + 1`, capped at 5.
-4. `status: 'known'` if confidence has reached the space's
-   `confidence_threshold` (default 3, from `_config`). Note this no longer
-   gates anything in the graph — prerequisites unlock on *review*, not
-   confidence — it records that a topic is learned.
+3. `last_reviewed` = `localDay()`, and all three scores as given.
+4. `status` follows confidence **in both directions** against the space's
+   `confidence_threshold` (default 3, from `_config`). It no longer gates
+   anything in the graph — prerequisites unlock on *review*, not confidence
+   — but it is what a reader sees and what an exported Obsidian vault sorts
+   by.
 5. Save. If nothing changed, no write — that state is the system already
    being right, not an error.
 6. `requestSpaceGrowth(space)` → `POST /api/onboarding/grow`, fire and forget.
    The review is already saved; a failure here cannot surface.
-7. The control shows "Review complete" for 1s, then goes — permanently for
-   today, because of the daily cap.
+7. Open `Automated Graph/<space>/Next Up.md`. The note is finished; leaving
+   someone at the bottom of it with nothing to do makes them find their own
+   way out.
+
+Cancelling writes nothing, and the gesture stays usable — the daily cap
+counts reviews, not attempts.
 
 ### Growth, server side
 
@@ -119,6 +126,14 @@ threshold. Then, indirectly, new `notes` rows from `growSpace`, and
 
 ## Invariants
 
+- **The scores are asked for, never assumed.** The gesture used to write
+  `+1 confidence` and nothing at all for importance or interest. Finishing a
+  note is the only moment you can say how well it landed and whether you
+  want more of it, and that judgement was being thrown away.
+- **The dialog is portalled to `<body>`.** On touch its caller is the review
+  sheet, which is `position: sticky` with a z-index — that makes a stacking
+  context, and an overlay inside one is confined to it however high its own
+  z-index goes. The symptom was the bottom nav painting over Submit.
 - **One review per note per day.** Spacing is the mechanism; letting
   confidence be walked to 5 in one sitting would make the ranking describe an
   afternoon's enthusiasm rather than what stuck. Enforced in `ReviewBar` — it

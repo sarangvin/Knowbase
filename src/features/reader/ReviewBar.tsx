@@ -23,6 +23,7 @@ import { requestSpaceGrowth } from '../onboarding/onboardingApi'
 import { configOf, isReviewedToday, localDay, spaceOfPath } from '../automated-graph/engine'
 import { Check, RotateCw } from '../../ui/icons'
 import { useScrollReview } from './useScrollReview'
+import { ReviewDialog, type ReviewScores } from './ReviewDialog'
 import './score.css'
 
 const MAX_CONFIDENCE = 5
@@ -62,6 +63,16 @@ function currentConfidence(fm: Record<string, unknown>): number {
   return Number.isFinite(n) ? Math.min(MAX_CONFIDENCE, Math.max(0, Math.round(n))) : 0
 }
 
+function scoreOf(fm: Record<string, unknown>, key: string, fallback: number): number {
+  const raw = fm[key]
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN
+  return Number.isFinite(n) ? Math.round(n) : fallback
+}
+
+function clamp(n: number, min: number): number {
+  return Math.min(MAX_CONFIDENCE, Math.max(min, n))
+}
+
 /** Ring plus glyph in one 36-unit box, so the whole thing scales with the
  *  sheet from a single CSS width — no second size to keep in step. */
 function Dial({ progress, done }: { progress: number; done: boolean }) {
@@ -80,6 +91,7 @@ function Dial({ progress, done }: { progress: number; done: boolean }) {
 export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObject<HTMLElement | null> }) {
   const saveNote = useVault((s) => s.saveNote)
   const getNote = useVault((s) => s.getNote)
+  const openNote = useVault((s) => s.openNote)
   const source = useVault((s) => s.source)
   const index = useVault((s) => s.index)
   const touch = useTouchPrimary()
@@ -87,15 +99,17 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The gesture no longer writes anything by itself: it opens this.
+  const [asking, setAsking] = useState(false)
 
   // Only on notes that actually take part in the review loop. A note with no
   // confidence and no last_reviewed is prose, not a topic, and a review
   // control there would write frontmatter nobody asked for.
   const tracked = 'confidence' in note.frontmatter || 'last_reviewed' in note.frontmatter
   const writable = !!source?.writable && (source.isPathWritable?.(note.path) ?? true)
+  // The starting point for the dialog, not an increment: the score is
+  // asked for now rather than assumed, so there is nothing to add one to.
   const conf = currentConfidence(note.frontmatter)
-  const next = Math.min(MAX_CONFIDENCE, conf + 1)
-  const atMax = conf >= MAX_CONFIDENCE
   // One review per note per day. A second pass on the same day is not a
   // second review — spacing is the whole mechanism, and letting confidence
   // be walked up to 5 in one sitting would make the ranking describe an
@@ -112,51 +126,62 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   const runRef = useRef<() => void>(() => {})
   const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const run = async () => {
-    if (busy || done || !writable || !tracked || reviewedToday) return
+  /** The gesture and the button both land here: ask, do not assume. */
+  const ask = () => {
+    if (busy || done || asking || !writable || !tracked || reviewedToday) return
+    setError(null)
+    setAsking(true)
+  }
+
+  const submit = async (scores: ReviewScores) => {
+    if (busy) return
     setBusy(true)
     setError(null)
-    // Show the finished state the moment the gesture completes, not when the
-    // write returns: the user's part is over, and letting the sheet sag back
-    // while the network settles would read as a failure.
-    setDone(true)
     try {
       // Re-read rather than trusting the rendered copy: a background draft
       // may have rewritten the body since this note was displayed.
       const current = getNote(note.path)
       if (!current) throw new Error('note not found')
       let raw = setFrontmatterValue(current.raw, 'last_reviewed', localDay())
-      // At 5 there is nothing to raise, but the review still happened — the
-      // date is what moves it out of "due for review".
-      if (!atMax) raw = setFrontmatterValue(raw, 'confidence', next)
-      // Reaching the threshold is what "learned" means, so say so in the
-      // frontmatter too. The ranking now reads confidence directly, but
-      // status is the field a reader sees and the one a vault exported to
-      // Obsidian is sorted by — leaving it on "frontier" forever made the
-      // note claim to be unlearned material it had finished.
-      if ((atMax ? conf : next) >= threshold && note.frontmatter.status === 'frontier') {
+      // The user's own numbers, not a guess. Every one of these is written,
+      // including ones they left where they were — a slider left alone is
+      // still an answer, and writing it keeps the note's three scores a
+      // single consistent snapshot rather than a mix of eras.
+      raw = setFrontmatterValue(raw, 'confidence', scores.confidence)
+      raw = setFrontmatterValue(raw, 'importance', scores.importance)
+      raw = setFrontmatterValue(raw, 'interest', scores.interest)
+      // Status follows confidence in both directions. It only ever moved up
+      // while the gesture could only add one; now that the number is typed
+      // in, it can come down, and a note stuck on "known" at 1/5 would lie
+      // to anyone reading the vault in Obsidian.
+      const status = note.frontmatter.status
+      if (scores.confidence >= threshold && status === 'frontier') {
         raw = setFrontmatterValue(raw, 'status', 'known')
+      } else if (scores.confidence < threshold && status === 'known') {
+        raw = setFrontmatterValue(raw, 'status', 'frontier')
       }
-      // Unchanged means already reviewed today at max confidence — the state
-      // the gesture was asking for. Treating that as an error blames the user
-      // for the system already being right.
       if (raw !== current.raw) await saveNote(note.path, raw)
       // Finishing a topic is exactly when the tree should grow: the server
       // tops it back up to three unstudied topics, using what they now know
       // as the prerequisites for what comes next. Not awaited, and its
       // failure cannot surface here — the review is already saved.
       if (space) requestSpaceGrowth(space)
+      setAsking(false)
+      // Back to where the decision about what to read next gets made. The
+      // note is finished; leaving them at the bottom of it with nothing to
+      // do would make them find their own way out.
+      if (space) openNote(`Automated Graph/${space}/Next Up.md`)
+      else setDone(true)
       holdRef.current = setTimeout(() => setDone(false), (touch ? OPEN_MS : 0) + HOLD_MS)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-      setDone(false)
     } finally {
       setBusy(false)
     }
   }
-  runRef.current = () => void run()
+  runRef.current = () => ask()
 
-  const active = tracked && writable && !busy && !done && !reviewedToday
+  const active = tracked && writable && !busy && !done && !asking && !reviewedToday
   // Disabled outright on a pointer device: there, the button is the whole
   // interaction and a wheel at the end of a note should just be a wheel.
   const { progress, armed } = useScrollReview(scrollRef, {
@@ -169,6 +194,7 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   useEffect(() => {
     setError(null)
     setDone(false)
+    setAsking(false)
     if (holdRef.current) clearTimeout(holdRef.current)
   }, [note.path])
 
@@ -181,9 +207,29 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   // without this the sheet would vanish mid-"Review complete".
   if (reviewedToday && !done) return null
 
-  const detail = atMax
-    ? `Sets last reviewed to today. Confidence stays at ${MAX_CONFIDENCE}/${MAX_CONFIDENCE}.`
-    : `Sets last reviewed to today and raises confidence to ${next}/${MAX_CONFIDENCE}.`
+  const detail = 'Asks how it went, then records your scores and today\u2019s date.'
+
+  // Pre-filled with what the note already says, so leaving a row alone
+  // keeps its value rather than resetting it to some default.
+  const initial: ReviewScores = {
+    confidence: conf,
+    importance: clamp(scoreOf(note.frontmatter, 'importance', 3), 1),
+    interest: clamp(scoreOf(note.frontmatter, 'interest', 3), 1),
+  }
+  const dialog = asking ? (
+    <ReviewDialog
+      title={note.title}
+      initial={initial}
+      busy={busy}
+      error={error}
+      onSubmit={(sc) => void submit(sc)}
+      onCancel={() => {
+        if (busy) return
+        setAsking(false)
+        setError(null)
+      }}
+    />
+  ) : null
 
   // ── Pointer: a button at the end of the note ─────────────────────────────
   if (!touch) {
@@ -192,15 +238,16 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
         <button
           className={'review-btn' + (done ? ' is-done' : '')}
           disabled={!writable || busy || done}
-          onClick={() => void run()}
+          onClick={ask}
           title={writable ? detail : 'This vault is read-only.'}
         >
           {done ? <Check width={15} height={15} /> : <RotateCw width={15} height={15} />}
           {done ? 'Review complete' : busy ? 'Saving…' : 'Mark reviewed'}
         </button>
-        <span className={'review-hint' + (error ? ' is-error' : '')}>
-          {error ?? (writable ? detail : 'This vault is read-only.')}
+        <span className={'review-hint' + (error && !asking ? ' is-error' : '')}>
+          {(!asking && error) || (writable ? detail : 'This vault is read-only.')}
         </span>
+        {dialog}
       </div>
     )
   }
@@ -213,10 +260,10 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
   // Nothing to swipe anywhere but the end of the note, so the sheet is not
   // there anywhere else — it would just be a bar covering the text with an
   // instruction you cannot follow yet.
-  const visible = armed || pulling || done || !!error
+  const visible = armed || pulling || done || asking || !!error
 
   let label: string
-  if (error) label = error
+  if (error && !asking) label = error
   else if (done) label = 'Review complete'
   else if (!writable) label = 'This vault is read-only'
   else label = 'Swipe up to complete'
@@ -230,12 +277,12 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
           (visible ? ' is-visible' : '') +
           (pulling ? ' is-pulling' : '') +
           (done ? ' is-done' : '') +
-          (error ? ' is-error' : '') +
+          (error && !asking ? ' is-error' : '') +
           (writable ? '' : ' is-locked')
         }
         style={{ '--p': p } as CSSProperties}
         disabled={!writable || busy || done || !visible}
-        onClick={() => void run()}
+        onClick={ask}
         // The gesture is the discoverable path; assistive tech gets the plain
         // one, described by what it will actually write. The name starts
         // with the visible word so voice control ("tap complete") can reach
@@ -247,6 +294,7 @@ export function ReviewBar({ note, scrollRef }: { note: Note; scrollRef: RefObjec
         <Dial progress={progress} done={done} />
         <span className="rs-label">{label}</span>
       </button>
+      {dialog}
     </div>
   )
 }
