@@ -364,7 +364,7 @@ export async function reconcileQueue(): Promise<number> {
           .select({ vaultId: draftQueue.vaultId, path: draftQueue.path })
           .from(draftQueue)
           .where(inArray(draftQueue.status, ['pending', 'running', 'failed']))
-      ).map((r) => `${r.vaultId} ${r.path}`),
+      ).map((r) => JSON.stringify([r.vaultId, r.path])),
     )
 
     // Owner and siblings come from the vault itself. The summary is recovered
@@ -372,7 +372,7 @@ export async function reconcileQueue(): Promise<number> {
     // it — a worse prompt than the original plan's, but a real one.
     const byVault = new Map<string, typeof stranded>()
     for (const n of stranded) {
-      if (known.has(`${n.vaultId} ${n.path}`)) continue
+      if (known.has(JSON.stringify([n.vaultId, n.path]))) continue
       const list = byVault.get(n.vaultId) ?? []
       list.push(n)
       byVault.set(n.vaultId, list)

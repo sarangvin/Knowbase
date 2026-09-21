@@ -1,0 +1,1 @@
+ALTER TABLE "flashcard_reviews" ADD COLUMN "bookmarked" boolean DEFAULT false NOT NULL;

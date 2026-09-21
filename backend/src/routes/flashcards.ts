@@ -13,7 +13,7 @@ import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectSources, pickSources, extractTerms, dealDeck, cardsPerDay } from '../flashcards/build.js'
-import { schedulesFor, recordTurn } from '../flashcards/schedule.js'
+import { schedulesFor, recordTurn, setBookmark, scheduleKey } from '../flashcards/schedule.js'
 
 export const flashcardsRouter = Router()
 flashcardsRouter.use(requireAuth)
@@ -24,8 +24,22 @@ function dayOf(v: unknown): string | null {
   return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null
 }
 
-function view(row: { day: string; cards: FlashcardRow[] }) {
-  return { day: row.day, cards: row.cards }
+/** The deck, plus which of its cards are bookmarked right now.
+ *
+ *  Alongside rather than inside: a bookmark belongs to the card's schedule,
+ *  not to this particular deck, and copying it onto the deck row would give
+ *  the same fact two homes to drift between. This is the shape that keeps
+ *  one of them authoritative. */
+async function view(userId: string, row: { day: string; cards: FlashcardRow[] }) {
+  const seen = await schedulesFor(
+    userId,
+    row.cards.map((c) => ({ notePath: c.notePath, term: c.term })),
+  )
+  return {
+    day: row.day,
+    cards: row.cards,
+    bookmarked: row.cards.map((c) => seen.get(scheduleKey(c.notePath, c.term))?.bookmarked ?? false),
+  }
 }
 
 async function todaysRow(userId: string, day: string) {
@@ -51,7 +65,7 @@ flashcardsRouter.get('/today', asyncHandler(async (req, res) => {
 
   const row = await todaysRow(userId, day)
   if (row) {
-    res.json({ deck: view(row), notes: null, limit })
+    res.json({ deck: await view(userId, row), notes: null, limit })
     return
   }
   const vaultId = await getOrCreatePersonalVaultId(userId)
@@ -75,7 +89,7 @@ flashcardsRouter.post('/today', asyncHandler(async (req, res) => {
 
   const existing = await todaysRow(userId, day)
   if (existing) {
-    res.json({ deck: view(existing) })
+    res.json({ deck: await view(userId, existing) })
     return
   }
 
@@ -109,7 +123,7 @@ flashcardsRouter.post('/today', asyncHandler(async (req, res) => {
     res.status(500).json({ error: 'Could not save the deck.' })
     return
   }
-  res.json({ deck: view(row) })
+  res.json({ deck: await view(userId, row) })
 }))
 
 /** Turn a card over.
@@ -160,4 +174,34 @@ flashcardsRouter.post('/turn', asyncHandler(async (req, res) => {
     intervalDays: schedule.intervalDays,
     reps: schedule.reps,
   })
+}))
+
+/** Bookmark a card, or take the bookmark off.
+ *
+ *  "Show me this one sooner": the card comes back tomorrow and has first
+ *  claim on that deck. It lasts exactly until the next turn, which is what
+ *  stops a bookmark becoming a card that never leaves the rotation — if it
+ *  is still not sticking, bookmark it again. */
+flashcardsRouter.post('/bookmark', asyncHandler(async (req, res) => {
+  const day = dayOf(req.body?.day)
+  const index = Number(req.body?.index)
+  const bookmarked = req.body?.bookmarked
+  if (!day || !Number.isInteger(index) || typeof bookmarked !== 'boolean') {
+    res.status(400).json({ error: 'body.day, body.index and body.bookmarked required' })
+    return
+  }
+  const userId = req.user!.id
+  const row = await todaysRow(userId, day)
+  if (!row) {
+    res.status(404).json({ error: 'No deck for that day.' })
+    return
+  }
+  const card = row.cards[index]
+  if (!card) {
+    res.status(400).json({ error: 'No such card.' })
+    return
+  }
+
+  const schedule = await setBookmark(userId, card.notePath, card.term, day, bookmarked)
+  res.json({ bookmarked: schedule.bookmarked, nextDue: schedule.dueOn })
 }))

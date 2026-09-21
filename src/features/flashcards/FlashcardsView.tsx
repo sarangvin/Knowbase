@@ -12,8 +12,8 @@
 // to one you half-knew is most of how this gets used.
 import { useCallback, useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { Layers, RotateCw, ArrowRight, ArrowLeft, Check } from '../../ui/icons'
-import { fetchDeck, dealDeck, turnCard, type Deck, type TurnResult } from './flashcardsApi'
+import { Layers, RotateCw, ArrowRight, ArrowLeft, Check, Bookmark, BookmarkFilled } from '../../ui/icons'
+import { fetchDeck, dealDeck, turnCard, bookmarkCard, type Deck, type TurnResult } from './flashcardsApi'
 import './flashcards.css'
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -72,6 +72,17 @@ export function FlashcardsView() {
   // must not wait for the network to move, and a failed record must not
   // leave the user looking at a card that refuses to turn — so the write is
   // fire-and-forget and the count is corrected from its reply.
+  const toggleBookmark = useCallback(() => {
+    if (!deck) return
+    const next = !deck.bookmarked[at]
+    // Optimistic: a bookmark is a small, reversible thing and the control
+    // should answer the tap, not the round trip.
+    setDeck((d) => (d ? { ...d, bookmarked: d.bookmarked.map((b, i) => (i === at ? next : b)) } : d))
+    void bookmarkCard(at, next).catch(() => {
+      setDeck((d) => (d ? { ...d, bookmarked: d.bookmarked.map((b, i) => (i === at ? !next : b)) } : d))
+    })
+  }, [at, deck])
+
   const flip = useCallback(() => {
     setFlipped((f) => ({ ...f, [at]: !f[at] }))
     const card = deck?.cards[at]
@@ -190,6 +201,7 @@ export function FlashcardsView() {
   // ── The stack ───────────────────────────────────────────────────────────
   const card = deck.cards[at]
   const isFlipped = !!flipped[at]
+  const bookmarked = deck.bookmarked[at] ?? false
   // The front is whichever side this card was dealt on; the back is the
   // other one. Mixing the direction is what stops the deck being a
   // vocabulary list read in one direction only.
@@ -216,6 +228,22 @@ export function FlashcardsView() {
         <div className="fc-stack">
           {at < total - 1 && <span className="fc-stack-edge fc-stack-2" aria-hidden="true" />}
           {at < total - 2 && <span className="fc-stack-edge fc-stack-3" aria-hidden="true" />}
+
+          {/* A sibling of the card, not a child of either face. Nesting a
+              button inside a button is invalid, and duplicating it per face
+              would be two controls to keep in step — this one sits above
+              both and is therefore visible whichever way the card is
+              showing, without moving when it flips. */}
+          <button
+            type="button"
+            className={'fc-bookmark' + (bookmarked ? ' is-on' : '')}
+            aria-pressed={bookmarked}
+            title={bookmarked ? 'Bookmarked — back tomorrow' : 'See this one again tomorrow'}
+            aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark to see again tomorrow'}
+            onClick={toggleBookmark}
+          >
+            {bookmarked ? <BookmarkFilled width={17} height={17} /> : <Bookmark width={17} height={17} />}
+          </button>
 
           <button
             type="button"
@@ -257,9 +285,12 @@ export function FlashcardsView() {
           {card.turnedAt && (
             <span className="fc-reviewed">
               <Check width={12} height={12} /> Reviewed
-              {scheduled[at] && ` · back in ${scheduled[at].intervalDays} days`}
+              {/* A bookmark overrides the interval, so saying "back in 8
+                  days" next to a bookmarked card would be a lie. */}
+              {scheduled[at] && !bookmarked && ` · back in ${scheduled[at].intervalDays} days`}
             </span>
           )}
+          {bookmarked && <span className="fc-bookmarked-note">Back tomorrow</span>}
           {/* The note is the point: a term you could not place should be one
               tap from the thing that explains it. */}
           <button className="fc-source" onClick={() => openNote(card.notePath)}>

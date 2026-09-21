@@ -76,6 +76,18 @@ export const Layers = (p: P) => (
     <path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" />
   </svg>
 )
+/** Outline, and the filled twin below. A bookmark that only changes colour
+ *  is hard to read at 16px against a dark card; the shape carries it. */
+export const Bookmark = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+)
+export const BookmarkFilled = (p: P) => (
+  <svg {...base(p)} fill="currentColor">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+)
 export const HelpCircle = (p: P) => (
   <svg {...base(p)}>
     <circle cx="12" cy="12" r="9" /><path d="M9.2 9.2a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4" /><path d="M12 17.5h.01" />

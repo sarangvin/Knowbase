@@ -289,17 +289,25 @@ export function dealDeck(
   seen: Map<string, CardSchedule>,
   today: string,
 ): FlashcardRow[] {
+  // Bookmarked cards are not sampled, they are taken. The user asked for
+  // this one specifically; leaving it to a weighted draw would mean asking
+  // to see a card sooner and then not seeing it.
+  const asked: Extracted[] = []
   const ready: Extracted[] = []
   const waiting: { card: Extracted; dueOn: string }[] = []
   for (const e of pool) {
     const sched = seen.get(scheduleKey(e.source.notePath, e.term))
+    if (sched?.bookmarked) asked.push(e)
     // Never seen, or due today or earlier. String comparison is correct for
     // ISO dates and is the same comparison the rest of the app makes.
-    if (!sched || sched.dueOn <= today) ready.push(e)
+    else if (!sched || sched.dueOn <= today) ready.push(e)
     else waiting.push({ card: e, dueOn: sched.dueOn })
   }
 
-  const chosen = weightedSample(ready, (e) => e.source.weight, size)
+  const chosen = [
+    ...asked.slice(0, size),
+    ...weightedSample(ready, (e) => e.source.weight, Math.max(0, size - asked.length)),
+  ]
   if (chosen.length < size) {
     const short = size - chosen.length
     chosen.push(

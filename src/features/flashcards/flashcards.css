@@ -243,3 +243,39 @@
   font-size: 11.5px;
   color: var(--accent);
 }
+
+/* Bookmark: over the card, top right, on top of both faces. It sits outside
+   the flipping element so it neither rotates with the card nor needs a copy
+   on each side. */
+.fc-bookmark {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 40px: the card underneath is one big tap target, so this one has to be
+     unmissable or a thumb aiming for it flips the card instead. */
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.fc-bookmark:hover { background: var(--bg-hover); color: var(--text-normal); }
+.fc-bookmark.is-on { color: var(--accent); }
+.fc-bookmark:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.fc-bookmarked-note {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--accent);
+}

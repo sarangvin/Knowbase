@@ -61,12 +61,35 @@ which of its terms make the deck.
 `flashcards/schedule.ts`, table `flashcard_reviews`. The gap doubles each
 time a card is turned over:
 
-| Turn | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8+ |
-|---|---|---|---|---|---|---|---|---|
-| Next gap (days) | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 180 |
+| Turn | 1 | 2 | 3 | 4 | 5+ |
+|---|---|---|---|---|---|
+| Next gap (days) | 2 | 4 | 8 | 16 | 30 |
 
-Two days, not one, because "not the following day" is the requirement. 180
-is a ceiling so a card met six times does not disappear for two years.
+Two days, not one, because "not the following day" is the requirement.
+Thirty is the ceiling — reached on the fifth turn — because a month is
+about as long as a gap can get before a card stops feeling like part of the
+deck and starts feeling like a surprise.
+
+### Bookmarks
+
+A bookmark is "show me this one sooner": it pulls the due date to tomorrow
+and gives the card **first claim** on that deck, taken rather than sampled,
+because asking to see a card sooner and then not seeing it is worse than
+not offering the button.
+
+It lasts exactly until the next turn. A standing bookmark would become a
+card that never leaves the rotation, and the honest way to say "still not
+sticking" is to bookmark it again when it comes back.
+
+**A bookmarked card holds its gap instead of doubling it.** Without that
+the button is a trap: you flag a card at a 16-day gap because you did not
+know it, see it tomorrow, and the turn pushes it to 30 — further away than
+if you had never asked. Asking to see something sooner cannot be the thing
+that makes it rarer. The rule lives in `intervalAfterTurn`, which is a
+separate function purely so it can be tested without a database.
+
+Bookmarking does **not** touch `reps` or `interval_days`: the card's real
+place in the schedule is still needed once the bookmark is consumed.
 
 **Not SM-2 proper, on purpose.** SM-2's ease factor is driven by how well
 you said you did, and this deck has no self-rating: turning a card over
@@ -128,6 +151,15 @@ not knowing it in the other.
   card looked at twice reported "0 turned" — the visual face and the fact of
   having seen it are two different things and are now two different pieces
   of state, one local and one on the server.
+- **The bookmark control is a sibling of the card, not a child of a face.**
+  Nesting a button inside the card button is invalid, and one per face
+  would be two controls to keep in step. It sits above both faces, so it is
+  visible whichever way the card is showing and does not rotate with it.
+  40x40, because the card underneath is one enormous tap target and a thumb
+  aiming for a small bookmark would flip the card instead.
+- **Bookmark state is read from the schedule, never copied onto the deck.**
+  `GET /today` sends it alongside the cards. The same fact in two rows is
+  the failure this codebase keeps repeating.
 - **The daily limit lives in one place.** `cardsPerDay()` in `build.ts`,
   keyed by plan tier — free is 10 and every account is on free. A limit at
   the call site is a limit that disagrees with the copy describing it.
@@ -139,8 +171,9 @@ not knowing it in the other.
 **`flashcard_decks`** — one row per user per day: the cards as dealt, with
 the side each one opens on.
 
-**`flashcard_reviews`** — one row per card ever turned: reps, the interval
-that produced the due date, the due date, and when it was last seen.
+**`flashcard_reviews`** — one row per card ever turned or bookmarked: reps,
+the interval that produced the due date, the due date, whether it is
+bookmarked, and when it was last seen.
 
 **`usage_events`** — one `llm_call` with source `flashcards-build`. One
 extra model call per user per day against the 500/day ceiling.

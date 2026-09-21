@@ -328,6 +328,11 @@ export const flashcardReviews = pgTable(
      *  comparison is the same string comparison the rest of the app makes
      *  and no timezone gets a vote. */
     dueOn: text('due_on').notNull(),
+    /** "Show me this one again sooner." Pulls `dueOn` to tomorrow and gives
+     *  the card first claim on that deck. Consumed by the next turn rather
+     *  than persisting — a standing bookmark would quietly become a card
+     *  that never leaves the rotation. */
+    bookmarked: boolean('bookmarked').notNull().default(false),
     lastSeenOn: text('last_seen_on').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

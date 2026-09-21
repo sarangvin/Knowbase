@@ -18,6 +18,9 @@ export interface Flashcard {
 export interface Deck {
   day: string
   cards: Flashcard[]
+  /** Per card, by index. Lives on the card's schedule rather than on the
+   *  deck, so it is sent alongside rather than baked into the cards. */
+  bookmarked: boolean[]
 }
 
 export interface DeckToday {
@@ -71,4 +74,20 @@ export async function turnCard(index: number): Promise<TurnResult> {
     body: JSON.stringify({ day: localDay(), index }),
   })
   return (await jsonOrThrow(res)) as TurnResult
+}
+
+export interface BookmarkResult {
+  bookmarked: boolean
+  /** When the card will next come round, after the change. */
+  nextDue: string
+}
+
+export async function bookmarkCard(index: number, bookmarked: boolean): Promise<BookmarkResult> {
+  const res = await fetch('/api/flashcards/bookmark', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ day: localDay(), index, bookmarked }),
+  })
+  return (await jsonOrThrow(res)) as BookmarkResult
 }
