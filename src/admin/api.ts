@@ -105,6 +105,34 @@ export interface UsageEventRow {
   created_at: string
 }
 
+/** One draft_queue row (backend/src/onboarding/queue.ts). */
+export interface AdminQueueRow {
+  id: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  attempts: number
+  last_error: string | null
+  source: string
+  space: string
+  title: string
+  path: string
+  email: string
+  created_at: string
+  started_at: string | null
+  updated_at: string
+  /** Running AND started recently enough to be the job actually holding the
+   *  queue — not merely a row left in 'running' by a killed invocation. */
+  in_flight: boolean
+}
+
+export interface AdminQueueResponse {
+  depth: { pending: number; running: number; failed: number }
+  /** Everything not done, running first, then oldest pending. */
+  rows: AdminQueueRow[]
+  /** Last 20 finished, so "quiet" can be told from "stalled". */
+  recent: AdminQueueRow[]
+  timing: { calls: number; avg_ms: number | null; max_ms: number | null }
+}
+
 export interface AdminUserDetail {
   user: {
     id: string
@@ -144,6 +172,18 @@ export function fetchSpaces(): Promise<AdminSpacesResponse> {
 
 export function fetchUsage(): Promise<AdminUsageResponse> {
   return api('/api/admin/usage')
+}
+
+export function fetchQueue(): Promise<AdminQueueResponse> {
+  return api('/api/admin/queue')
+}
+
+export function drainQueueNow(): Promise<{ reconciled: number; drained: unknown; depth: AdminQueueResponse['depth'] }> {
+  return api('/api/admin/queue/drain', { method: 'POST' })
+}
+
+export function retryFailedJobs(): Promise<{ requeued: number; depth: AdminQueueResponse['depth'] }> {
+  return api('/api/admin/queue/retry', { method: 'POST' })
 }
 
 export function setApproved(id: string, approved: boolean): Promise<{ access_approved: boolean; access_approved_at: string | null }> {

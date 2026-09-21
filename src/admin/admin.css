@@ -202,3 +202,23 @@
 @media (max-width: 640px) {
   .admin-shell { padding: 20px 14px; }
 }
+
+/* Draft queue tab. The header is counts on the left, actions on the right,
+   wrapping to two rows on a narrow screen rather than squeezing the buttons. */
+.admin-queue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+}
+.admin-queue-stats { display: flex; flex-wrap: wrap; gap: 18px; align-items: baseline; }
+.admin-queue-actions { display: flex; gap: 8px; }
+/* Model errors run to paragraphs. One line here, the whole thing on hover. */
+.admin-queue-error {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -9,7 +9,7 @@ import { db } from '../db/client.js'
 import { users, usageEvents, subscriptions, onboardingJobs } from '../db/schema.js'
 import { waitUntil } from '@vercel/functions'
 import { runOnboarding } from '../onboarding/run.js'
-import { queueDepth } from '../onboarding/queue.js'
+import { queueDepth, drainQueue, reconcileQueue } from '../onboarding/queue.js'
 import { requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 
@@ -229,6 +229,90 @@ adminRouter.get('/usage', asyncHandler(async (_req, res) => {
     // you find out about when a user reports a note that never filled in.
     queue: await queueDepth(),
   })
+}))
+
+/** The draft queue, row by row.
+ *
+ *  Model usage shows three numbers (waiting / in flight / given up on), which
+ *  answers "is anything stuck" and nothing else. When something *is* stuck the
+ *  next questions are always whose note it is, how many attempts it has burnt
+ *  and what the last error said — and those only exist in the rows.
+ *
+ *  Done rows are kept to the last 20: the queue's recent history is how you
+ *  tell "nothing is running because it is all finished" from "nothing is
+ *  running because nothing has run in an hour".
+ */
+adminRouter.get('/queue', asyncHandler(async (_req, res) => {
+  const rows = (await db.execute(sql`
+    SELECT q.id, q.status, q.attempts, q.last_error, q.source, q.space, q.title, q.path,
+           q.created_at, q.started_at, q.updated_at,
+           u.email,
+           -- The claim query refuses to start a job while another has been
+           -- running for under IN_FLIGHT_SECONDS. Deriving the same predicate
+           -- here is what makes "in flight" on the dashboard mean the thing
+           -- that is actually blocking the queue, rather than any row left in
+           -- 'running' by a killed invocation.
+           (q.status = 'running' AND q.started_at > now() - interval '30 seconds') AS in_flight
+    FROM draft_queue q
+    JOIN users u ON u.id = q.user_id
+    WHERE q.status <> 'done'
+    ORDER BY
+      CASE q.status WHEN 'running' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
+      q.created_at
+  `)).rows
+
+  const recent = (await db.execute(sql`
+    SELECT q.id, q.status, q.attempts, q.last_error, q.source, q.space, q.title, q.path,
+           q.created_at, q.started_at, q.updated_at, u.email, false AS in_flight
+    FROM draft_queue q
+    JOIN users u ON u.id = q.user_id
+    WHERE q.status = 'done'
+    ORDER BY q.updated_at DESC
+    LIMIT 20
+  `)).rows
+
+  // How long drafts are actually taking, from the meter rather than from the
+  // queue — the budget that decides whether a second job fits in one
+  // invocation is set against these numbers, so they belong next to them.
+  const timing = (await db.execute(sql`
+    SELECT count(*)::int AS calls,
+           round(avg(latency_ms))::int AS avg_ms,
+           max(latency_ms)::int AS max_ms
+    FROM usage_events
+    WHERE event_type = 'llm_call'
+      AND metadata->>'source' = 'queue-draft'
+      AND created_at > now() - interval '24 hours'
+  `)).rows[0] as { calls: number; avg_ms: number | null; max_ms: number | null }
+
+  res.json({ depth: await queueDepth(), rows, recent, timing })
+}))
+
+/** Drain one job now.
+ *
+ *  Drafting is driven by the status poll, so an empty queue with nobody in the
+ *  app stays empty until someone opens it. This is the nudge — the same
+ *  drainQueue the poll calls, with no special path of its own to drift. */
+adminRouter.post('/queue/drain', asyncHandler(async (_req, res) => {
+  const reconciled = await reconcileQueue()
+  const drained = await drainQueue()
+  res.json({ reconciled, drained, depth: await queueDepth() })
+}))
+
+/** Put every given-up-on job back in line, attempts reset to zero.
+ *
+ *  A 'failed' row is terminal by design — three attempts and the queue stops
+ *  spending model calls on it. But the usual reason is a bug or an outage that
+ *  has since been fixed, and without this the only way back is SQL. */
+adminRouter.post('/queue/retry', asyncHandler(async (_req, res) => {
+  const rows = await db.execute(sql`
+    UPDATE draft_queue
+       SET status = 'pending', attempts = 0, last_error = NULL,
+           started_at = NULL, updated_at = now()
+     WHERE status = 'failed'
+    RETURNING id
+  `)
+  waitUntil(drainQueue())
+  res.json({ requeued: rows.rows.length, depth: await queueDepth() })
 }))
 
 adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {
