@@ -1,0 +1,76 @@
+/* The Files tab: a thin bar to choose the view, and the view under it. */
+.filespane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
+.filespane-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The label wraps the select so the icon sits inside the control rather than
+   beside it — one thing to aim at, not two. */
+.filespane-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+.filespane-select:hover { border-color: var(--accent); }
+.filespane-select:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.filespane-icon { display: inline-flex; color: var(--text-muted); }
+.filespane-select select {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  /* Room for the caret drawn by ::after below. */
+  padding: 0 16px 0 0;
+  cursor: pointer;
+}
+.filespane-select select:focus { outline: none; }
+.filespane-select::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: translateY(-2px) rotate(45deg);
+  pointer-events: none;
+}
+
+/* min-height:0 so the stack can actually shrink — without it a canvas sized
+   to its content pushes the pane taller than the viewport and the whole app
+   scrolls. */
+.filespane-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+/* Both views are laid out at full size, one on top of the other. */
+.filespane-body { position: absolute; inset: 0; }
+/* visibility, not display: a display:none box measures zero, GraphView drops
+   its canvas below nonzero width, and the settled layout is lost on every
+   switch. visibility keeps the box and still takes the pane out of the tab
+   order and the accessibility tree. */
+.filespane-body.is-hidden { visibility: hidden; pointer-events: none; }

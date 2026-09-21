@@ -17,6 +17,21 @@ interface GLink {
   target: string | GNode
 }
 
+/** Below this zoom, only the hovered and focused nodes are named.
+ *
+ *  Labels come in as you zoom, the way Obsidian's graph does. There used to
+ *  be an escape hatch — always label a graph under 45 nodes — which was
+ *  fine while this was a desktop-only pane. It is the Files tab's default
+ *  view now, and on a phone zoomToFit leaves every label at full size on a
+ *  tight cluster: a wall of overlapping text.
+ *
+ *  0.5 rather than the old 0.85 because 0.85 hid them everywhere once the
+ *  escape hatch went. Measured, on the demo vault's 22 notes, the zoom the
+ *  initial fit settles at: 0.75 at 1024px, 0.65 at 768px, 0.24 at 375px.
+ *  So a desktop or tablet opens with its labels and a phone opens on the
+ *  shape, a pinch away from the names. */
+const LABEL_ZOOM = 0.5
+
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
@@ -150,8 +165,15 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
               ctx.strokeStyle = accent
               ctx.stroke()
             }
-            const showLabel =
-              n.id === hover || isFocus || globalScale > 0.85 || (!compact && data.nodes.length < 45)
+            // Labels come in as you zoom, the way Obsidian's graph does.
+            //
+            // There used to be an escape hatch — always label a graph under
+            // 45 nodes — which was fine while this was a desktop-only pane.
+            // It is the Files tab's default view now, and on a 375px screen
+            // zoomToFit leaves every label at full size on a tight cluster:
+            // a wall of overlapping text. Zoom is the honest signal for "is
+            // there room to read this", and it already works.
+            const showLabel = n.id === hover || isFocus || globalScale > LABEL_ZOOM
             if (showLabel && !dim) {
               // Constant on-screen label size (the canvas ctx is pre-scaled by zoom).
               const fs = (compact ? 9 : 11) / globalScale
