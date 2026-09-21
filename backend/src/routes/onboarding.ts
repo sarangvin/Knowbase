@@ -116,7 +116,11 @@ onboardingRouter.post('/grow', asyncHandler(async (req, res) => {
   }
   const userId = req.user!.id
   res.status(202).json({ ok: true, maxUnreviewed: MAX_UNREVIEWED })
-  waitUntil(growSpace(userId, space))
+  // Plan the topics, then take one draft off the queue — one, because the
+  // batch is one, so the worst case here is a plan call plus a single draft
+  // rather than the plan plus three that used to overrun the 60s ceiling.
+  // The rest drain from the status poll below.
+  waitUntil(growSpace(userId, space).then(() => drainQueue()))
 }))
 
 /** The job's state, and the heartbeat that keeps the draft queue moving.

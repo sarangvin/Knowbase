@@ -23,14 +23,34 @@ import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
 import { draftOne } from './draftNote.js'
 import { SPACE_ROOT, contributeToLibrary } from '../vault/spaces.js'
 
-/** Notes drafted per drain. Each is a model call, and the free tier allows 15
- *  a minute across everything — small batches leave room for the calls a user
- *  is making by hand. */
-const BATCH = 3
+/** Notes drafted per drain.
+ *
+ *  One, not three. A drain runs inside a request's invocation, under the
+ *  same 60s ceiling as the response it followed, and a draft that normally
+ *  takes 4s has been observed taking 28. Three of those in sequence cannot
+ *  fit, so the batch was the thing that had to go — more invocations each
+ *  doing one small piece, rather than one invocation gambling on latency. */
+const BATCH = 1
 
-/** Stop claiming new work near the function's ceiling (60s) so a drain always
- *  finishes the note it is on rather than being killed holding a claim. */
+/** The wall this has to stay inside: the function's maxDuration in
+ *  vercel.json, less the time the request itself already spent. */
 const TIME_BUDGET_MS = 40_000
+
+/** The slowest single draft worth planning for. Typical is ~4s; the worst
+ *  seen in production is 28s, under load from overlapping drains.
+ *
+ *  The budget is checked against elapsed + THIS, not elapsed alone. Checking
+ *  elapsed alone is the bug that killed /grow: a job could legally start at
+ *  39.9s and then run for 28 more, half a minute past the ceiling. */
+const WORST_CASE_JOB_MS = 30_000
+
+/** How long a claimed job is treated as still in flight.
+ *
+ *  A drain claims nothing while another job is in flight, which is what
+ *  keeps concurrent drains from stampeding. Set to the worst-case job time:
+ *  shorter and a slow draft would let a second start beside it; longer and
+ *  a genuinely dead invocation stalls the queue for no reason. */
+const IN_FLIGHT_SECONDS = 30
 
 /** A 'running' row older than this is assumed dead and is reclaimed. Longer
  *  than any legitimate single draft (~15s on flash-lite, ~55s on a thinking
@@ -100,13 +120,28 @@ interface ClaimedRow {
 }
 
 /**
- * Take ownership of up to `n` jobs, atomically.
+ * Take ownership of up to `n` jobs — but only if nothing else is running.
  *
  * One statement, so two drains racing cannot claim the same row: the UPDATE
  * flips status under a lock, and SKIP LOCKED means the loser takes different
- * rows rather than blocking. This is the entire concurrency design — without
- * it, the 5-second status poll would have several invocations drafting the
- * same note and paying for it several times.
+ * rows rather than blocking.
+ *
+ * SKIP LOCKED alone was not enough. It stops two drains taking the *same*
+ * row; it does nothing to stop ten drains working on ten *different* rows,
+ * and the status poll kicks one every five seconds. That stampede is what
+ * turned a 4s draft into a 28s one against a 15-requests-per-minute model
+ * limit. The NOT EXISTS below is the fix: claim nothing while another job is
+ * in flight, so the queue runs strictly one job at a time.
+ *
+ * A Postgres advisory lock was the obvious alternative and is wrong here.
+ * `pg_advisory_lock` is session-scoped, and `db` is a connection pool — the
+ * unlock can land on a different connection than the lock did, and then the
+ * lock is never released and the queue wedges permanently. A predicate over
+ * rows we already have is pool-safe and self-expiring.
+ *
+ * The pacing falls out of it: one job at a time, each ~4s, is about 12 model
+ * calls a minute — inside the limit, without a second throttle to keep in
+ * step with Google's published numbers by hand.
  */
 async function claim(n: number): Promise<ClaimedRow[]> {
   const res = await db.execute(sql`
@@ -116,10 +151,17 @@ async function claim(n: number): Promise<ClaimedRow[]> {
       updated_at = now(),
       attempts = attempts + 1
     WHERE id IN (
-      SELECT id FROM draft_queue
-      WHERE status = 'pending'
-         OR (status = 'running' AND started_at < now() - interval '${sql.raw(String(STALE_MINUTES))} minutes')
-      ORDER BY created_at
+      SELECT id FROM draft_queue q
+      WHERE (
+              q.status = 'pending'
+              OR (q.status = 'running' AND q.started_at < now() - interval '${sql.raw(String(STALE_MINUTES))} minutes')
+            )
+        AND NOT EXISTS (
+              SELECT 1 FROM draft_queue r
+              WHERE r.status = 'running'
+                AND r.started_at > now() - interval '${sql.raw(String(IN_FLIGHT_SECONDS))} seconds'
+            )
+      ORDER BY q.created_at
       LIMIT ${n}
       FOR UPDATE SKIP LOCKED
     )
@@ -137,6 +179,21 @@ async function claim(n: number): Promise<ClaimedRow[]> {
     siblings: Array.isArray(r.siblings) ? (r.siblings as string[]) : [],
     attempts: Number(r.attempts ?? 1),
   }))
+}
+
+/** Google's 429, or a quota message. Distinguished from a real failure
+ *  because it says nothing about this job — only about how many other calls
+ *  happened to be in flight. */
+function isRateLimited(message: string): boolean {
+  return /\b429\b|rate.?limit|RESOURCE_EXHAUSTED|quota/i.test(message)
+}
+
+/** Put a job back without charging it an attempt. */
+async function refund(id: string, error: string): Promise<void> {
+  await db
+    .update(draftQueue)
+    .set({ status: 'pending', lastError: error, attempts: sql`greatest(${draftQueue.attempts} - 1, 0)`, updatedAt: new Date() })
+    .where(eq(draftQueue.id, id))
 }
 
 async function finish(id: string, status: 'done' | 'pending' | 'failed', error?: string): Promise<void> {
@@ -157,6 +214,10 @@ export interface DrainResult {
   claimed: number
   drafted: number
   failed: number
+  /** Nothing was claimed — the queue is empty, or another job is in flight.
+   *  The common case under a 5s poll, and not a problem: it costs one
+   *  cheap query. */
+  skipped?: boolean
 }
 
 /**
@@ -167,19 +228,23 @@ export interface DrainResult {
  */
 export async function drainQueue(limit = BATCH): Promise<DrainResult> {
   const started = Date.now()
-  const out: DrainResult = { claimed: 0, drafted: 0, failed: 0 }
-  try {
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) return out
-    const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
+  const out: DrainResult = { claimed: 0, drafted: 0, failed: 0, skipped: false }
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return out
+  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
 
+  try {
+    // claim() returns nothing while another job is in flight, so overlapping
+    // drains cost one cheap query rather than a second model call.
     const jobs = await claim(limit)
+    if (jobs.length === 0) out.skipped = true
     out.claimed = jobs.length
     const finished: { path: string; content: string }[] = []
 
     for (const job of jobs) {
-      if (Date.now() - started > TIME_BUDGET_MS) {
-        // Hand it back rather than starting a call we cannot finish.
+      if (Date.now() - started + WORST_CASE_JOB_MS > TIME_BUDGET_MS) {
+        // Hand it back rather than starting a call we cannot finish. The
+        // next drain picks it up; there is always a next drain.
         await finish(job.id, 'pending')
         continue
       }
@@ -228,6 +293,14 @@ export async function drainQueue(limit = BATCH): Promise<DrainResult> {
         out.drafted++
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+        if (isRateLimited(message)) {
+          // Not this job's fault, and trying it again in a minute will
+          // probably work. Charging it an attempt would let three unlucky
+          // minutes permanently kill a note that was never broken.
+          await refund(job.id, message)
+          console.warn(`[queue] ${job.path} rate-limited, requeued:`, message)
+          continue
+        }
         // Out of attempts means stop, not loop. Whatever is wrong here is not
         // going to fix itself on the fourth try.
         await finish(job.id, job.attempts >= MAX_ATTEMPTS ? 'failed' : 'pending', message)

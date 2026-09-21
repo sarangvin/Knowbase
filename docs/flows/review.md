@@ -90,11 +90,29 @@ that knew to retry. Three notes in one user's vault sat like that for a day.
 | | |
 |---|---|
 | **Enqueued by** | `growSpace`, and `reconcileQueue` for anything stranded |
-| **Claimed by** | one `UPDATE … FOR UPDATE SKIP LOCKED` statement, so overlapping drains take different rows rather than drafting the same note twice |
-| **Driven by** | `GET /api/onboarding/status` — the banner already polls it every 5s, which makes it the heartbeat. There is no long-running worker to put this on |
-| **Retried** | up to `MAX_ATTEMPTS` (3); a `running` row older than 5 minutes is reclaimed as dead |
+| **Claimed by** | one `UPDATE … FOR UPDATE SKIP LOCKED` statement that also refuses to claim while another job is in flight (`IN_FLIGHT_SECONDS`, 30) |
+| **Batch** | **one** job per drain. A draft normally takes ~4s and has been seen taking 28; three in sequence cannot fit a 60s invocation |
+| **Driven by** | `GET /api/onboarding/status` — the banner polls it every 5s, and keeps polling while the queue is non-empty even after the caller's own job finished. There is no long-running worker to put this on |
+| **Retried** | up to `MAX_ATTEMPTS` (3). A 429 is refunded rather than charged an attempt — it says nothing about the job |
 | **Swept by** | `POST /api/onboarding/queue/sweep` — scans notes for placeholders no job is tracking |
 | **Visible in** | admin › Model usage, as pending / in flight / given up on |
+
+**`growSpace` enqueues and returns; it does not draft.** It used to end with
+`await drainQueue()`, which put the work back inside the invocation the queue
+exists to get it out of — a plan call plus three drafts against a 60s
+ceiling. That is what was timing out `/api/onboarding/grow`. The route now
+drains exactly one job after growing, and the poll takes the rest.
+
+**Why not a Postgres advisory lock.** It was the obvious way to serialise
+drains and it is wrong here: `pg_advisory_lock` is session-scoped and `db` is
+a connection pool, so the unlock can land on a different connection than the
+lock did — and then it is never released and the queue wedges permanently.
+The in-flight predicate is pool-safe and self-expiring.
+
+One job at a time, each ~4s, is about 12 model calls a minute — inside the
+free tier's 15 rpm. The concurrency guard is also the rate limiter, which
+beats a second throttle that has to be kept in step with Google's numbers by
+hand.
 
 Each write re-checks that the note is still a placeholder, immediately before
 committing: a draft call takes seconds, and the user may have opened and

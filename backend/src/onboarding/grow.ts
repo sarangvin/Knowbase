@@ -12,7 +12,7 @@ import { and, eq, like } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
 import { generateNextTopics } from './plan.js'
-import { enqueueDrafts, drainQueue } from './queue.js'
+import { enqueueDrafts } from './queue.js'
 import { buildTopicNote, dedupeSegments, sanitizeSegment } from './notePlan.js'
 import { SPACE_ROOT, getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
@@ -120,11 +120,14 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
       metadata: { vault: 'personal', space, count: fresh.length, source: 'grow' },
     })
 
-    // Start on them straight away. The caller is already inside a waitUntil,
-    // so this costs the user nothing, and whatever this invocation does not
-    // finish the next drain picks up.
-    await drainQueue()
-
+    // Enqueue and stop. This used to `await drainQueue()` here, which put
+    // the drafting back inside the very invocation the queue exists to get
+    // it out of: one plan call plus three drafts, against a 60s ceiling,
+    // where a single draft has been seen taking 28s. That is the timeout.
+    //
+    // Nothing is lost by not draining — the status poll drains every few
+    // seconds, and reconcileQueue sweeps anything the queue loses track of.
+    // Grow's job is to decide *what* to write, not to write it.
     return { added: fresh.length }
   } catch (err) {
     console.error('[grow] failed', err)

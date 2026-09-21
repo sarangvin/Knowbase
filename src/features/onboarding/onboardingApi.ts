@@ -54,15 +54,32 @@ export const ONBOARDING_STARTED = 'rabbithole:onboarding-started'
 /** Null when there's nothing to report: no job, or the caller isn't approved
  *  (403) and so has nothing being built for them. Never throws — this is
  *  polled, and a blip must not surface as an error next to the user's notes. */
-export async function fetchOnboardingJob(): Promise<OnboardingJob | null> {
+export interface QueueDepth {
+  pending: number
+  running: number
+  failed: number
+}
+
+export interface OnboardingStatus {
+  job: OnboardingJob | null
+  /** Outstanding note drafting, across everyone. The poll is the only
+   *  heartbeat the draft queue has, so the banner keeps polling while this
+   *  is non-empty even when the caller's own job finished long ago. */
+  queue?: QueueDepth
+}
+
+export async function fetchOnboardingStatus(): Promise<OnboardingStatus> {
   try {
     const res = await fetch('/api/onboarding/status', { credentials: 'include' })
-    if (!res.ok) return null
-    const { job } = (await res.json()) as { job: OnboardingJob | null }
-    return job
+    if (!res.ok) return { job: null }
+    return (await res.json()) as OnboardingStatus
   } catch {
-    return null
+    return { job: null }
   }
+}
+
+export async function fetchOnboardingJob(): Promise<OnboardingJob | null> {
+  return (await fetchOnboardingStatus()).job
 }
 
 /** Mark the notification as delivered. Best-effort: the worst case of a

@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { RemoteVaultSource } from '../../vault/remoteSource'
-import { startOnboarding, fetchOnboardingJob, ackOnboarding, ONBOARDING_STARTED, type OnboardingJob } from './onboardingApi'
+import { startOnboarding, fetchOnboardingStatus, ackOnboarding, ONBOARDING_STARTED, type OnboardingJob } from './onboardingApi'
 import { Sparkles, ArrowRight, X, RotateCw } from '../../ui/icons'
 import './onboarding.css'
 
@@ -40,13 +40,19 @@ export function OnboardingBanner() {
     let cancelled = false
 
     const poll = async () => {
-      const next = await fetchOnboardingJob()
+      const { job: next, queue } = await fetchOnboardingStatus()
       if (cancelled) return
       setJob(next)
-      // Stop the moment there is nothing left to wait for. A finished job
-      // doesn't change again until the user starts another one, and that path
-      // sets state directly.
-      if (next?.status !== 'running' && timer.current !== null) {
+      // Two reasons to keep polling, not one.
+      //
+      // The job being 'running' is the visible one — the banner is counting
+      // notes. The other is the draft queue: this poll is the only thing
+      // that drains it, and growing a space after a review enqueues work
+      // long after the user's own onboarding finished. Stopping then would
+      // leave those notes as "Coming soon" until the next time somebody
+      // happened to onboard.
+      const working = next?.status === 'running' || (queue ? queue.pending + queue.running > 0 : false)
+      if (!working && timer.current !== null) {
         clearInterval(timer.current)
         timer.current = null
       }
