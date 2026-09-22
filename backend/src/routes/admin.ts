@@ -28,12 +28,27 @@ adminRouter.get('/users', asyncHandler(async (req, res) => {
     SELECT
       u.id, u.email, u.display_name, u.role, u.plan_tier, u.created_at, u.last_login_at,
       COALESCE(nc.note_count, 0)::int AS note_count,
+      COALESCE(nc.topic_count, 0)::int AS topic_count,
+      COALESCE(nc.reviewed_count, 0)::int AS reviewed_count,
       COALESCE(nc.storage_bytes, 0)::bigint AS storage_bytes,
       COALESCE(lc.llm_calls, 0)::int AS llm_calls_this_month
     FROM users u
     LEFT JOIN vaults v ON v.owner_user_id = u.id AND v.kind = 'personal'
     LEFT JOIN (
-      SELECT vault_id, count(*) AS note_count, sum(size_bytes) AS storage_bytes
+      SELECT vault_id,
+             count(*) AS note_count,
+             -- "Completed" is a topic note with a real review date. The same
+             -- test the review control, the ranking, the quiz and the
+             -- flashcard deck make, so the number here means what it means
+             -- everywhere else. Topics only: dashboards and _config are not
+             -- notes anybody completes, and counting them would make the
+             -- column read higher than the app ever will.
+             count(*) FILTER (WHERE path LIKE 'Automated Graph/%/Topics/%') AS topic_count,
+             count(*) FILTER (
+               WHERE path LIKE 'Automated Graph/%/Topics/%'
+                 AND content ~ '(?n)^last_reviewed: *[0-9]'
+             ) AS reviewed_count,
+             sum(size_bytes) AS storage_bytes
       FROM notes GROUP BY vault_id
     ) nc ON nc.vault_id = v.id
     LEFT JOIN (

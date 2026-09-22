@@ -7,6 +7,11 @@ export interface AdminUserRow {
   created_at: string
   last_login_at: string | null
   note_count: number
+  /** Topic notes only — the denominator for `reviewed_count`. `note_count`
+   *  includes dashboards and config, which nobody completes. */
+  topic_count: number
+  /** Topic notes with a real `last_reviewed` — the app's own "studied". */
+  reviewed_count: number
   storage_bytes: number
   llm_calls_this_month: number
 }

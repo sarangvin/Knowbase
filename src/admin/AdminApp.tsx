@@ -684,6 +684,7 @@ export function AdminApp() {
             <th>Email</th>
             <th>Plan</th>
             <th>Notes</th>
+            <th>Completed</th>
             <th>Storage</th>
             <th>LLM calls (month)</th>
             <th>Joined</th>
@@ -707,6 +708,15 @@ export function AdminApp() {
                 </button>
               </td>
               <td>{u.note_count}</td>
+              {/* Out of topics, not out of notes: note_count includes Next
+                  Up, _config and templates, which nobody completes, so that
+                  denominator would understate every user. */}
+              <td>
+                {u.reviewed_count}
+                {u.topic_count > 0 && (
+                  <span className="admin-subtle"> / {u.topic_count}</span>
+                )}
+              </td>
               <td>{formatBytes(u.storage_bytes)}</td>
               <td>{u.llm_calls_this_month}</td>
               <td>{formatDate(u.created_at)}</td>
