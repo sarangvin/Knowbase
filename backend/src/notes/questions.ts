@@ -162,8 +162,10 @@ Rules:
 - Ground the answer in the supplied note text. You may add a sentence of
   standard background if the note leaves an obvious gap, but never contradict
   it and never invent specifics — numbers, names, dates — that are not there.
-- If the note does not contain enough to answer, say so plainly in one
-  sentence and then give the best short general answer you can.
+- Never mention the note, "the text provided", or what it does or does not
+  contain. The reader wants an answer, not a report on your sources. Where
+  the note does not cover something, answer it from ordinary knowledge of the
+  subject — just do not invent specifics the note contradicts.
 - Write to someone who has just read the note. Do not restate the question or
   open with "Great question".`
 
@@ -202,4 +204,75 @@ export async function writeOwnNote(vaultId: string, path: string, content: strin
     .update(notes)
     .set({ content, sizeBytes: Buffer.byteLength(content, 'utf8'), mtime: new Date() })
     .where(and(eq(notes.vaultId, vaultId), eq(notes.path, path)))
+}
+
+const BATCH_SYSTEM = `You answer the study questions attached to one note, for the person studying it.
+
+Rules:
+- Respond with ONLY a JSON array, one object per question, in the same order:
+  [{ "a": string }]
+- Each answer is 2-5 sentences of plain prose. No preamble, no headings, no
+  bullet list unless the answer is genuinely a list of three or more things.
+- Ground every answer in the supplied note text. You may add a sentence of
+  standard background where the note leaves an obvious gap, but never
+  contradict it and never invent specifics — numbers, names, dates — that are
+  not there.
+- Never mention the note, "the provided note", or what it does or does not
+  contain. The reader wants an answer, not a report on your sources. Where
+  the note does not cover something, answer it from ordinary knowledge of the
+  subject — just do not invent specifics the note contradicts.
+- The reader sees the question and reveals the answer, so an answer must stand
+  on its own and must not restate the question.`
+
+/**
+ * Answer several of a note's questions in one call.
+ *
+ * One call per note rather than one per question, which is what makes
+ * filling a backlog possible at all: 568 unanswered questions across the
+ * vaults would be 568 calls against a 500-a-day ceiling, where a call per
+ * note is closer to 300 — and the answers are better, because the model can
+ * see the whole set and avoid saying the same thing three times.
+ *
+ * Returns one answer per question asked, in order, with any that came back
+ * unusable dropped as null. Never throws for a bad response shape; the
+ * caller decides whether a partial result is worth writing.
+ */
+export async function generateAnswers(
+  noteTitle: string,
+  context: string,
+  questions: string[],
+  userId: string | undefined,
+  source: string,
+): Promise<(string | null)[]> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('Answers need a model key, which is not configured.')
+  if (questions.length === 0) return []
+
+  const user = `Note: ${noteTitle}\n\nNote text:\n${context || '(this note has no body yet)'}\n\nQuestions:\n${questions
+    .map((q, i) => `${i + 1}. ${q}`)
+    .join('\n')}`
+
+  const raw = await meteredGeminiCall(apiKey, BATCH_SYSTEM, user, { userId, source })
+  const t = raw.trim()
+  const fenced = t.match(/^\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`$/)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(fenced ? fenced[1] : t)
+  } catch {
+    return questions.map(() => null)
+  }
+  if (!Array.isArray(parsed)) return questions.map(() => null)
+
+  return questions.map((_q, i) => {
+    const item = parsed[i] as { a?: unknown } | string | undefined
+    const a = typeof item === 'string' ? item : typeof item?.a === 'string' ? item.a : ''
+    const trimmed = a.trim()
+    // A one-word "answer" is the model losing the thread, not an answer.
+    return trimmed.length >= 20 ? trimmed : null
+  })
+}
+
+/** Every question on this note that has no answer yet. */
+export function unanswered(raw: string): string[] {
+  return parseQuestions(raw).filter((q) => !q.answer).map((q) => q.question)
 }

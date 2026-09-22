@@ -60,6 +60,11 @@ const TIMEOUT_BY_SOURCE: Record<string, number> = {
   'grow-draft': 30_000,
   'queue-draft': 30_000,
   'quiz-build': 25_000,
+  // Answers several of a note's questions in one call, so it is doing three
+  // or four times the work of a single answer and needs the room. Nobody is
+  // waiting on it — it is a background backfill — and at 25s it was timing
+  // out often enough to leave notes unfilled and spend the call anyway.
+  'answer-backfill': 45_000,
 }
 const DEFAULT_TIMEOUT_MS = 25_000
 
