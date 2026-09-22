@@ -182,7 +182,7 @@ export async function generateAnswer(
   if (!apiKey) throw new Error('Answers need a model key, which is not configured.')
   const user = `Note: ${noteTitle}\n\nNote text:\n${context || '(this note has no body yet)'}\n\nQuestion: ${question}`
   const raw = await meteredGeminiCall(apiKey, SYSTEM, user, { userId, source })
-  const answer = raw.trim()
+  const answer = stripSourceCommentary(raw)
   if (!answer) throw new Error('The model returned nothing. Try again in a moment.')
   return answer
 }
@@ -204,6 +204,46 @@ export async function writeOwnNote(vaultId: string, path: string, content: strin
     .update(notes)
     .set({ content, sizeBytes: Buffer.byteLength(content, 'utf8'), mtime: new Date() })
     .where(and(eq(notes.vaultId, vaultId), eq(notes.path, path)))
+}
+
+/** Sentences about the source, rather than about the subject. */
+const SOURCE_COMMENTARY =
+  /\b(?:the\s+(?:provided\s+|supplied\s+)?note|the\s+(?:provided\s+)?text)\b[^.!?]*?\b(?:does\s+not|doesn't|lacks|contains\s+no|fails\s+to|says\s+nothing)\b/i
+
+/**
+ * Remove an opening remark about the note.
+ *
+ * Asking the model not to do this got it from a third of answers down to
+ * about one in a hundred, and no amount of asking gets it to zero. The
+ * reader wants an answer, not a report on the sources, and the useful part
+ * of these is always what comes after the clause — so the clause is cut
+ * rather than the answer thrown away.
+ *
+ * Two shapes, both seen in real output:
+ *   "The note does not contain enough to say. In general, X."  -> drop the sentence
+ *   "While the note does not mention X, Y."                    -> drop up to the comma
+ *
+ * Deliberately conservative: it only touches the opening, only when real
+ * content follows, and leaves anything else exactly as written.
+ */
+export function stripSourceCommentary(answer: string): string {
+  const text = answer.trim()
+
+  const subordinate = text.match(/^\s*(?:While|Although|Though)\b[^,]{0,200},\s*(.+)$/is)
+  if (subordinate && SOURCE_COMMENTARY.test(text.slice(0, text.indexOf(',')))) {
+    const rest = subordinate[1].trim()
+    if (rest.length >= 40) return rest.charAt(0).toUpperCase() + rest.slice(1)
+  }
+
+  const firstStop = text.search(/[.!?](\s|$)/)
+  if (firstStop > 0) {
+    const first = text.slice(0, firstStop + 1)
+    const rest = text.slice(firstStop + 1).trim()
+    if (SOURCE_COMMENTARY.test(first) && rest.length >= 40) {
+      return rest.charAt(0).toUpperCase() + rest.slice(1)
+    }
+  }
+  return text
 }
 
 const BATCH_SYSTEM = `You answer the study questions attached to one note, for the person studying it.
@@ -266,7 +306,7 @@ export async function generateAnswers(
   return questions.map((_q, i) => {
     const item = parsed[i] as { a?: unknown } | string | undefined
     const a = typeof item === 'string' ? item : typeof item?.a === 'string' ? item.a : ''
-    const trimmed = a.trim()
+    const trimmed = stripSourceCommentary(a)
     // A one-word "answer" is the model losing the thread, not an answer.
     return trimmed.length >= 20 ? trimmed : null
   })

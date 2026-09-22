@@ -129,9 +129,7 @@ content.
 
 ## Known gaps
 
-- **Old notes have no preloaded answers.** Anything drafted before answers
-  were written with the note still generates on demand. There is no
-  backfill; they fill in as people press the button.
+
 
 - **Sync still folds `## My Notes` into `## AI Notes`.** That was harmless
   while nothing wrote to My Notes; now it is a real editor, running Sync
