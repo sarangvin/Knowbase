@@ -298,7 +298,15 @@ export async function generateNextTopics(
       console.warn('[grow] response failed validation:', raw.slice(0, 400))
     } catch (err) {
       console.warn('[grow] request failed:', err)
-      if (err instanceof ModelTimeoutError) break
+      // Deliberately NOT breaking on a timeout, unlike the learning plan
+      // above. That break assumed "whatever made the model slow is still
+      // true a second later"; measured, it is not — consecutive calls with
+      // the same prompt came back in 1.6s, 2.6s, 10s, 13s, 16s and 20s+,
+      // so roughly one in four timed out and a retry usually succeeds.
+      //
+      // Growth can afford it where onboarding cannot: nobody is waiting,
+      // and /grow hands drainQueue an absolute deadline, so if two attempts
+      // eat the invocation the draft is simply left for the next poll.
     }
   }
   return null

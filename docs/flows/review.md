@@ -74,7 +74,23 @@ succeeded.
 - "Studied" is **`last_reviewed` being set**, not confidence — a slider can be
   dragged without reading anything.
 - If fewer than `MAX_UNREVIEWED` (**3**) topics are unstudied, generate more,
-  at most `MAX_PER_RUN` (**3**) per run.
+  at most `MAX_PER_RUN` (**3**) per run. So a collection sitting at three
+  unreviewed topics is *correctly* not growing — that is the cap working,
+  not a failure, and it is the first thing to check when "nothing is
+  generating".
+- **The plan call retries after a timeout**, unlike onboarding's. That
+  break assumed whatever made the model slow would still be true a second
+  later. Measured, it is not: consecutive calls with the same prompt came
+  back in 1.6s, 2.6s, 8s, 10s, 16s and 20s+, so about one in four hit the
+  20s deadline and a retry almost always succeeded — 12 of 12 with the
+  retry, against 3 of 4 without. Growth can afford the second attempt where
+  onboarding cannot: nobody is waiting on it, and `/grow` hands `drainQueue`
+  an absolute deadline, so two slow attempts simply leave the draft for the
+  next poll.
+- **A failed generation writes a `usage_event`.** Growth runs behind a
+  fire-and-forget request with nobody watching, so when it silently did
+  nothing the only trace was a `console.warn` in a serverless log. The row
+  is what makes "why is nothing generating" answerable from the database.
 - New topics are written as placeholders and their bodies **queued**, not
   drafted inline. See below.
 

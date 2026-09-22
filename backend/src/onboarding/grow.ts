@@ -71,7 +71,19 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
     if (!apiKey) return { added: 0, reason: 'no-key' }
 
     const fresh = await generateNextTopics(space, studied, all, want, userId)
-    if (!fresh || fresh.length === 0) return { added: 0, reason: 'generation-failed' }
+    if (!fresh || fresh.length === 0) {
+      // Recorded, not just logged. Growth happens behind a fire-and-forget
+      // request with nobody watching, so when it silently does nothing the
+      // only evidence used to be a console.warn in a serverless log. A row
+      // here is what let "why are no topics generating" be answered from
+      // the database instead of guessed at.
+      void logUsageEvent({
+        userId,
+        eventType: 'vault_sync',
+        metadata: { space, source: 'grow', outcome: 'generation-failed', want },
+      })
+      return { added: 0, reason: 'generation-failed' }
+    }
 
     // Disambiguate against every filename already in the space, not just this
     // batch, so a new topic can never overwrite an existing note.
