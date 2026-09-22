@@ -1,0 +1,37 @@
+# Ten-minute top-up, for a Vercel plan that cannot schedule one.
+#
+# Vercel's Hobby plan runs cron jobs once a day and REJECTS A DEPLOYMENT
+# whose vercel.json asks for more — not the cron, the whole deployment. A
+# `*/10 * * * *` entry there silently stopped every deploy until it was
+# removed, so vercel.json keeps a daily schedule as the backstop and the
+# ten-minute cadence lives here instead.
+#
+# Needs two repository secrets:
+#   RABBITHOLE_URL    e.g. https://rabbithole-topaz.vercel.app
+#   CRON_SECRET       the same value set on the Vercel project
+#
+# GitHub's scheduler is best-effort and often runs minutes late, which is
+# fine for this: the pass is idempotent, a stocked collection is excluded by
+# the query, and being late costs nothing.
+name: Top up collections
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  top-up:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the app to top up every collection
+        run: |
+          if [ -z "${{ secrets.CRON_SECRET }}" ] || [ -z "${{ secrets.RABBITHOLE_URL }}" ]; then
+            echo "RABBITHOLE_URL or CRON_SECRET is not set; nothing to do."
+            exit 0
+          fi
+          # --fail so a 404 (wrong or missing secret) shows up as a failed
+          # run rather than a green tick over a no-op.
+          curl --fail --silent --show-error --max-time 70 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.RABBITHOLE_URL }}/api/cron/top-up"

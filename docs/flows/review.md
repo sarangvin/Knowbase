@@ -99,8 +99,16 @@ available without turning the sidebar into a backlog nobody will finish.
 
 ### The scheduled top-up
 
-`onboarding/topUp.ts`, behind `GET /api/cron/top-up`, on a Vercel cron every
-ten minutes.
+`onboarding/topUp.ts`, behind `GET /api/cron/top-up`.
+
+**Scheduled twice, for a reason worth knowing.** Vercel's Hobby plan runs
+cron jobs once a day and *rejects a deployment* whose `vercel.json` asks for
+more — not the cron entry, the whole deployment. A `*/10 * * * *` there
+stopped every deploy silently until it was removed, taking an unrelated
+change with it. So `vercel.json` keeps a daily pass as the backstop, and the
+ten-minute cadence runs from `.github/workflows/top-up.yml`, which curls the
+same endpoint with the `CRON_SECRET` bearer token. Either can be dropped if
+the project moves to a plan that schedules this itself.
 
 Growth on review works while you are in the app and fails everywhere else:
 the request is fire-and-forget, so a timeout, a closed tab or a killed
