@@ -97,6 +97,38 @@ succeeded.
 The cap is the point. Topping back up to three keeps a next step always
 available without turning the sidebar into a backlog nobody will finish.
 
+### The scheduled top-up
+
+`onboarding/topUp.ts`, behind `GET /api/cron/top-up`, on a Vercel cron every
+ten minutes.
+
+Growth on review works while you are in the app and fails everywhere else:
+the request is fire-and-forget, so a timeout, a closed tab or a killed
+invocation loses the top-up silently and nothing retries it. This pass asks
+the database which collections are short and fixes them, for every user.
+
+| | |
+|---|---|
+| **Finds** | one query across all personal vaults: approved users, not archived, fewer than `MAX_UNREVIEWED` unreviewed topics, neediest first |
+| **Caps** | `MAX_GROWS_PER_RUN` (2) — a grow is up to two 20s plan attempts, so two is what fits a 60s invocation |
+| **Yields** | at 400 model calls in 24h, so an unattended job cannot drain a 500/day ceiling shared with real people |
+| **Then** | drains one draft, because the status poll only runs while somebody has the app open |
+
+**An idle pass costs nothing** — measured: no candidates, no queue, zero
+model calls. That is the point of excluding stocked collections in SQL
+rather than looping and checking.
+
+**Guarded by `CRON_SECRET`, failing closed.** With the variable unset the
+route refuses everybody, including the scheduler, and answers 404 rather
+than 401 so an unauthenticated caller learns nothing. A route left open
+because an env var is missing is how a free tier gets drained.
+
+**No pass-level `usage_event`.** `user_id` is NOT NULL, so the only way to
+write one would be to pin system work on somebody's account and make the
+per-user figures in admin a lie. Each grow is logged against the user whose
+quota it spent. A stopped cron shows up as collections sitting below the
+threshold, which is a better signal than a heartbeat.
+
 ### The draft queue
 
 `backend/src/onboarding/queue.ts`, table `draft_queue`.

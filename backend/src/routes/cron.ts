@@ -1,0 +1,53 @@
+// Scheduled work, triggered by Vercel Cron.
+//
+// Mounted outside the authenticated routers because the caller is a schedule,
+// not a person. That makes the guard below the only thing standing between a
+// stranger and the shared model quota, so it fails closed: with no
+// CRON_SECRET configured this route refuses everybody, including the
+// scheduler. A route that is open because a variable is unset is how a free
+// tier gets drained by a crawler.
+import { Router } from 'express'
+import { asyncHandler } from '../middleware/asyncHandler.js'
+import { topUpEveryone, findShortCollections } from '../onboarding/topUp.js'
+
+export const cronRouter = Router()
+
+/** Vercel sends `Authorization: Bearer $CRON_SECRET` on every scheduled
+ *  invocation when that variable is set on the project. The owner can also
+ *  trigger a pass by hand from the admin panel, which goes through the
+ *  authenticated admin router instead — not this one. */
+function authorised(header: string | undefined): boolean {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false
+  return header === `Bearer ${secret}`
+}
+
+/**
+ * Top every collection back up to three unreviewed topics.
+ *
+ * GET because that is what Vercel Cron sends. It is not idempotent in the
+ * strict sense — it writes notes — but it is self-limiting: a collection
+ * already at the threshold is excluded by the query, so running it twice in
+ * a row does nothing the second time.
+ */
+cronRouter.get('/top-up', asyncHandler(async (req, res) => {
+  if (!authorised(req.headers.authorization)) {
+    // 404 rather than 401: an unauthenticated caller learns nothing about
+    // whether this path exists.
+    res.status(404).json({ error: 'not found' })
+    return
+  }
+  res.json(await topUpEveryone())
+}))
+
+/** What the next pass would do, without doing it. Same guard, no spend —
+ *  useful for checking the schedule is wired up before trusting it with the
+ *  quota. */
+cronRouter.get('/top-up/preview', asyncHandler(async (req, res) => {
+  if (!authorised(req.headers.authorization)) {
+    res.status(404).json({ error: 'not found' })
+    return
+  }
+  const candidates = await findShortCollections(20)
+  res.json({ candidates: candidates.map((c) => ({ space: c.space, unreviewed: c.unreviewed })) })
+}))
