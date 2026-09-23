@@ -598,8 +598,13 @@ export function AdminApp() {
           <p className="admin-dim">
             Our own measured consumption, computed from logged model calls — not read from
             the provider, which exposes no API for it. Limits are transcribed from the
-            console for the free tier. Windows are rolling: RPM and TPM cover the last
-            minute, RPD the last 24 hours.
+            console for the free tier. RPM and TPM are rolling windows over the last
+            minute. RPD is not a window — Gemini resets it at midnight Pacific, so it
+            counts calls since that reset{' '}
+            {usage?.quotaResetsInSeconds != null && (
+              <>({Math.floor(usage.quotaResetsInSeconds / 3600)}h{' '}
+              {Math.floor((usage.quotaResetsInSeconds % 3600) / 60)}m until the next one)</>
+            )}.
           </p>
           <div className="admin-scroll">
           <table className="admin-table">

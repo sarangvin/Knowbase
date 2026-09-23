@@ -91,6 +91,8 @@ export interface ModelUsageRow {
 }
 
 export interface AdminUsageResponse {
+  /** Seconds until Gemini's RPD quota resets (midnight Pacific). */
+  quotaResetsInSeconds?: number
   models: ModelUsageRow[]
   bySource: { source: string; calls: number }[]
   activeModel: string

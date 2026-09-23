@@ -23,6 +23,7 @@ import { SPACE_ROOT, archivedSpaces } from '../vault/spaces.js'
 import { growSpace, MAX_UNREVIEWED } from './grow.js'
 import { runOnboarding, MAX_ONBOARDING_ATTEMPTS } from './run.js'
 import { HIDDEN_BUFFER, revealUpTo } from '../vault/hidden.js'
+import { callsSinceQuotaReset, secondsToQuotaReset } from '../usage/quotaWindow.js'
 import { drainQueue, reconcileQueue } from './queue.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
@@ -218,8 +219,13 @@ export async function findShortCollections(limit: number): Promise<Candidate[]> 
  *  The last is recorded by grow.ts as a usage_event, which is why it can be
  *  read back here at all. */
 export interface PassDiagnostics {
-  llmCallsLast24h: number
+  /** Calls since the provider's own daily reset — midnight Pacific, not a
+   *  rolling 24 hours. See usage/quotaWindow.ts. */
+  llmCallsToday: number
   dailyCallBudget: number
+  /** Seconds until the quota resets, so "out of budget" can be read
+   *  alongside how long that stays true. */
+  secondsToReset: number
   queue: { status: string; n: number }[]
   /** grow outcomes recorded in the last 48h, newest first. */
   recentGrows: {
@@ -252,7 +258,8 @@ export interface PassDiagnostics {
 }
 
 export async function passDiagnostics(): Promise<PassDiagnostics> {
-  const calls = await callsInLastDay()
+  const calls = await callsSinceQuotaReset()
+  const resetIn = await secondsToQuotaReset()
 
   const q = (await db.execute(sql`
     SELECT status, count(*)::int AS n FROM draft_queue GROUP BY 1 ORDER BY 1
@@ -300,8 +307,9 @@ export async function passDiagnostics(): Promise<PassDiagnostics> {
   }[]
 
   return {
-    llmCallsLast24h: calls,
+    llmCallsToday: calls,
     dailyCallBudget: DAILY_CALL_BUDGET,
+    secondsToReset: resetIn,
     queue: q,
     calls: bySource.map((r) => ({ source: r.source, n: r.n, timedOut: r.timed_out })),
     onboarding: jobs.map((j) => ({
@@ -386,18 +394,6 @@ export async function shelfReport(limit: number): Promise<ShelfReport[]> {
   }))
 }
 
-async function callsInLastDay(): Promise<number> {
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(usageEvents)
-    .where(
-      and(
-        eq(usageEvents.eventType, 'llm_call'),
-        sql`${usageEvents.createdAt} > now() - interval '24 hours'`,
-      ),
-    )
-  return row?.n ?? 0
-}
 
 /**
  * One pass. Never throws: its only caller is a scheduled request that nobody
@@ -439,7 +435,7 @@ export async function topUpEveryone(): Promise<TopUpResult> {
 
     // Asked before the candidate query, because a quota that is gone makes
     // the rest of the pass pointless.
-    if ((await callsInLastDay()) >= DAILY_CALL_BUDGET) return { ...out, skipped: 'quota' }
+    if ((await callsSinceQuotaReset()) >= DAILY_CALL_BUDGET) return { ...out, skipped: 'quota' }
 
     // Drain before growing, not after.
     //

@@ -15,6 +15,7 @@ import { and, eq, like, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes, usageEvents, vaults } from '../db/schema.js'
 import { SPACE_ROOT } from '../vault/spaces.js'
+import { callsSinceQuotaReset } from '../usage/quotaWindow.js'
 import { parseQuestions, setAnswer, contextOf, generateAnswers, unanswered } from './questions.js'
 
 export interface BackfillOptions {
@@ -43,18 +44,6 @@ export interface BackfillResult {
   stoppedBecause: 'done' | 'limit' | 'quota' | 'time' | 'no-key'
 }
 
-async function callsInLastDay(): Promise<number> {
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(usageEvents)
-    .where(
-      and(
-        eq(usageEvents.eventType, 'llm_call'),
-        sql`${usageEvents.createdAt} > now() - interval '24 hours'`,
-      ),
-    )
-  return row?.n ?? 0
-}
 
 /**
  * One pass. Returns what it did; never throws, so a caller running it on a
@@ -99,7 +88,7 @@ export async function backfillAnswers(opts: BackfillOptions): Promise<BackfillRe
       out.stoppedBecause = 'time'
       break
     }
-    if ((await callsInLastDay()) >= opts.dailyCallBudget) {
+    if ((await callsSinceQuotaReset()) >= opts.dailyCallBudget) {
       out.stoppedBecause = 'quota'
       break
     }

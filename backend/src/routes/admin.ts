@@ -6,6 +6,7 @@
 import { Router } from 'express'
 import { sql, eq, desc } from 'drizzle-orm'
 import { db } from '../db/client.js'
+import { SINCE_QUOTA_RESET, secondsToQuotaReset } from '../usage/quotaWindow.js'
 import { users, usageEvents, subscriptions, onboardingJobs } from '../db/schema.js'
 import { waitUntil } from '@vercel/functions'
 import { runOnboarding } from '../onboarding/run.js'
@@ -209,16 +210,22 @@ const MODEL_LIMITS: Record<string, { rpm: number; tpm: number; rpd: number }> = 
 }
 
 adminRouter.get('/usage', asyncHandler(async (_req, res) => {
-  // Rolling windows, not calendar buckets: "requests in the last minute" is
-  // what a per-minute limit actually constrains, and a bucket that resets on
-  // the minute would read as zero right after a burst.
+  // RPM is a rolling window; RPD is not.
+  //
+  // "Requests in the last minute" is what a per-minute limit constrains, and
+  // a bucket that reset on the minute would read as zero right after a
+  // burst. But the daily quota is not rolling at all — Gemini resets RPD at
+  // midnight Pacific — so counting the last 24 hours reported spend the
+  // provider had already forgiven, and the dashboard said the ceiling was
+  // nearly gone while the real figure was two thirds of that. See
+  // usage/quotaWindow.ts.
   const rows = (await db.execute(sql`
     SELECT
       COALESCE(model, 'unknown') AS model,
       count(*) FILTER (WHERE created_at > now() - interval '1 minute')::int  AS rpm,
       COALESCE(sum(COALESCE(input_tokens,0) + COALESCE(output_tokens,0))
         FILTER (WHERE created_at > now() - interval '1 minute'), 0)::int      AS tpm,
-      count(*) FILTER (WHERE created_at > now() - interval '24 hours')::int   AS rpd,
+      count(*) FILTER (WHERE created_at >= ${SINCE_QUOTA_RESET})::int         AS rpd,
       count(*)::int                                                           AS total,
       max(created_at)                                                         AS last_call
     FROM usage_events
@@ -228,11 +235,12 @@ adminRouter.get('/usage', asyncHandler(async (_req, res) => {
   `)).rows as { model: string; rpm: number; tpm: number; rpd: number; total: number; last_call: string | null }[]
 
   // What the calls were for, so a day that burns the quota can be explained
-  // rather than just observed.
+  // rather than just observed. Same window as RPD above, because the point
+  // of this list is to account for that number.
   const bySource = (await db.execute(sql`
     SELECT COALESCE(metadata->>'source', 'direct') AS source, count(*)::int AS calls
     FROM usage_events
-    WHERE event_type = 'llm_call' AND created_at > now() - interval '24 hours'
+    WHERE event_type = 'llm_call' AND created_at >= ${SINCE_QUOTA_RESET}
     GROUP BY 1 ORDER BY calls DESC
   `)).rows as { source: string; calls: number }[]
 
@@ -241,6 +249,9 @@ adminRouter.get('/usage', asyncHandler(async (_req, res) => {
     bySource,
     // So the UI never has to guess which row is the one currently in use.
     activeModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+    // So the RPD column can say what day it is counting, and how long is
+    // left of it.
+    quotaResetsInSeconds: await secondsToQuotaReset(),
     // Outstanding drafting work. A queue you cannot see the depth of is one
     // you find out about when a user reports a note that never filled in.
     queue: await queueDepth(),

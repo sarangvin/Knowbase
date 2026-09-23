@@ -24,6 +24,7 @@ import { SPACE_ROOT, archivedSpaces, getOrCreatePersonalVaultId } from '../vault
 import { HIDDEN_BUFFER, VISIBLE_AHEAD, revealUpTo } from '../vault/hidden.js'
 import { growSpace } from './grow.js'
 import { retryFailedOnboarding } from './topUp.js'
+import { callsSinceQuotaReset } from '../usage/quotaWindow.js'
 /** Stop when the shared daily ceiling is close. Imported rather than
  *  re-declared: two background spenders with two different ideas of the
  *  reserve is how the reserve stops existing. */
@@ -57,18 +58,6 @@ export interface EnsureResult {
   skipped?: 'quota' | 'no-key' | 'cooldown' | 'nothing-short'
 }
 
-async function callsInLastDay(): Promise<number> {
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(usageEvents)
-    .where(
-      and(
-        eq(usageEvents.eventType, 'llm_call'),
-        sql`${usageEvents.createdAt} > now() - interval '24 hours'`,
-      ),
-    )
-  return row?.n ?? 0
-}
 
 /** Spaces this user has had a grow *attempt* on recently — successes and
  *  failures alike. Failures are what the cooldown is for, and grow.ts
@@ -139,7 +128,7 @@ export async function ensureStocked(userId: string): Promise<EnsureResult> {
     }
 
     if (!process.env.GEMINI_API_KEY) return { ...out, skipped: 'no-key' }
-    if ((await callsInLastDay()) >= DAILY_CALL_BUDGET) return { ...out, skipped: 'quota' }
+    if ((await callsSinceQuotaReset()) >= DAILY_CALL_BUDGET) return { ...out, skipped: 'quota' }
 
     const attempted = await recentlyAttempted(userId)
     const toGrow = candidates.filter((c) => !attempted.has(c.space)).slice(0, MAX_PER_CALL)
