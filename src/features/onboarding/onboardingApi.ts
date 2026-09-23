@@ -72,6 +72,21 @@ export function announceServerWork(): void {
   window.dispatchEvent(new CustomEvent(ONBOARDING_STARTED))
 }
 
+/** Fired when the set of builds has changed for a reason other than the
+ *  server making progress — deleting a collection removes the build that
+ *  produced it, and the card for it should go with it rather than linger
+ *  until the next poll happens along.
+ *
+ *  Separate from ONBOARDING_STARTED because it means something different:
+ *  that one says "expect work for a while" and opens a two-minute polling
+ *  window; this one says "what you are holding is out of date", and wants
+ *  exactly one fetch. */
+export const JOBS_CHANGED = 'rabbithole:jobs-changed'
+
+export function notifyJobsChanged(): void {
+  window.dispatchEvent(new CustomEvent(JOBS_CHANGED))
+}
+
 /** How long to keep watching after the server has been handed work, even
  *  while nothing is visibly happening yet.
  *

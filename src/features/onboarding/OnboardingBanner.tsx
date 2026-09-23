@@ -23,6 +23,7 @@ import {
   ackOnboarding,
   workInFlight,
   ONBOARDING_STARTED,
+  JOBS_CHANGED,
   WORK_GRACE_MS,
   type OnboardingJob,
 } from './onboardingApi'
@@ -163,6 +164,11 @@ export function OnboardingBanner() {
     }
     window.addEventListener(ONBOARDING_STARTED, onStarted)
 
+    // One fetch, no window, no interval: the job list changed underneath us
+    // and the only thing out of date is what we are holding.
+    const onJobsChanged = () => void poll()
+    window.addEventListener(JOBS_CHANGED, onJobsChanged)
+
     const idle = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refreshVault()
     }, IDLE_SYNC_MS)
@@ -174,6 +180,7 @@ export function OnboardingBanner() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
       window.removeEventListener(ONBOARDING_STARTED, onStarted)
+      window.removeEventListener(JOBS_CHANGED, onJobsChanged)
       clearInterval(idle)
     }
   }, [approved, refreshVault, setBuildingJobs])

@@ -105,31 +105,27 @@ export async function retryFailedOnboarding(): Promise<{ email: string; topic: s
       SELECT j.user_id, j.topic, u.email
       FROM onboarding_jobs j
       JOIN users u ON u.id = j.user_id
-      JOIN vaults v ON v.owner_user_id = j.user_id AND v.kind = 'personal'
       WHERE j.status IN ('failed', 'running')
         AND j.attempts < ${MAX_ONBOARDING_ATTEMPTS}
         AND (u.access_approved OR u.role = 'owner')
         AND j.updated_at > now() - ${sql.raw(`interval '${Math.round(RETRY_FAILED_WITHIN_MS / 1000)} seconds'`)}
         AND j.updated_at < now() - ${sql.raw(`interval '${Math.round(RETRY_COOLDOWN_MS / 1000)} seconds'`)}
-        -- **Only jobs that produced nothing.**
+        -- **Only jobs that never got as far as a space.**
         --
-        -- A run that already wrote its space must never be re-run. There is
-        -- no "resume" — runOnboarding plans from scratch, and disambiguateSpace
-        -- sees the existing folder and writes the whole thing again beside it
-        -- under "<name> 2". Retrying a two-day-old stale job did exactly
-        -- that: a second System Architecture for PMs, five more notes, five
-        -- more model calls, and a duplicate collection the owner has to
-        -- delete by hand.
+        -- The space column is set the moment the plan comes back and the
+        -- folder is written, so a job that has one got past the expensive
+        -- part. There is no resume: runOnboarding plans from scratch and
+        -- disambiguateSpace writes the whole thing again beside the
+        -- existing one under a numbered name, so re-running it can only
+        -- ever duplicate.
         --
-        -- A job whose space exists is not stuck, it is unfinished, and the
-        -- repair for unfinished is reconcileQueue putting its missing drafts
-        -- back on the queue — which costs a scan rather than a whole plan.
-        AND NOT EXISTS (
-              SELECT 1 FROM notes n
-              WHERE n.vault_id = v.id
-                AND j.space IS NOT NULL
-                AND n.path LIKE ${SPACE_ROOT} || j.space || '/%'
-            )
+        -- Testing "and the space still has notes" is not enough, because a
+        -- collection the owner *deleted* also has none: that job would
+        -- qualify, and deleting a collection would quietly bring it back.
+        -- Having planned at all is the honest line. The repair for a job
+        -- past that point is reconcileQueue putting its missing drafts back,
+        -- and the repair for a deleted one is nothing.
+        AND j.space IS NULL
       ORDER BY j.updated_at ASC
       LIMIT 1
     `)).rows as { user_id: string; topic: string; email: string }[]
@@ -156,6 +152,8 @@ export interface TopUpResult {
   retriedOnboarding?: string
   /** Stub notes found with no queue row, and put back on it. */
   reconciled: number
+  /** Build rows left behind by a deleted collection. */
+  forgotten: number
   skipped?: 'quota' | 'no-key'
 }
 
@@ -334,6 +332,43 @@ export async function passDiagnostics(): Promise<PassDiagnostics> {
   }
 }
 
+/**
+ * Forget builds whose collection is gone.
+ *
+ * Deleting a collection now removes its build row with it, but rows orphaned
+ * before that will sit there forever — and a job row with a space and no
+ * notes is drawn as a card, so the collections screen keeps showing
+ * "Taking longer than expected" for something its owner deleted.
+ *
+ * A space recorded, no notes under it, and untouched for a while: the run
+ * writes its notes within seconds of recording the space, so the only way to
+ * still be in that state minutes later is that the notes were removed.
+ * Spends nothing.
+ */
+export async function forgetDeletedBuilds(): Promise<number> {
+  try {
+    const gone = (await db.execute(sql`
+      DELETE FROM onboarding_jobs j
+      USING vaults v
+      WHERE v.owner_user_id = j.user_id
+        AND v.kind = 'personal'
+        AND j.space IS NOT NULL
+        AND j.updated_at < now() - interval '5 minutes'
+        AND NOT EXISTS (
+              SELECT 1 FROM notes n
+              WHERE n.vault_id = v.id
+                AND n.path LIKE ${SPACE_ROOT} || j.space || '/%'
+            )
+      RETURNING j.id
+    `)).rows as { id: string }[]
+    if (gone.length > 0) console.log(`[top-up] forgot ${gone.length} build(s) whose collection was deleted`)
+    return gone.length
+  } catch (err) {
+    console.error('[top-up] forgetDeletedBuilds failed', err)
+    return 0
+  }
+}
+
 export interface ShelfReport {
   space: string
   /** Unfinished and on the shelf. */
@@ -401,7 +436,9 @@ export async function shelfReport(limit: number): Promise<ShelfReport[]> {
  */
 export async function topUpEveryone(): Promise<TopUpResult> {
   const started = Date.now()
-  const out: TopUpResult = { candidates: 0, grown: 0, added: 0, drafted: 0, revealed: 0, reconciled: 0 }
+  const out: TopUpResult = {
+    candidates: 0, grown: 0, added: 0, drafted: 0, revealed: 0, reconciled: 0, forgotten: 0,
+  }
 
   try {
     if (!process.env.GEMINI_API_KEY) return { ...out, skipped: 'no-key' }
@@ -432,6 +469,7 @@ export async function topUpEveryone(): Promise<TopUpResult> {
     // the one day the budget ran out was the day the stranded notes stayed
     // stranded.
     out.reconciled = await reconcileQueue()
+    out.forgotten = await forgetDeletedBuilds()
 
     // Asked before the candidate query, because a quota that is gone makes
     // the rest of the pass pointless.

@@ -6,7 +6,7 @@
 // real bug — the corpus lookup and the corpus write have to agree on the key.
 import { and, eq, like, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { notes, vaults, draftQueue, flashcardReviews } from '../db/schema.js'
+import { notes, vaults, draftQueue, flashcardReviews, onboardingJobs } from '../db/schema.js'
 import { frontmatterValue, setFrontmatterValue } from './frontmatter.js'
 
 export const SPACE_ROOT = 'Automated Graph/'
@@ -314,5 +314,27 @@ export async function deleteSpace(vaultId: string, userId: string, space: string
     .where(and(eq(flashcardReviews.userId, userId), sql`${flashcardReviews.notePath} LIKE ${prefix + '%'}`))
     .returning({ id: flashcardReviews.id })
 
-  return { deletedNotes: gone.length, cancelledJobs: jobs.length, forgottenCards: cards.length }
+  // And the build that produced it.
+  //
+  // The row outlives the notes otherwise, and two things then go wrong. The
+  // collections screen keeps drawing a card for a collection that no longer
+  // exists — "System Architecture for PMs 2 · Taking longer than expected"
+  // for something its owner had just deleted. And the retry loop, which
+  // skips jobs whose space exists, sees a job whose space does not exist any
+  // more and rebuilds the whole thing: deleting a collection would bring it
+  // back.
+  //
+  // Matched on `space`, not `topic`. They are the same string most of the
+  // time and are not when the name was disambiguated, which is exactly the
+  // case this was found in.
+  const builds = await db
+    .delete(onboardingJobs)
+    .where(and(eq(onboardingJobs.userId, userId), eq(onboardingJobs.space, space)))
+    .returning({ id: onboardingJobs.id })
+
+  return {
+    deletedNotes: gone.length,
+    cancelledJobs: jobs.length + builds.length,
+    forgottenCards: cards.length,
+  }
 }

@@ -1,6 +1,7 @@
 // Archiving and deleting a collection. Both are server-owned: the flag lives
 // in the space's own `_config.md` and the delete is a scoped DELETE, so the
 // client asks and then reloads rather than editing the vault itself.
+import { notifyJobsChanged } from '../onboarding/onboardingApi'
 async function jsonOrThrow(res: Response): Promise<unknown> {
   const body = (await res.json().catch(() => ({}))) as { error?: string }
   if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`)
@@ -28,7 +29,12 @@ export async function deleteCollection(space: string): Promise<DeleteResult> {
     method: 'DELETE',
     credentials: 'include',
   })
-  return (await jsonOrThrow(res)) as DeleteResult
+  const out = (await jsonOrThrow(res)) as DeleteResult
+  // The server also removed the build that produced this collection. Ask for
+  // the job list again so its card goes now, rather than surviving its own
+  // collection until the next poll wanders past.
+  notifyJobsChanged()
+  return out
 }
 
 /** For Settings, which wants the list without having to hold a vault index. */
