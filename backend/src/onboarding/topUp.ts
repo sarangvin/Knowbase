@@ -123,7 +123,14 @@ export interface PassDiagnostics {
   dailyCallBudget: number
   queue: { status: string; n: number }[]
   /** grow outcomes recorded in the last 48h, newest first. */
-  recentGrows: { at: string; space: string | null; outcome: string | null; count: number | null; want: number | null }[]
+  recentGrows: {
+    at: string
+    space: string | null
+    outcome: string | null
+    count: number | null
+    want: number | null
+    error: string | null
+  }[]
   /** Model calls in the last 48h by source, and how many of each timed out.
    *  meter.ts records `timedOut: true` on the event, which is the only place
    *  a per-call deadline leaves a trace. */
@@ -169,6 +176,7 @@ export async function passDiagnostics(): Promise<PassDiagnostics> {
       outcome: (g.metadata?.outcome as string) ?? (g.metadata?.reason as string) ?? null,
       count: (g.metadata?.count as number) ?? (g.metadata?.added as number) ?? null,
       want: (g.metadata?.want as number) ?? null,
+      error: (g.metadata?.error as string) ?? null,
     })),
     hasKey: !!process.env.GEMINI_API_KEY,
   }

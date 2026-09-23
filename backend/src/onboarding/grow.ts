@@ -196,7 +196,22 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
     // Grow's job is to decide *what* to write, not to write it.
     return { added: fresh.length }
   } catch (err) {
+    // Recorded, not only logged — for the same reason the empty-plan path
+    // above is. console.error goes to a serverless log nobody reads, and
+    // this catch was the one exit that left no trace anywhere: a pass could
+    // report "grew 1, added 0" with no row explaining why, which is exactly
+    // the state that made Statistics take three deploys to diagnose.
     console.error('[grow] failed', err)
+    void logUsageEvent({
+      userId,
+      eventType: 'vault_sync',
+      metadata: {
+        space,
+        source: 'grow',
+        outcome: 'threw',
+        error: err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 300) : String(err).slice(0, 300),
+      },
+    })
     return { added: 0, reason: 'generation-failed' }
   }
 }
