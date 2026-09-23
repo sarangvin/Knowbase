@@ -124,6 +124,10 @@ export interface PassDiagnostics {
   queue: { status: string; n: number }[]
   /** grow outcomes recorded in the last 48h, newest first. */
   recentGrows: { at: string; space: string | null; outcome: string | null; count: number | null }[]
+  /** Model calls in the last 48h by source, and how many of each timed out.
+   *  meter.ts records `timedOut: true` on the event, which is the only place
+   *  a per-call deadline leaves a trace. */
+  calls: { source: string | null; n: number; timedOut: number }[]
   hasKey: boolean
 }
 
@@ -144,10 +148,21 @@ export async function passDiagnostics(): Promise<PassDiagnostics> {
     LIMIT 25
   `)).rows as { created_at: Date; metadata: Record<string, unknown> | null }[]
 
+  const bySource = (await db.execute(sql`
+    SELECT metadata->>'source' AS source,
+           count(*)::int AS n,
+           count(*) FILTER (WHERE metadata->>'timedOut' = 'true')::int AS timed_out
+    FROM usage_events
+    WHERE event_type = 'llm_call' AND created_at > now() - interval '48 hours'
+    GROUP BY 1
+    ORDER BY 2 DESC
+  `)).rows as { source: string | null; n: number; timed_out: number }[]
+
   return {
     llmCallsLast24h: calls,
     dailyCallBudget: DAILY_CALL_BUDGET,
     queue: q,
+    calls: bySource.map((r) => ({ source: r.source, n: r.n, timedOut: r.timed_out })),
     recentGrows: grows.map((g) => ({
       at: new Date(g.created_at).toISOString(),
       space: (g.metadata?.space as string) ?? null,
