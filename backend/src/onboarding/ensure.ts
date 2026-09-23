@@ -31,14 +31,29 @@ import { callsSinceQuotaReset } from '../usage/quotaWindow.js'
 import { DAILY_CALL_BUDGET } from './topUp.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
-/** Don't attempt the same collection again for this long.
+/** Don't attempt the same collection again for this long. */
+const COOLDOWN_MS = 30 * 60 * 1000
+
+/** And don't start *any* generation for this user more often than this.
  *
- *  The status poll fires every five seconds while anything is in flight, so
- *  without a cooldown a collection whose generation reliably fails would
- *  burn the shared daily quota in a couple of minutes. Fifteen minutes is
- *  slow enough to be harmless and fast enough that a transient timeout is
- *  retried within one sitting — which is the whole point. */
-const COOLDOWN_MS = 15 * 60 * 1000
+ *  This is the one that matters, and its absence is what turned the status
+ *  poll into a load generator. The per-collection cooldown above stops the
+ *  same collection being retried in a loop; it does nothing about
+ *  *different* collections, and this account has thirty-six. The poll fires
+ *  every five seconds, each firing found a collection not yet in cooldown,
+ *  and the result was a plan call every five seconds — around seven hundred
+ *  an hour where the baseline was thirty in two days.
+ *
+ *  The free tier throttles by making you wait, so that load does not fail
+ *  loudly, it just makes everything slow: median draft latency went from
+ *  6.5s to 30s and half of every call type started crossing its deadline.
+ *  Growth that nobody asked for was starving the drafting somebody was
+ *  waiting on.
+ *
+ *  Five minutes is twelve attempts an hour from the whole app, which is
+ *  more than enough to keep shelves stocked — a shelf is three notes and a
+ *  grow produces two. */
+const USER_COOLDOWN_MS = 5 * 60 * 1000
 
 /** Most collections to fix per call. One: this runs on a poll, inside a
  *  request with a 60s ceiling, and a grow is up to two twenty-second plan
@@ -71,6 +86,21 @@ async function recentlyAttempted(userId: string): Promise<Set<string>> {
       AND created_at > now() - ${sql.raw(`interval '${Math.round(COOLDOWN_MS / 1000)} seconds'`)}
   `)).rows as { space: string | null }[]
   return new Set(rows.map((r) => r.space).filter((s): s is string => !!s))
+}
+
+/** Has this user had *any* generation started for them recently? */
+async function startedAnythingRecently(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(usageEvents)
+    .where(
+      and(
+        eq(usageEvents.userId, userId),
+        sql`${usageEvents.metadata}->>'source' IN ('grow', 'ensure')`,
+        sql`${usageEvents.createdAt} > now() - ${sql.raw(`interval '${Math.round(USER_COOLDOWN_MS / 1000)} seconds'`)}`,
+      ),
+    )
+  return (row?.n ?? 0) > 0
 }
 
 /**
@@ -129,6 +159,11 @@ export async function ensureStocked(userId: string): Promise<EnsureResult> {
 
     if (!process.env.GEMINI_API_KEY) return { ...out, skipped: 'no-key' }
     if ((await callsSinceQuotaReset()) >= DAILY_CALL_BUDGET) return { ...out, skipped: 'quota' }
+
+    // Per user before per collection. One collection in cooldown only moves
+    // the poll on to the next one, which is not a limit at all when there
+    // are thirty-six of them.
+    if (await startedAnythingRecently(userId)) return { ...out, skipped: 'cooldown' }
 
     const attempted = await recentlyAttempted(userId)
     const toGrow = candidates.filter((c) => !attempted.has(c.space)).slice(0, MAX_PER_CALL)

@@ -22,6 +22,7 @@ import { notes, usageEvents } from '../db/schema.js'
 import { SPACE_ROOT, archivedSpaces } from '../vault/spaces.js'
 import { growSpace, MAX_UNREVIEWED } from './grow.js'
 import { runOnboarding, MAX_ONBOARDING_ATTEMPTS } from './run.js'
+import { onboardingJobs } from '../db/schema.js'
 import { HIDDEN_BUFFER, revealUpTo } from '../vault/hidden.js'
 import { callsSinceQuotaReset, secondsToQuotaReset } from '../usage/quotaWindow.js'
 import { drainQueue, reconcileQueue } from './queue.js'
@@ -107,6 +108,14 @@ export async function retryFailedOnboarding(): Promise<{ email: string; topic: s
       JOIN users u ON u.id = j.user_id
       WHERE j.status IN ('failed', 'running')
         AND j.attempts < ${MAX_ONBOARDING_ATTEMPTS}
+        -- Nothing else mid-run. Every step of a run patches its row, so a
+        -- job touched in the last two minutes is one that is still going,
+        -- and starting a second beside it is how the model gets slow for
+        -- everybody.
+        AND NOT EXISTS (
+              SELECT 1 FROM onboarding_jobs r
+              WHERE r.status = 'running' AND r.updated_at > now() - interval '2 minutes'
+            )
         AND (u.access_approved OR u.role = 'owner')
         AND j.updated_at > now() - ${sql.raw(`interval '${Math.round(RETRY_FAILED_WITHIN_MS / 1000)} seconds'`)}
         AND j.updated_at < now() - ${sql.raw(`interval '${Math.round(RETRY_COOLDOWN_MS / 1000)} seconds'`)}
@@ -132,6 +141,29 @@ export async function retryFailedOnboarding(): Promise<{ email: string; topic: s
 
     const job = rows[0]
     if (!job) return null
+
+    // Claim it before running it.
+    //
+    // This is reached from every status poll, from every user, and an
+    // onboarding run is a plan call plus five drafts. Without a claim, five
+    // polls arriving in the same few seconds start five runs — of the same
+    // job, or of five different ones — and the free tier answers that by
+    // making every call in the system slower rather than by refusing any of
+    // them. Bumping updated_at puts this job straight into its own cooldown,
+    // so the next poll walks past it.
+    const claimed = await db
+      .update(onboardingJobs)
+      .set({ updatedAt: new Date(), attempts: sql`${onboardingJobs.attempts} + 1` })
+      .where(
+        and(
+          eq(onboardingJobs.userId, job.user_id),
+          eq(onboardingJobs.topic, job.topic),
+          sql`${onboardingJobs.updatedAt} < now() - ${sql.raw(`interval '${Math.round(RETRY_COOLDOWN_MS / 1000)} seconds'`)}`,
+        ),
+      )
+      .returning({ id: onboardingJobs.id })
+    if (claimed.length === 0) return null
+
     await runOnboarding(job.user_id, job.topic)
     return { email: job.email, topic: job.topic }
   } catch (err) {
