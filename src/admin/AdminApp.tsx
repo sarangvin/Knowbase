@@ -185,7 +185,9 @@ function QueuePanel({
                 <th>User</th>
                 <th>Queued</th>
                 <th>Started</th>
-                <th>Attempts</th>
+                <th title="Every time this job has been picked up. Hover a cell for how many of those were charged against its retry budget — a rate-limited attempt is refunded, and the Retry button resets the budget to zero.">
+                  Attempts
+                </th>
                 <th>Last error</th>
               </tr>
             </thead>
@@ -200,7 +202,9 @@ function QueuePanel({
                   <td>{r.email}</td>
                   <td title={formatDate(r.created_at)}>{ago(r.created_at)}</td>
                   <td title={r.started_at ? formatDate(r.started_at) : undefined}>{ago(r.started_at)}</td>
-                  <td>{r.attempts}</td>
+                  <td title={`${r.attempts} charged against the retry budget`}>
+                    {r.total_attempts ?? r.attempts}
+                  </td>
                   {/* Truncated in CSS, not here: the full text is the title
                       attribute, because the useful part of a model error is
                       usually at the end. */}
@@ -228,7 +232,9 @@ function QueuePanel({
                     <td>{r.title}<div className="admin-subtle">{r.space}</div></td>
                     <td>{r.email}</td>
                     <td title={formatDate(r.updated_at)}>{ago(r.updated_at)}</td>
-                    <td>{r.attempts}</td>
+                    <td title={`${r.attempts} charged against the retry budget`}>
+                    {r.total_attempts ?? r.attempts}
+                  </td>
                   </tr>
                 ))}
               </tbody>

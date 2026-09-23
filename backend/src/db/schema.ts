@@ -239,7 +239,18 @@ export const draftQueue = pgTable(
     /** 'pending' → 'running' → 'done' | 'failed'. A 'running' row older than
      *  the stale timeout is reclaimed: that is the killed-invocation case. */
     status: text('status').notNull().default('pending'),
+    /** Attempts charged against MAX_ATTEMPTS — the retry *budget*, not the
+     *  history. It goes down as well as up: a job refused for rate limiting
+     *  is put back without being charged, and the admin Retry button resets
+     *  it to zero. */
     attempts: integer('attempts').notNull().default(0),
+    /** Every time this job has actually been picked up, ever.
+     *
+     *  Only ever increments. The two are different questions and the
+     *  dashboard was answering the wrong one: a note retried nine times
+     *  could read "1 attempt" because eight were refunded or reset, which
+     *  hides exactly the job worth looking at. */
+    totalAttempts: integer('total_attempts').notNull().default(0),
     lastError: text('last_error'),
     startedAt: timestamp('started_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

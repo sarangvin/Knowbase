@@ -193,7 +193,8 @@ async function claim(n: number): Promise<ClaimedRow[]> {
       status = 'running',
       started_at = now(),
       updated_at = now(),
-      attempts = attempts + 1
+      attempts = attempts + 1,
+      total_attempts = total_attempts + 1
     WHERE id IN (
       SELECT id FROM draft_queue q
       WHERE (

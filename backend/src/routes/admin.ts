@@ -315,7 +315,7 @@ adminRouter.get('/completions', asyncHandler(async (_req, res) => {
 
 adminRouter.get('/queue', asyncHandler(async (_req, res) => {
   const rows = (await db.execute(sql`
-    SELECT q.id, q.status, q.attempts, q.last_error, q.source, q.space, q.title, q.path,
+    SELECT q.id, q.status, q.attempts, q.total_attempts, q.last_error, q.source, q.space, q.title, q.path,
            q.created_at, q.started_at, q.updated_at,
            u.email,
            -- The claim query refuses to start a job while another has been
@@ -333,7 +333,7 @@ adminRouter.get('/queue', asyncHandler(async (_req, res) => {
   `)).rows
 
   const recent = (await db.execute(sql`
-    SELECT q.id, q.status, q.attempts, q.last_error, q.source, q.space, q.title, q.path,
+    SELECT q.id, q.status, q.attempts, q.total_attempts, q.last_error, q.source, q.space, q.title, q.path,
            q.created_at, q.started_at, q.updated_at, u.email, false AS in_flight
     FROM draft_queue q
     JOIN users u ON u.id = q.user_id

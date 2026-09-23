@@ -116,7 +116,11 @@ export interface UsageEventRow {
 export interface AdminQueueRow {
   id: string
   status: 'pending' | 'running' | 'done' | 'failed'
+  /** Charged against the retry budget; refunds and the Retry button move
+   *  it down. */
   attempts: number
+  /** Every pick-up ever, which is the one that says "look at this job". */
+  total_attempts?: number
   last_error: string | null
   source: string
   space: string
