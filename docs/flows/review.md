@@ -13,42 +13,63 @@ finish it.
 
 ## Trigger
 
-One control, everywhere: a **"Mark reviewed" button**, rendered by
-`src/features/reader/ReviewBar.tsx` and placed by `NoteView.tsx` **directly
-under the `## AI Notes` section** — not at the foot of the note.
+**One write, two ways in on touch.** Both are rendered by a single
+`ReviewBar` instance (`src/features/reader/ReviewBar.tsx`), placed by
+`NoteView.tsx` directly under the `## AI Notes` section.
 
-**Where it sits is the design decision.** A topic note is AI Notes, then
-Useful Links, then My Notes, then Questions, and the last two are optional
-exercises. A control below them makes finishing the prose cost a scroll past
-every question, which is a toll on the single action the whole loop depends
-on. It now sits where the reading ends. A note with no `## AI Notes` section
-— hand-written, or drifted from the template — falls back to the end of the
-note.
+| Control | Where | Devices |
+|---|---|---|
+| "Mark reviewed" button | Inline, at the foot of AI Notes | All |
+| Swipe-up sheet ("Swipe up to complete") | Foot of the scroller, below Questions | Touch only |
 
-`NoteView.tsx` splices all three non-markdown pieces (the review control, the
-My Notes editor, the Questions list) into the prose as a **list of inserts
-sorted by offset**, rather than as a nest of orderings. The template puts
-them in one order; a hand-edited note can have them in any, and enumerating
-the permutations is how a branch nobody tested renders a paragraph twice.
+**Why both.** A topic note is AI Notes, then Useful Links, then My Notes,
+then Questions, and the last two are optional exercises. Someone who just
+wants to finish the prose should not have to scroll past a question list to
+say so — that is the button. Someone who *does* work through the questions
+ends up at the bottom and should not have to scroll back up — that is the
+sheet. A pointer gets only the button: pushing a wheel against a threshold
+is a gesture borrowed from a device that is not there, and the sheet is the
+wrong shape for a wheel's discrete clicks. The split is decided live by
+`(hover: none) and (pointer: coarse)` — a laptop with a touchscreen reports
+`coarse` too, so the absence of hover is the half that decides.
 
-### What was removed, and why
+**The sheet is portalled**, not mounted separately. It has to live inside
+`.note-scroll` to stick to the foot of the reader, but the component that
+owns it now renders in the middle of the document, so it is placed there
+with `createPortal` — which lands it as the scroller's last child, exactly
+where it used to sit in JSX.
 
-Touch devices used to get a different control: an orange sheet at the foot of
-the scroller that grew as you swiped up past the end of the note, driven by
-`useScrollReview.ts`. Both that hook and the sheet are gone.
+That is the important part: **one `asking` flag, one dialog, one submit.**
+Two components each holding their own copy of that state is how one control
+ends up reporting "Review complete" while the other still offers to review.
+The sheet only exists at the very bottom of the note; elsewhere it would be
+a bar covering text with an instruction you cannot act on.
 
-The gesture rested on a premise that stopped holding — that the end of the
-scroller is the end of the reading. It is not, and an overscroll gesture
-cannot be moved into the middle of a document: it is armed by there being
-nothing left to scroll, and My Notes and Questions sit below this point.
-Keeping the sheet as well would have put two controls writing the same
-frontmatter on one screen.
+`NoteView.tsx` splices its three non-markdown pieces (the review control,
+the My Notes editor, the Questions list) into the prose as a **list of
+inserts sorted by offset**, rather than as a nest of orderings. The template
+puts them in one order; a hand-edited note can have them in any, and
+enumerating the permutations is how a branch nobody tested renders a
+paragraph twice. A note with no `## AI Notes` section falls back to placing
+the control at the end.
+
+### The gesture
+
+`src/features/reader/useScrollReview.ts`:
+
+- **Touch** — pull-to-refresh, inverted. Distance past the end, *held* while
+  the finger is down, springing back on an early release. 110px fills it.
+- **Wheel** — no hold exists, so progress accumulates from delta (380px) and
+  decays in ~0.5s. **A wheel gesture only counts if it starts at the bottom**,
+  or a hard flick to the end of a note would mark it reviewed on its own
+  momentum. Disabled entirely on pointer devices.
+- Both commit at 1, on the way up, never on release.
 
 ---
 
 ## Steps
 
-1. The button opens `ReviewDialog` — it writes nothing by
+1. Either control opens `ReviewDialog` — it writes nothing by
    itself. Three rows of taps: confidence 0-5, importance and interest 1-5,
    pre-filled from the note so an untouched row keeps its value.
 2. On submit, `ReviewBar.tsx` re-reads the note from the store — a background
@@ -67,7 +88,7 @@ frontmatter on one screen.
    someone at the bottom of it with nothing to do makes them find their own
    way out.
 
-Cancelling writes nothing, and the button stays usable — the daily cap
+Cancelling writes nothing, and both controls stay usable — the daily cap
 counts reviews, not attempts.
 
 ### Growth, server side

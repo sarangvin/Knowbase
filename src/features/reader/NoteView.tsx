@@ -58,7 +58,10 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
   // each has to be spliced into the prose at the right offset:
   //
   //   the review control, at the foot of "AI Notes" — the end of the
-  //   reading, and deliberately above the optional exercises below it
+  //   reading, and deliberately above the optional exercises below it. On
+  //   touch it also portals a swipe sheet to the foot of the scroller, so
+  //   a reader who does work through the questions can finish from there
+  //   too; see ReviewBar.tsx
   //   "My Notes", which is an editor
   //   "Questions", which has a button per question
   //
@@ -80,7 +83,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
   const qsStart = qs ? body.lastIndexOf('##', qs.start) : -1
 
   const inserts: { start: number; end: number; node: ReactNode }[] = []
-  if (ai) inserts.push({ start: ai.contentEnd, end: ai.contentEnd, node: <ReviewBar note={note} /> })
+  if (ai) inserts.push({ start: ai.contentEnd, end: ai.contentEnd, node: <ReviewBar note={note} scrollRef={scrollRef} /> })
   if (mine && mineStart >= 0) {
     inserts.push({
       start: mineStart,
@@ -126,7 +129,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
         {/* A note with no "AI Notes" section — a hand-written one, or one
             whose template has drifted — still needs a way to be reviewed, so
             the control falls back to the end of the note. */}
-        {!ai && <ReviewBar note={note} />}
+        {!ai && <ReviewBar note={note} scrollRef={scrollRef} />}
       </div>
     </div>
   )
