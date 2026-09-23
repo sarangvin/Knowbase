@@ -8,7 +8,7 @@
 // tier gets drained by a crawler.
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/asyncHandler.js'
-import { topUpEveryone, findShortCollections } from '../onboarding/topUp.js'
+import { topUpEveryone, findShortCollections, shelfReport } from '../onboarding/topUp.js'
 
 export const cronRouter = Router()
 
@@ -49,5 +49,11 @@ cronRouter.get('/top-up/preview', asyncHandler(async (req, res) => {
     return
   }
   const candidates = await findShortCollections(20)
-  res.json({ candidates: candidates.map((c) => ({ space: c.space, unreviewed: c.unreviewed })) })
+  // Both shelves, per collection. "Short" alone cannot tell you whether the
+  // buffer behind it is full, empty or full of stubs, and those need three
+  // different fixes.
+  res.json({
+    candidates: candidates.map((c) => ({ space: c.space, unreviewed: c.unreviewed })),
+    shelves: await shelfReport(60),
+  })
 }))

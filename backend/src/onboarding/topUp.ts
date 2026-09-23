@@ -111,6 +111,66 @@ export async function findShortCollections(limit: number): Promise<Candidate[]> 
   }))
 }
 
+export interface ShelfReport {
+  space: string
+  /** Unfinished and on the shelf. */
+  visible: number
+  /** Generated and waiting behind it. */
+  hidden: number
+  /** Of those, still one-line stubs the draft queue has not reached. */
+  hiddenPending: number
+  visiblePending: number
+  reviewed: number
+  topics: number
+}
+
+/**
+ * What both shelves actually hold, per collection.
+ *
+ * Read-only and spends nothing. It exists because the buffer's failure mode
+ * is silence: a shelf that is short and a buffer that is empty look exactly
+ * like a shelf that is short and a buffer that is full, from outside. The
+ * counts are the difference between knowing and guessing.
+ */
+export async function shelfReport(limit: number): Promise<ShelfReport[]> {
+  const rows = (await db.execute(sql`
+    SELECT split_part(n.path, '/', 2) AS space,
+           count(*)::int AS topics,
+           count(*) FILTER (WHERE n.content ~ '(?n)^last_reviewed: *[0-9]')::int AS reviewed,
+           count(*) FILTER (WHERE n.content ~ '(?n)^hidden: *true')::int AS hidden,
+           count(*) FILTER (WHERE n.content ~ '(?n)^hidden: *true'
+                              AND n.content ~ '(?n)^pending: *true')::int AS hidden_pending,
+           count(*) FILTER (WHERE n.content !~ '(?n)^hidden: *true'
+                              AND n.content ~ '(?n)^pending: *true')::int AS visible_pending
+    FROM notes n
+    JOIN vaults v ON v.id = n.vault_id
+    JOIN users u ON u.id = v.owner_user_id
+    WHERE v.kind = 'personal'
+      AND n.path LIKE ${SPACE_ROOT + '%/Topics/%'}
+      AND (u.access_approved OR u.role = 'owner')
+    GROUP BY 1
+    ORDER BY 1
+    LIMIT ${limit}
+  `)).rows as {
+    space: string
+    topics: number
+    reviewed: number
+    hidden: number
+    hidden_pending: number
+    visible_pending: number
+  }[]
+
+  return rows.map((r) => ({
+    space: r.space,
+    visible: r.topics - r.reviewed - r.hidden,
+    hidden: r.hidden,
+    hiddenPending: r.hidden_pending,
+    visiblePending: r.visible_pending,
+    reviewed: r.reviewed,
+    topics: r.topics,
+  }))
+}
+
 async function callsInLastDay(): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
