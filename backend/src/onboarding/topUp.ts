@@ -104,11 +104,31 @@ export async function retryFailedOnboarding(): Promise<{ email: string; topic: s
       SELECT j.user_id, j.topic, u.email
       FROM onboarding_jobs j
       JOIN users u ON u.id = j.user_id
+      JOIN vaults v ON v.owner_user_id = j.user_id AND v.kind = 'personal'
       WHERE j.status IN ('failed', 'running')
         AND j.attempts < ${MAX_ONBOARDING_ATTEMPTS}
         AND (u.access_approved OR u.role = 'owner')
         AND j.updated_at > now() - ${sql.raw(`interval '${Math.round(RETRY_FAILED_WITHIN_MS / 1000)} seconds'`)}
         AND j.updated_at < now() - ${sql.raw(`interval '${Math.round(RETRY_COOLDOWN_MS / 1000)} seconds'`)}
+        -- **Only jobs that produced nothing.**
+        --
+        -- A run that already wrote its space must never be re-run. There is
+        -- no "resume" — runOnboarding plans from scratch, and disambiguateSpace
+        -- sees the existing folder and writes the whole thing again beside it
+        -- under "<name> 2". Retrying a two-day-old stale job did exactly
+        -- that: a second System Architecture for PMs, five more notes, five
+        -- more model calls, and a duplicate collection the owner has to
+        -- delete by hand.
+        --
+        -- A job whose space exists is not stuck, it is unfinished, and the
+        -- repair for unfinished is reconcileQueue putting its missing drafts
+        -- back on the queue — which costs a scan rather than a whole plan.
+        AND NOT EXISTS (
+              SELECT 1 FROM notes n
+              WHERE n.vault_id = v.id
+                AND j.space IS NOT NULL
+                AND n.path LIKE ${SPACE_ROOT} || j.space || '/%'
+            )
       ORDER BY j.updated_at ASC
       LIMIT 1
     `)).rows as { user_id: string; topic: string; email: string }[]

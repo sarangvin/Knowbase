@@ -18,11 +18,12 @@
 // destructive.
 import { and, eq, inArray, like, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { draftQueue, notes } from '../db/schema.js'
+import { draftQueue, notes, onboardingJobs } from '../db/schema.js'
 import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
 import { timeoutFor } from '../llm/meter.js'
 import { draftOne } from './draftNote.js'
 import { SPACE_ROOT, contributeToLibrary } from '../vault/spaces.js'
+import { isHidden } from '../vault/hidden.js'
 
 /** Notes drafted per drain.
  *
@@ -422,6 +423,25 @@ export async function reconcileQueue(): Promise<number> {
         .select({ path: notes.path })
         .from(notes)
         .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${SPACE_ROOT}%/Topics/%`)))
+
+      // Which of this owner's collections came from an onboarding run.
+      //
+      // A note rescued from the floor has to go back with the priority it
+      // had. Everything reconcile found used to be requeued as 'reconcile',
+      // which is not 'onboarding' — so a first collection's notes, the ones
+      // most worth hurrying, came back and queued behind every top-up draft
+      // already waiting. The rescue quietly demoted exactly the work it was
+      // rescuing.
+      const onboarded = new Set(
+        (
+          await db
+            .select({ space: onboardingJobs.space })
+            .from(onboardingJobs)
+            .where(eq(onboardingJobs.userId, owner.ownerUserId))
+        )
+          .map((r) => r.space)
+          .filter((x): x is string => !!x),
+      )
       for (const n of list) {
         const space = n.path.slice(SPACE_ROOT.length).split('/')[0]
         const prefix = `${SPACE_ROOT}${space}/Topics/`
@@ -435,7 +455,10 @@ export async function reconcileQueue(): Promise<number> {
           siblings: all
             .filter((a) => a.path.startsWith(prefix))
             .map((a) => (a.path.split('/').pop() ?? '').replace(/\.md$/i, '')),
-          source: 'reconcile',
+          // Hidden notes are the growth buffer, never part of a first
+          // collection — so a visible stub in a space that was onboarded is
+          // one of that plan's own notes, whatever put it back on the floor.
+          source: onboarded.has(space) && !isHidden(n.content) ? 'onboarding' : 'reconcile',
         })
       }
     }
