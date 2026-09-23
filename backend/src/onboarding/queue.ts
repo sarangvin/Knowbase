@@ -26,18 +26,23 @@ import { SPACE_ROOT, contributeToLibrary } from '../vault/spaces.js'
 
 /** Notes drafted per drain.
  *
- *  One, not three. A drain runs inside a request's invocation, under the
- *  same 60s ceiling as the response it followed, and a draft that normally
- *  takes 4s has been observed taking 28. Three of those in sequence cannot
- *  fit, so the batch was the thing that had to go — more invocations each
- *  doing one small piece, rather than one invocation gambling on latency. */
-const BATCH = 1
+ *  It was one. A drain runs inside a request's invocation, and under the
+ *  old 60s ceiling a draft that normally takes 4s but has been observed at
+ *  28 could not be attempted three times in sequence — so the batch was the
+ *  thing that had to go, more invocations each doing one small piece rather
+ *  than one invocation gambling on latency.
+ *
+ *  The ceiling is 240s now and the draft deadline is 60s, so two fit with
+ *  room for the writes either side. Two rather than three: the point of the
+ *  small batch was never to be as large as fits, it was to lose at most one
+ *  piece of work when an invocation dies. */
+const BATCH = 2
 
 /** The wall this has to stay inside when no caller supplies one: the
  *  function's maxDuration in vercel.json, less the response and the
  *  bookkeeping either side of the draft. A caller that already spent part of
  *  the invocation passes its own deadline instead. */
-const TIME_BUDGET_MS = 45_000
+const TIME_BUDGET_MS = 210_000
 
 /** The slowest single job worth planning for: the draft call's own timeout
  *  (30s, in llm/meter.ts) plus the reads and the write around it.

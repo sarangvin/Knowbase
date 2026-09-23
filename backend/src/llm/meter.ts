@@ -38,33 +38,48 @@ export class ModelTimeoutError extends Error {
 
 /** How long each kind of call may take before it is abandoned.
  *
- *  Every one of these sits under a 60s function ceiling, and the failure
- *  being prevented is specific: a draft call was measured at 55.6s, which
- *  did not fail — it ran until the platform killed the invocation holding
- *  it, taking the queue row's bookkeeping with it. The row then sat
- *  'running' for the full five-minute reclaim before anything retried it.
- *  A call that gives up at 30s fails cleanly, inside a process that is still
- *  alive to write that down.
+ *  The failure being prevented is specific: a draft call was measured at
+ *  55.6s, which did not fail — it ran until the platform killed the
+ *  invocation holding it, taking the queue row's bookkeeping with it. The
+ *  row then sat 'running' for the full five-minute reclaim before anything
+ *  retried it. A call that gives up cleanly fails inside a process that is
+ *  still alive to write that down.
+ *
+ *  **The split is who is waiting, not how slow the model is.**
+ *
+ *  Background work — planning a space, drafting a note, backfilling answers
+ *  — happens under `waitUntil` after the response has already gone. Nobody
+ *  is watching, so the only cost of waiting longer is the invocation, and
+ *  the only cost of giving up early is a wasted call and a collection that
+ *  does not grow. These were 20-30s against a 60s ceiling, and the
+ *  measurements said that was too tight: `grow-plan` was abandoning 9 calls
+ *  in 38 and `onboarding-plan` 15 in 32. Nearly half of a user's first
+ *  impression, thrown away at the deadline. They now get 60s each, under a
+ *  240s `maxDuration`.
+ *
+ *  Foreground work — a quiz, a flashcard deck, an answer the reader pressed
+ *  a button for — is awaited by the client with a spinner on screen. There
+ *  the deadline is a promise about how long someone will be made to wait,
+ *  and it stays where it was. Raising it would trade a clean failure for a
+ *  longer stare.
  *
  *  One table so the numbers cannot drift apart across five call sites. They
  *  are budgets, not predictions: a plan normally answers in ~3.4s and a
  *  draft in ~4-6s, so these fire only when something is already wrong.
  */
 const TIMEOUT_BY_SOURCE: Record<string, number> = {
-  'onboarding-plan': 20_000,
-  'grow-plan': 20_000,
-  // Lower than the queue's: this one shares its invocation with the plan
-  // call before it (20 + 25 + writes stays under 60), where a drain does
-  // nothing else.
-  'onboarding-draft': 25_000,
-  'grow-draft': 30_000,
-  'queue-draft': 30_000,
-  'quiz-build': 25_000,
+  // ── background: nobody is watching ──
+  'onboarding-plan': 60_000,
+  'grow-plan': 60_000,
+  'onboarding-draft': 60_000,
+  'grow-draft': 60_000,
+  'queue-draft': 60_000,
   // Answers several of a note's questions in one call, so it is doing three
-  // or four times the work of a single answer and needs the room. Nobody is
-  // waiting on it — it is a background backfill — and at 25s it was timing
-  // out often enough to leave notes unfilled and spend the call anyway.
-  'answer-backfill': 45_000,
+  // or four times the work of a single answer and needs the room.
+  'answer-backfill': 60_000,
+
+  // ── foreground: the reader is looking at a spinner ──
+  'quiz-build': 25_000,
 }
 const DEFAULT_TIMEOUT_MS = 25_000
 

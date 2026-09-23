@@ -56,5 +56,11 @@ cronRouter.get('/top-up/preview', asyncHandler(async (req, res) => {
     candidates: candidates.map((c) => ({ space: c.space, unreviewed: c.unreviewed })),
     shelves: await shelfReport(60),
     diagnostics: await passDiagnostics(),
+    // Echoed so a deployment that was *rejected* is visible from outside.
+    // Vercel refuses the whole deployment over an unsupported maxDuration —
+    // it does not fall back — and the symptom is the old build quietly
+    // staying live, which this repo has already been caught by once with a
+    // sub-daily cron entry.
+    maxDurationS: 240,
   })
 }))

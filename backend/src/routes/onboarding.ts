@@ -45,11 +45,14 @@ const MAX_TOPIC_LEN = 200
  *  permanently. */
 const STALE_JOB_MS = 2 * 60_000
 
-/** What one invocation may spend on background work, against the 60s
+/** What one invocation may spend on background work, against the 240s
  *  maxDuration in vercel.json. The slack is the response, the queries either
  *  side, and the platform's own overhead — a deadline set at the ceiling is
- *  not a deadline. */
-const INVOCATION_BUDGET_MS = 50_000
+ *  not a deadline.
+ *
+ *  Sized so a grow fits with room: two 60s plan attempts, the writes, the
+ *  reveal, and one draft off the queue afterwards. */
+const INVOCATION_BUDGET_MS = 210_000
 
 /** Local YYYY-MM-DD as the client keeps it — the same day the review cap,
  *  the quiz, the flashcard deck and the question allowance all use. */

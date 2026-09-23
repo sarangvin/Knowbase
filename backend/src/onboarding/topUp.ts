@@ -34,11 +34,14 @@ import { logUsageEvent } from '../usage/logEvent.js'
  *  a quiet week trying to grow everything at once. */
 const MAX_GROWS_PER_RUN = 2
 
-/** Wall-clock budget for the whole pass, against the 60s function ceiling. */
-const RUN_BUDGET_MS = 50_000
+/** Wall-clock budget for the whole pass, against the 240s function ceiling. */
+const RUN_BUDGET_MS = 210_000
 
-/** Worst case for one grow: two plan attempts plus the writes. */
-const WORST_GROW_MS = 42_000
+/** Worst case for one grow: two 60s plan attempts plus the writes and the
+ *  reveal after them. Derived from the deadline in llm/meter.ts rather than
+ *  guessed from past latencies — a guess is what put a 55.6s call inside a
+ *  budget that assumed 30. */
+const WORST_GROW_MS = 135_000
 
 /** Stop spending when the shared daily quota is nearly gone.
  *
@@ -318,7 +321,8 @@ export async function topUpEveryone(): Promise<TopUpResult> {
     // Whatever was just created is a placeholder until something drafts it.
     // The status poll only runs while somebody has the app open, which is
     // exactly the case this pass exists to cover.
-    if (Date.now() - started < RUN_BUDGET_MS - 35_000) {
+    // Room for a draft or two at their 60s deadline, plus the writes.
+    if (Date.now() - started < RUN_BUDGET_MS - 140_000) {
       const drained = await drainQueue()
       out.drafted = drained.drafted
     }
