@@ -1,15 +1,24 @@
-// The other half of moving generation off the critical path: if nobody is
-// watching a spinner, something has to tell them when their space is ready.
+// One announcement: your space is ready, here is the way in.
 //
-// It sits above the bottom nav on every screen of the app, because the user is
-// somewhere else entirely while this runs — browsing the demo space, which is
-// the whole point — and there is no single screen they can be relied on to be
-// looking at.
+// It used to carry the whole build — spinner, failure, retry — and now
+// carries none of that. A collection being built is a card in the
+// collections grid with the topic as its title (see CollectionCard's
+// BuildingCard), which is the shape of the thing being made, in the place it
+// will appear, one per collection. This bar could only ever say one of them
+// at a time, somewhere the collection would never be.
+//
+// What is left is the part a card cannot do. The moment a space becomes
+// real, the reader is usually somewhere else entirely — browsing the demo,
+// which is the whole point of building in the background — and "it is ready,
+// take me there" has to reach them wherever that is.
+//
+// It also still runs the status poll, which is the app's only heartbeat:
+// draining the draft queue, keeping the vault in sync, and publishing the
+// job list the cards are drawn from.
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { RemoteVaultSource } from '../../vault/remoteSource'
 import {
-  startOnboarding,
   fetchOnboardingStatus,
   ackOnboarding,
   workInFlight,
@@ -17,7 +26,7 @@ import {
   WORK_GRACE_MS,
   type OnboardingJob,
 } from './onboardingApi'
-import { Sparkles, ArrowRight, X, RotateCw } from '../../ui/icons'
+import { Sparkles, ArrowRight, X } from '../../ui/icons'
 import './onboarding.css'
 
 /** Slow enough not to be a background load on a phone, fast enough that the
@@ -204,18 +213,6 @@ export function OnboardingBanner() {
     }
   }
 
-  const retry = async () => {
-    if (busy) return
-    setBusy(true)
-    try {
-      setJob(await startOnboarding(job.topic))
-    } catch (err) {
-      setJob({ ...job, error: err instanceof Error ? err.message : String(err) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
   // 'running' is deliberately not drawn here any more. A build in progress
   // is a card in the collections grid, with the topic as its title and a
   // spinner where the counts go — the shape of the thing being made, in the
@@ -224,22 +221,11 @@ export function OnboardingBanner() {
   // many collections were building.
   if (job.status === 'running') return null
 
-  if (job.status === 'failed') {
-    return (
-      <div className="ob-banner failed" role="alert">
-        <div className="ob-banner-text">
-          <strong>Couldn't build your space on {job.topic}</strong>
-          <span>{job.error ?? 'Something went wrong on our side.'}</span>
-        </div>
-        <button className="ob-banner-btn" onClick={() => void retry()} disabled={busy}>
-          <RotateCw /> Try again
-        </button>
-        <button className="ob-banner-dismiss" aria-label="Dismiss" onClick={dismiss}>
-          <X />
-        </button>
-      </div>
-    )
-  }
+  // 'failed' is not drawn here either, for the same reason 'running' is
+  // not: the collection card carries the failure and the retry, in the slot
+  // the collection was going to occupy. Both would have shown at once on the
+  // collections screen — a banner and a card saying the same thing, which is
+  // the duplicate this move was meant to remove rather than double.
 
   // Ready. The draft count is here rather than hidden because the remaining
   // notes land after this point: saying "5 of 5" once it's true is the
