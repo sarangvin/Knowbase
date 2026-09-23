@@ -19,6 +19,7 @@ import { requireAuth, requireApproved, requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { NOT_HIDDEN } from '../vault/hidden.js'
 import { SPACE_ROOT, spaceOf, normalizeTopic, getOrCreatePersonalVaultId, getGlobalVaultId, adoptSpaceInto, contributeToLibrary, archivedSpaces, setSpaceArchived, deleteSpace } from '../vault/spaces.js'
 
 export const vaultsRouter = Router()
@@ -40,10 +41,14 @@ function parsePathParam(raw: unknown): string | { error: string } {
 vaultsRouter.get('/mine/notes', asyncHandler(async (req, res) => {
   const personalVaultId = await getOrCreatePersonalVaultId(req.user!.id)
 
+  // Hidden notes are excluded here rather than filtered in the client.
+  // A note the browser receives and agrees not to draw is one search box,
+  // one graph view or one export away from being drawn, and the buffer only
+  // works if the reader genuinely cannot see what is in it.
   const personalRows = await db
     .select({ path: notes.path, sizeBytes: notes.sizeBytes, mtime: notes.mtime })
     .from(notes)
-    .where(eq(notes.vaultId, personalVaultId))
+    .where(and(eq(notes.vaultId, personalVaultId), NOT_HIDDEN))
 
   // origin is still reported, and is still always 'personal' here. App.tsx
   // keys its "brand new vault" check off it, and keeping the field means a
@@ -80,10 +85,14 @@ vaultsRouter.get('/mine/note', asyncHandler(async (req, res) => {
   const path = parsed
 
   const personalVaultId = await getOrCreatePersonalVaultId(req.user!.id)
+  // NOT_HIDDEN here as well as in the listing. The listing is what an honest
+  // client works from, but the path is a query parameter and guessing a
+  // plausible topic filename is not hard; a buffer that leaks to anyone who
+  // types the right URL is not a buffer.
   const personal = await db
     .select({ content: notes.content })
     .from(notes)
-    .where(and(eq(notes.vaultId, personalVaultId), eq(notes.path, path)))
+    .where(and(eq(notes.vaultId, personalVaultId), eq(notes.path, path), NOT_HIDDEN))
     .limit(1)
   if (personal[0]) {
     res.json({ content: personal[0].content })

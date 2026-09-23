@@ -11,11 +11,17 @@
 // The expensive part is the model, so the whole design is about not calling
 // it. A collection at or above the threshold is skipped by a SQL predicate,
 // which means an idle pass is one query and no spend at all.
+//
+// "Short" now means short on either shelf: fewer than three notes the reader
+// can see, or fewer than three written and waiting behind them. Hidden notes
+// are subtracted from the visible count rather than counted as available —
+// see vault/hidden.ts.
 import { and, eq, like, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes, usageEvents } from '../db/schema.js'
 import { SPACE_ROOT, archivedSpaces } from '../vault/spaces.js'
 import { growSpace, MAX_UNREVIEWED } from './grow.js'
+import { HIDDEN_BUFFER, revealUpTo } from '../vault/hidden.js'
 import { drainQueue } from './queue.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
@@ -48,6 +54,8 @@ export interface TopUpResult {
   grown: number
   added: number
   drafted: number
+  /** Hidden notes handed over without spending anything. */
+  revealed: number
   skipped?: 'quota' | 'no-key'
 }
 
@@ -72,7 +80,12 @@ export async function findShortCollections(limit: number): Promise<Candidate[]> 
              v.id            AS vault_id,
              split_part(n.path, '/', 2) AS space,
              count(*)::int AS topics,
-             count(*) FILTER (WHERE n.content ~ '(?n)^last_reviewed: *[0-9]')::int AS reviewed
+             count(*) FILTER (WHERE n.content ~ '(?n)^last_reviewed: *[0-9]')::int AS reviewed,
+             -- Hidden notes are generated and waiting, not available. Counting
+             -- them as unreviewed would tell this pass every collection was
+             -- already stocked the moment the buffer filled, and the top-up
+             -- would quietly stop doing anything.
+             count(*) FILTER (WHERE n.content ~ '(?n)^hidden: *true')::int AS hidden
       FROM notes n
       JOIN vaults v ON v.id = n.vault_id
       JOIN users u ON u.id = v.owner_user_id
@@ -83,10 +96,10 @@ export async function findShortCollections(limit: number): Promise<Candidate[]> 
         AND (u.access_approved OR u.role = 'owner')
       GROUP BY 1, 2, 3
     )
-    SELECT user_id, vault_id, space, topics - reviewed AS unreviewed
+    SELECT user_id, vault_id, space, topics - reviewed - hidden AS unreviewed
     FROM per_space
-    WHERE topics - reviewed < ${MAX_UNREVIEWED}
-    ORDER BY topics - reviewed ASC, space ASC
+    WHERE topics - reviewed - hidden < ${MAX_UNREVIEWED} OR hidden < ${HIDDEN_BUFFER}
+    ORDER BY topics - reviewed - hidden ASC, hidden ASC, space ASC
     LIMIT ${limit}
   `)).rows as { user_id: string; vault_id: string; space: string; unreviewed: number }[]
 
@@ -117,7 +130,7 @@ async function callsInLastDay(): Promise<number> {
  */
 export async function topUpEveryone(): Promise<TopUpResult> {
   const started = Date.now()
-  const out: TopUpResult = { candidates: 0, grown: 0, added: 0, drafted: 0 }
+  const out: TopUpResult = { candidates: 0, grown: 0, added: 0, drafted: 0, revealed: 0 }
 
   try {
     if (!process.env.GEMINI_API_KEY) return { ...out, skipped: 'no-key' }
@@ -144,6 +157,14 @@ export async function topUpEveryone(): Promise<TopUpResult> {
         archivedByVault.set(c.vaultId, archived)
       }
       if (archived.has(c.space)) continue
+
+      // Free first. A shelf that is short while notes sit hidden behind it
+      // needs no model call at all, and this pass runs for people who are
+      // not in the app — so it is the only thing that will fix a collection
+      // whose owner has nothing left to review and therefore nothing that
+      // would trigger a reveal.
+      const opened = await revealUpTo(c.vaultId, c.space)
+      out.revealed += opened.length
 
       const res = await growSpace(c.userId, c.space)
       out.grown++

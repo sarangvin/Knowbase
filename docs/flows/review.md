@@ -83,7 +83,11 @@ the control at the end.
 5. Save. If nothing changed, no write — that state is the system already
    being right, not an error.
 6. `requestSpaceGrowth(space)` → `POST /api/onboarding/grow`, fire and forget.
-   The review is already saved; a failure here cannot surface.
+   The review is already saved; a failure here cannot surface. That request
+   does two things in order: it **reveals** the best note from the hidden
+   buffer before it responds, which costs one `UPDATE` and is what refills
+   the shelf instantly, and then tops the buffer back up with a model call
+   under `waitUntil`. See [buffer.md](buffer.md).
 7. Open `Automated Graph/<space>/Next Up.md`. The note is finished; leaving
    someone at the bottom of it with nothing to do makes them find their own
    way out.

@@ -7,8 +7,30 @@ import {
 } from './engine'
 import './dashboards.css'
 
-function NoteLink({ path, label, pending }: { path: string | null; label: string; pending?: boolean }) {
+function NoteLink({
+  path,
+  label,
+  pending,
+  isNew,
+}: {
+  path: string | null
+  label: string
+  pending?: boolean
+  isNew?: boolean
+}) {
   const openNote = useVault((s) => s.openNote)
+  // "New" and "Coming soon" are mutually exclusive by construction: a note
+  // is only revealed once its body is written, so a row can never be both.
+  // Ordered with New first anyway, because if that invariant ever breaks,
+  // "New" is the more useful of the two to see.
+  const badge = isNew ? (
+    // The anticipation beat the hidden buffer pays for. Finishing a note
+    // visibly produces the next one — without this the list is just silently
+    // one longer, and the work of pre-generating it goes unnoticed.
+    <span className="dv-new" title="Just unlocked by finishing your last note.">
+      New
+    </span>
+  ) : null
   const marker = pending ? (
     // The note exists and is readable — it is a one-line stub while the draft
     // queue gets to it. Saying so beats letting someone open it and conclude
@@ -18,12 +40,13 @@ function NoteLink({ path, label, pending }: { path: string | null; label: string
       Coming soon
     </span>
   ) : null
-  if (!path) return <span className="dv-faint">{label}{marker}</span>
+  if (!path) return <span className="dv-faint">{label}{badge}{marker}</span>
   return (
     <>
       <a className="internal-link" onClick={() => openNote(path)}>
         {label}
       </a>
+      {badge}
       {marker}
     </>
   )
@@ -70,7 +93,7 @@ export function NextUp({ space }: { space: string }) {
         <div className="dv-pick">
           <div className="dv-pick-label">{r.pick.isReview ? 'Review next' : 'Pick'}</div>
           <div className="dv-pick-title">
-            <NoteLink path={r.pick.path} label={r.pick.title} pending={r.pick.pending} />
+            <NoteLink path={r.pick.path} label={r.pick.title} pending={r.pick.pending} isNew={r.pick.isNew} />
           </div>
           <div className="dv-pick-meta">
             {r.pick.isReview ? (
@@ -103,7 +126,7 @@ export function NextUp({ space }: { space: string }) {
           <tbody>
             {r.ranked.map((c) => (
               <tr key={c.path}>
-                <td><NoteLink path={c.path} label={c.title} pending={c.pending} /></td>
+                <td><NoteLink path={c.path} label={c.title} pending={c.pending} isNew={c.isNew} /></td>
                 <td>{c.confidence}/5</td>
                 <td>{c.importance}</td>
                 <td>{c.unlocks}</td>

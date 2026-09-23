@@ -16,6 +16,7 @@ import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
 import type { QuizQuestionRow } from '../db/schema.js'
 import { SPACE_ROOT, spaceOf, archivedSpaces } from '../vault/spaces.js'
+import { NOT_HIDDEN } from '../vault/hidden.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
 import { meteredGeminiCall } from '../llm/meter.js'
 
@@ -71,7 +72,8 @@ export async function collectCandidates(vaultId: string): Promise<Candidate[]> {
   const rows = await db
     .select({ path: notes.path, content: notes.content })
     .from(notes)
-    .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${SPACE_ROOT}%/Topics/%`)))
+    // A quiz must not ask about a note the reader has never been shown.
+    .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${SPACE_ROOT}%/Topics/%`), NOT_HIDDEN))
 
   // An archived collection is one the reader has set aside. Testing them on
   // it would be the app disagreeing with a decision they just made.

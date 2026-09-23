@@ -163,7 +163,7 @@ export function buildTopicNote(
   title: string,
   s: Subtopic,
   body?: TopicNoteBody | null,
-  opts?: { pending?: boolean },
+  opts?: { pending?: boolean; hidden?: boolean },
 ): string {
   const prereqLine =
     s.prerequisites.length === 0
@@ -204,11 +204,15 @@ export function buildTopicNote(
   // that breaks when prose changes is the kind of coupling this codebase has
   // been paying for all week. Removed by fillPlaceholder when the draft lands.
   const pendingLine = opts?.pending ? 'pending: true\n' : ''
+  // Generated ahead of time and not handed over yet. Like `pending`, a
+  // frontmatter fact rather than a row somewhere else — see
+  // backend/src/vault/hidden.ts for why, and for what removes it.
+  const hiddenLine = opts?.hidden ? 'hidden: true\n' : ''
 
   return `---
 space:
 status: frontier
-${pendingLine}${prereqLine}
+${hiddenLine}${pendingLine}${prereqLine}
 importance: ${s.importance}
 interest: ${s.interest}
 confidence: 0

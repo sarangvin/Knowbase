@@ -12,6 +12,7 @@ import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
 import type { FlashcardRow } from '../db/schema.js'
 import { SPACE_ROOT, spaceOf, archivedSpaces } from '../vault/spaces.js'
+import { NOT_HIDDEN } from '../vault/hidden.js'
 import { frontmatterValue, frontmatterNumber } from '../vault/frontmatter.js'
 import { meteredGeminiCall } from '../llm/meter.js'
 import { limitsFor } from '../plans.js'
@@ -107,7 +108,8 @@ export async function collectSources(vaultId: string): Promise<NoteSource[]> {
   const rows = await db
     .select({ path: notes.path, content: notes.content })
     .from(notes)
-    .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${SPACE_ROOT}%/Topics/%`)))
+    // A card must not come from a note the reader has never been shown.
+    .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${SPACE_ROOT}%/Topics/%`), NOT_HIDDEN))
 
   // An archived collection is one the reader has set aside; drilling them on
   // it would be the app disagreeing with a decision they just made.

@@ -119,11 +119,30 @@ export function isPending(fm: Record<string, unknown>): boolean {
   return fm.pending === true || fm.pending === 'true'
 }
 
+/** Just handed over from the hidden buffer and not yet opened.
+ *
+ *  `revealed` is written by the server at the moment a completed note pulls
+ *  the next one off the buffer (backend/src/vault/hidden.ts). The marker is
+ *  the anticipation beat the buffer buys: finishing a note visibly produces
+ *  the next one, rather than the list silently being one longer.
+ *
+ *  It stops being new once it has been reviewed, which needs no timer and no
+ *  second write — the same fact the rest of this file splits New from Review
+ *  on. A note revealed and ignored for a week still says New, which is true.
+ */
+export function isNewlyRevealed(fm: Record<string, unknown>): boolean {
+  const raw = fm.revealed
+  const has = raw instanceof Date ? !Number.isNaN(raw.getTime()) : typeof raw === 'string' ? raw.trim() !== '' : false
+  return has && !lastReviewedDay(fm)
+}
+
 export interface RankedTopic {
   path: string
   title: string
   /** Body not written yet — the queue has it. */
   pending: boolean
+  /** Arrived from the buffer when the last note was finished. */
+  isNew: boolean
   confidence: number
   importance: number
   interest: number
@@ -193,6 +212,7 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
         path: p.path,
         title: p.title,
         pending: isPending(p.frontmatter),
+        isNew: isNewlyRevealed(p.frontmatter),
         confidence: num(p.frontmatter.confidence),
         importance,
         interest,
@@ -262,6 +282,9 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
           path: fallback.path,
           title: fallback.title,
           pending: fallback.pending,
+          // A note out of the review list has been opened before, so it is
+          // not new whatever its frontmatter says.
+          isNew: false,
           confidence: fallback.confidence,
           importance: num(index.notes.get(fallback.path)?.frontmatter.importance),
           interest: fallback.interest,

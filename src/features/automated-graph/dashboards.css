@@ -51,6 +51,40 @@
   background: var(--bg-elevated);
 }
 
+/* "New" — just handed over from the hidden buffer by finishing a note.
+   Shares the chip shape with "Coming soon" but not its meaning, so it is
+   filled rather than tinted: one is a status you wait out, the other is a
+   small reward, and they must not read as the same thing at a glance.
+   It clears itself when the note is reviewed. */
+.dv-new {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  vertical-align: 1px;
+  cursor: help;
+  /* One quiet pulse on arrival, not a loop: the row has usually just
+     appeared under the reader's eyes, and a badge that keeps moving is a
+     distraction for as long as the note goes unread. */
+  animation: dv-new-in 0.42s ease-out both;
+}
+
+@keyframes dv-new-in {
+  from { opacity: 0; transform: scale(0.8); }
+  60%  { opacity: 1; transform: scale(1.06); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dv-new { animation: none; }
+}
+
 /* "Coming soon" — the note exists but the draft queue has not reached its
    body yet. Muted and small on purpose: it is a status, not a warning, and
    it removes itself the moment the draft lands. */

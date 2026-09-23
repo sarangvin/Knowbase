@@ -18,7 +18,8 @@ import { runOnboarding } from '../onboarding/run.js'
 import { growSpace, MAX_UNREVIEWED } from '../onboarding/grow.js'
 import { drainQueue, queueDepth, reconcileQueue } from '../onboarding/queue.js'
 import { collectionAllowance, recordCollectionStart } from '../onboarding/limits.js'
-import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
+import { getOrCreatePersonalVaultId, archivedSpaces } from '../vault/spaces.js'
+import { revealUpTo } from '../vault/hidden.js'
 
 export const onboardingRouter = Router()
 onboardingRouter.use(requireAuth)
@@ -240,7 +241,18 @@ onboardingRouter.post('/grow', asyncHandler(async (req, res) => {
   // to know how much of the invocation the plan before it already spent,
   // and it cannot work that out from its own start time.
   const deadline = Date.now() + INVOCATION_BUDGET_MS
-  res.status(202).json({ ok: true, maxUnreviewed: MAX_UNREVIEWED })
+
+  // The reveal happens *in* the request, before the response, because it is
+  // a single UPDATE against a note that already exists — there is nothing to
+  // wait for. That is the whole point of the buffer: the shelf refills now,
+  // and the model call that replaces what was taken happens afterwards with
+  // nobody watching.
+  const vaultId = await getOrCreatePersonalVaultId(userId)
+  const revealed = (await archivedSpaces(vaultId)).has(space)
+    ? []
+    : await revealUpTo(vaultId, space)
+
+  res.status(202).json({ ok: true, maxUnreviewed: MAX_UNREVIEWED, revealed })
   // Plan the topics, then take one draft off the queue — one, because the
   // batch is one, so the worst case here is a plan call plus a single draft
   // rather than the plan plus three that used to overrun the 60s ceiling.
