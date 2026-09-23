@@ -28,10 +28,20 @@ import { logUsageEvent } from '../usage/logEvent.js'
  *  short?" — it is VISIBLE_AHEAD, which is where the number now lives. */
 export const MAX_UNREVIEWED = VISIBLE_AHEAD
 
-/** Ceiling on a single grow run, independent of the cap above: a vault whose
- *  frontmatter is malformed enough to read as zero unreviewed topics must not
- *  turn one click into an unbounded generation run. */
-const MAX_PER_RUN = 3
+/** Ceiling on how many topics one run asks the planner for.
+ *
+ *  Two, not three. It is a ceiling on unbounded generation — a vault whose
+ *  frontmatter is malformed enough to read as zero unreviewed topics must
+ *  not turn one click into an open-ended run — but the number itself is
+ *  about the planner's reliability. `grow-plan` has a 20s deadline and a
+ *  bigger ask is a longer generation: every recorded grow that asked for one
+ *  or two topics succeeded, and the first that asked for three came back
+ *  empty and stranded the collection.
+ *
+ *  Filling a six-note buffer therefore takes a few passes rather than one.
+ *  That is the right trade: a pass that returns two notes is progress, and a
+ *  pass that returns nothing is a collection nobody can read. */
+const MAX_PER_RUN = 2
 
 function titleFromPath(path: string): string {
   return (path.split('/').pop() ?? '').replace(/\.md$/i, '')

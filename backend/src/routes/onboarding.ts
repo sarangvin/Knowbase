@@ -17,6 +17,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { runOnboarding } from '../onboarding/run.js'
 import { growSpace, MAX_UNREVIEWED } from '../onboarding/grow.js'
 import { drainQueue, queueDepth, reconcileQueue } from '../onboarding/queue.js'
+import { ensureStocked } from '../onboarding/ensure.js'
 import { collectionAllowance, recordCollectionStart } from '../onboarding/limits.js'
 import { getOrCreatePersonalVaultId, archivedSpaces } from '../vault/spaces.js'
 import { revealUpTo } from '../vault/hidden.js'
@@ -278,6 +279,16 @@ onboardingRouter.get('/status', asyncHandler(async (req, res) => {
     waitUntil(drainQueue())
     return
   }
+
+  // Nothing queued. This is the moment to check whether anything of theirs
+  // is starved — a collection whose last grow failed has no other way back,
+  // because the thing that would retry it is finishing a note they do not
+  // have. Behind a fifteen-minute per-collection cooldown and the shared
+  // daily budget, so a collection that keeps failing cannot turn a
+  // five-second poll into a quota fire. See onboarding/ensure.ts.
+  waitUntil(ensureStocked(req.user!.id).then((r) => {
+    if (r.grown || r.revealed) console.log('[ensure]', JSON.stringify(r))
+  }))
 
   // Notes still unwritten and an empty queue is the stranded case: an
   // invocation died holding work nothing else knew about. Rare, and the only
