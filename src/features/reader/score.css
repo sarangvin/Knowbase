@@ -119,10 +119,23 @@
 .review-hint { color: var(--text-faint); font-size: 12.5px; line-height: 1.5; }
 .review-hint.is-error { color: var(--text-error); }
 
-/* A finger needs a bigger target than a cursor does, and on a phone the
-   hint wraps under the button rather than sitting beside it. */
+/* A finger needs a bigger target than a cursor does. */
 @media (hover: none) and (pointer: coarse) {
   .review-btn { padding: 12px 18px; font-size: 14.5px; }
+}
+
+/* On a phone the button sits at the right-hand edge, under the thumb that
+   would reach for it, while the hint keeps its own line at the left where
+   it reads with the prose above it. `margin-left: auto` on the button
+   rather than `justify-content` on the row, because the row holds both and
+   only one of them is moving.
+
+   A width query, not the coarse one above: this is about a column narrow
+   enough that the hint has already wrapped to its own line, which is a
+   phone, not any touchscreen. */
+@media (max-width: 560px) {
+  .review-btn { margin-left: auto; }
+  .review-hint { flex-basis: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
