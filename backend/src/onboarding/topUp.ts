@@ -330,11 +330,26 @@ export async function passDiagnostics(): Promise<PassDiagnostics> {
 
   const jobs = (await db.execute(sql`
     SELECT j.updated_at, u.email, j.topic, j.status, j.space, j.error,
-           j.notes_drafted, j.notes_total,
+           -- Counted from the notes, not from the row.
+           --
+           -- notes_drafted is written once, when the run ends, and the queue
+           -- that writes the other four notes has no business touching this
+           -- table — so the stored counter sits at 1/5 forever and reads as
+           -- a collection that never finished. Every job below looked
+           -- unfinished for that reason alone, including several that were
+           -- complete.
+           (SELECT count(*)::int FROM notes n
+             WHERE n.vault_id = v.id
+               AND n.path LIKE ${SPACE_ROOT} || j.space || '/Topics/%'
+               AND n.content NOT LIKE '%fuller draft of this note is being written%') AS notes_drafted,
+           (SELECT count(*)::int FROM notes n
+             WHERE n.vault_id = v.id
+               AND n.path LIKE ${SPACE_ROOT} || j.space || '/Topics/%') AS notes_total,
            (SELECT count(*)::int FROM draft_queue q
              WHERE q.user_id = j.user_id AND q.status IN ('pending','running')) AS queued
     FROM onboarding_jobs j
     JOIN users u ON u.id = j.user_id
+    LEFT JOIN vaults v ON v.owner_user_id = j.user_id AND v.kind = 'personal'
     ORDER BY j.updated_at DESC
     LIMIT 25
   `)).rows as {
