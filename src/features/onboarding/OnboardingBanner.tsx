@@ -65,6 +65,7 @@ export function OnboardingBanner() {
   const loadRemote = useVault((s) => s.loadRemote)
   const openNote = useVault((s) => s.openNote)
   const refreshVault = useVault((s) => s.refreshVault)
+  const setBuildingJobs = useVault((s) => s.setBuildingJobs)
 
   const [job, setJob] = useState<OnboardingJob | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(readDismissed)
@@ -87,9 +88,12 @@ export function OnboardingBanner() {
     let graceUntil = 0
 
     const poll = async () => {
-      const { job: next, queue } = await fetchOnboardingStatus()
+      const { job: next, jobs, queue } = await fetchOnboardingStatus()
       if (cancelled) return
       setJob(next)
+      // Published for the collections home, which draws a card per build in
+      // progress. Same fetch, so the card and this banner cannot disagree.
+      setBuildingJobs(jobs ?? (next ? [next] : []))
       // Two reasons to keep polling, not one.
       //
       // The job being 'running' is the visible one — the banner is counting
@@ -163,7 +167,7 @@ export function OnboardingBanner() {
       window.removeEventListener(ONBOARDING_STARTED, onStarted)
       clearInterval(idle)
     }
-  }, [approved, refreshVault])
+  }, [approved, refreshVault, setBuildingJobs])
 
   const dismissKey = job ? `${job.topic}|${job.status}` : ''
   const dismiss = () => {
@@ -193,7 +197,7 @@ export function OnboardingBanner() {
       if (!alreadyPersonal) await loadRemote()
       else await refreshVault()
       openNote(job.openPath, { replace: true })
-      await ackOnboarding()
+      await ackOnboarding(job.topic)
       setJob({ ...job, acknowledged: true })
     } finally {
       setBusy(false)
@@ -212,22 +216,13 @@ export function OnboardingBanner() {
     }
   }
 
-  if (job.status === 'running') {
-    return (
-      <div className="ob-banner building" role="status">
-        <span className="spinner" />
-        <div className="ob-banner-text">
-          <strong>Building your space on {job.topic}</strong>
-          <span>Have a look around this one meanwhile — we'll tell you when yours is ready.</span>
-        </div>
-        {/* Closing this only hides the spinner. The work carries on server
-            side, and the banner comes back to say it is ready. */}
-        <button className="ob-banner-dismiss" aria-label="Hide until it's ready" onClick={dismiss}>
-          <X />
-        </button>
-      </div>
-    )
-  }
+  // 'running' is deliberately not drawn here any more. A build in progress
+  // is a card in the collections grid, with the topic as its title and a
+  // spinner where the counts go — the shape of the thing being made, in the
+  // place it will appear. A bar at the foot of every screen said the same
+  // thing in a place the collection will never be, and said it once however
+  // many collections were building.
+  if (job.status === 'running') return null
 
   if (job.status === 'failed') {
     return (

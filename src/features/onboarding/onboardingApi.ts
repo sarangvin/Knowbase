@@ -116,7 +116,13 @@ export interface QueueDepth {
 }
 
 export interface OnboardingStatus {
+  /** The single one worth announcing, for the banner. */
   job: OnboardingJob | null
+  /** Every collection this user has asked for. The collections screen draws
+   *  a card per running one — several can build at once now, which is what
+   *  "two collections at a time" costs to support honestly. Absent from an
+   *  older server, hence optional. */
+  jobs?: OnboardingJob[]
   /** Outstanding note drafting, across everyone. The poll is the only
    *  heartbeat the draft queue has, so the banner keeps polling while this
    *  is non-empty even when the caller's own job finished long ago. */
@@ -140,9 +146,14 @@ export async function fetchOnboardingJob(): Promise<OnboardingJob | null> {
 /** Mark the notification as delivered. Best-effort: the worst case of a
  *  failure here is the banner appearing once more, which is not worth
  *  interrupting the user who has just arrived in their new space. */
-export async function ackOnboarding(): Promise<void> {
+export async function ackOnboarding(topic?: string): Promise<void> {
   try {
-    await fetch('/api/onboarding/ack', { method: 'POST', credentials: 'include' })
+    await fetch('/api/onboarding/ack', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(topic ? { topic } : {}),
+    })
   } catch {
     /* ignored on purpose — see above */
   }

@@ -135,3 +135,61 @@ export function CollectionCard({
     </div>
   )
 }
+
+/** A collection that has been asked for but does not exist yet.
+ *
+ *  It stands in the grid where the real card will be, with the topic the
+ *  reader typed as its title. That placement is the point: a bar at the foot
+ *  of the screen said "building your space on X" in a place the collection
+ *  would never appear, and said it once however many were building. Two
+ *  collections requested at once produced one message.
+ *
+ *  Deliberately not clickable and not a button. There is nothing to open —
+ *  the space has no landing note until the plan comes back — and a card that
+ *  looks pressable and does nothing is worse than one that plainly is not
+ *  ready.
+ */
+export function BuildingCard({ topic, drafted, total, error, onRetry, busy }: {
+  topic: string
+  drafted: number
+  total: number
+  /** Set when the build failed; the card carries the retry rather than a
+   *  separate banner, so the failure is reported where the thing was
+   *  expected to appear. */
+  error?: string | null
+  onRetry?: () => void
+  busy?: boolean
+}) {
+  const failed = !!error
+  return (
+    <div className={'collection-card is-building' + (failed ? ' is-failed' : '')} aria-live="polite">
+      <div className="collection-name">
+        {!failed && <span className="spinner building-spinner" aria-hidden="true" />}
+        {topic}
+      </div>
+      <div className="collection-meta">
+        {failed
+          ? error
+          : total > 0
+            ? `Writing the notes — ${drafted} of ${total} done`
+            : 'Working out what to cover…'}
+      </div>
+      {failed ? (
+        onRetry && (
+          <button className="collection-retry" onClick={onRetry} disabled={busy}>
+            {busy ? 'Starting…' : 'Try again'}
+          </button>
+        )
+      ) : (
+        <div className="collection-bar" aria-hidden="true">
+          {/* Indeterminate until the plan says how many notes there are;
+              there is no honest percentage before that. */}
+          <span
+            className={total > 0 ? '' : 'is-indeterminate'}
+            style={total > 0 ? { width: `${Math.round((drafted / total) * 100)}%` } : undefined}
+          />
+        </div>
+      )}
+    </div>
+  )
+}

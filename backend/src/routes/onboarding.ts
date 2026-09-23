@@ -8,7 +8,7 @@
 // notification, because nothing is being built for them, and implying
 // otherwise would be worse than the honest wall.
 import { Router } from 'express'
-import { eq, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { waitUntil } from '@vercel/functions'
 import { db } from '../db/client.js'
 import { onboardingJobs } from '../db/schema.js'
@@ -27,6 +27,19 @@ onboardingRouter.use(requireAuth)
 onboardingRouter.use(requireApproved)
 
 const MAX_TOPIC_LEN = 200
+
+/** Everything a job row says about a build that has just been asked for.
+ *  One object so the insert and the two update paths below cannot describe
+ *  "starting" three slightly different ways. */
+const FRESH_JOB = {
+  status: 'running' as const,
+  space: null,
+  openPath: null,
+  error: null,
+  notesTotal: 0,
+  notesDrafted: 0,
+  acknowledgedAt: null,
+}
 
 /** How long a job may sit on 'running' without progress before we call it
  *  dead.
@@ -91,10 +104,46 @@ async function draftedCount(userId: string, space: string): Promise<{ drafted: n
   return { drafted: r?.drafted ?? 0, total: r?.total ?? 0 }
 }
 
+/** Every collection this user has asked for, newest first.
+ *
+ *  A list, not a row. It was one job per user, and that silently swallowed a
+ *  second request in the same sitting: /start found a job already running
+ *  and handed back the running one, so somebody who asked for two
+ *  collections got one and was told nothing. */
+async function jobsFor(userId: string): Promise<OnboardingJobView[]> {
+  const rows = await db
+    .select()
+    .from(onboardingJobs)
+    .where(eq(onboardingJobs.userId, userId))
+    .orderBy(desc(onboardingJobs.createdAt))
+  return Promise.all(rows.map((r) => viewOf(userId, r)))
+}
+
+/** The one worth putting in front of the user, when only one will fit:
+ *  anything still running, else the newest unacknowledged result. */
 async function currentJob(userId: string): Promise<OnboardingJobView | null> {
-  const rows = await db.select().from(onboardingJobs).where(eq(onboardingJobs.userId, userId)).limit(1)
-  const row = rows[0]
-  if (!row) return null
+  const all = await jobsFor(userId)
+  return (
+    all.find((j) => j.status === 'running') ??
+    all.find((j) => !j.acknowledged) ??
+    all[0] ??
+    null
+  )
+}
+
+async function jobFor(userId: string, topic: string): Promise<OnboardingJobView | null> {
+  const rows = await db
+    .select()
+    .from(onboardingJobs)
+    .where(and(eq(onboardingJobs.userId, userId), eq(onboardingJobs.topic, topic)))
+    .limit(1)
+  return rows[0] ? viewOf(userId, rows[0]) : null
+}
+
+async function viewOf(
+  userId: string,
+  row: typeof onboardingJobs.$inferSelect,
+): Promise<OnboardingJobView> {
 
   // Reported, not written back. The row keeps saying 'running' and the reader
   // is told 'failed', which is the honest answer to both questions this
@@ -150,7 +199,12 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
   // "Running" here means running *and recently alive* — currentJob reports a
   // job with no progress for STALE_JOB_MS as failed, so a killed invocation
   // no longer blocks the retry it needs.
-  const existing = await currentJob(userId)
+  // Only the *same* topic already running is a duplicate. A different one is
+  // a second collection, which is a thing people do — and used to be thrown
+  // away here with a 202 that looked exactly like success. The number of
+  // collections somebody may have, and start in a day, is enforced below by
+  // the allowance; it is not this check's job.
+  const existing = await jobFor(userId, raw)
   if (existing?.status === 'running') {
     res.status(202).json({ job: existing })
     return
@@ -177,23 +231,35 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
   // Upsert: a retry after a failure, or a different topic, replaces the row.
   // There is one first-run job per user, so a history here would only raise
   // the question of which row the notification means.
-  await db
-    .insert(onboardingJobs)
-    .values({ userId, topic: raw, status: 'running', notesTotal: 0, notesDrafted: 0 })
-    .onConflictDoUpdate({
-      target: onboardingJobs.userId,
-      set: {
-        topic: raw,
-        status: 'running',
-        space: null,
-        openPath: null,
-        error: null,
-        notesTotal: 0,
-        notesDrafted: 0,
-        acknowledgedAt: null,
-        updatedAt: new Date(),
-      },
-    })
+  // Update-then-insert rather than ON CONFLICT, and deliberately so.
+  //
+  // ON CONFLICT names an index, which ties this write to whichever unique
+  // index exists at the moment it runs — so the code and the migration that
+  // changes that index have to land in the same instant or one of them is
+  // broken. This does not: it works against the old one-row-per-user index
+  // and the new one-row-per-topic index alike, which is what lets the
+  // migration be applied whenever, without a window where starting a
+  // collection throws.
+  const started = await db
+    .update(onboardingJobs)
+    .set({ ...FRESH_JOB, topic: raw, updatedAt: new Date() })
+    .where(and(eq(onboardingJobs.userId, userId), eq(onboardingJobs.topic, raw)))
+    .returning({ id: onboardingJobs.id })
+
+  if (started.length === 0) {
+    try {
+      await db.insert(onboardingJobs).values({ userId, topic: raw, ...FRESH_JOB })
+    } catch {
+      // The only way this fails is the pre-migration index, which allows one
+      // row per user however many collections they ask for. Fall back to its
+      // behaviour — replace the row — so the request still works. After the
+      // migration this branch stops being reachable.
+      await db
+        .update(onboardingJobs)
+        .set({ ...FRESH_JOB, topic: raw, updatedAt: new Date() })
+        .where(eq(onboardingJobs.userId, userId))
+    }
+  }
 
   if (day) await recordCollectionStart(userId, raw, day)
 
@@ -274,9 +340,12 @@ onboardingRouter.post('/grow', asyncHandler(async (req, res) => {
  *
  *  Deliberately after the response: the poll must stay instant. */
 onboardingRouter.get('/status', asyncHandler(async (req, res) => {
-  const job = await currentJob(req.user!.id)
+  const jobs = await jobsFor(req.user!.id)
+  // `job` stays for the banner, which shows one thing; `jobs` is what the
+  // collections screen draws a card from, one per collection being built.
+  const job = jobs.find((j) => j.status === 'running') ?? jobs.find((j) => !j.acknowledged) ?? null
   const depth = await queueDepth()
-  res.json({ job, queue: depth })
+  res.json({ job, jobs, queue: depth })
 
   if (depth.pending > 0 || depth.running > 0) {
     waitUntil(drainQueue())
@@ -316,10 +385,20 @@ onboardingRouter.post('/queue/sweep', asyncHandler(async (req, res) => {
 
 /** Called once the user has actually been taken to their new space, so the
  *  notification fires once instead of on every load for the rest of time. */
+/** Mark a finished build as delivered, so it stops being announced.
+ *
+ *  `topic` acknowledges one; no topic acknowledges every finished one, which
+ *  is what a reader landing on their collections screen has effectively
+ *  done — they can see them all. Only `ready` rows: acknowledging a running
+ *  build would hide it before it had said anything. */
 onboardingRouter.post('/ack', asyncHandler(async (req, res) => {
+  const topic = typeof req.body?.topic === 'string' ? req.body.topic.trim() : ''
+  const who = topic
+    ? and(eq(onboardingJobs.userId, req.user!.id), eq(onboardingJobs.topic, topic))
+    : eq(onboardingJobs.userId, req.user!.id)
   await db
     .update(onboardingJobs)
     .set({ acknowledgedAt: new Date(), updatedAt: new Date() })
-    .where(eq(onboardingJobs.userId, req.user!.id))
+    .where(and(who, eq(onboardingJobs.status, 'ready')))
   res.json({ ok: true })
 }))

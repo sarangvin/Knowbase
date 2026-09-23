@@ -13,6 +13,7 @@ import { parseNote } from './parse'
 import { buildIndex, resolveTarget } from './graph'
 import { buildTree } from './tree'
 import { spaceOfPath } from '../features/automated-graph/engine'
+import type { OnboardingJob } from '../features/onboarding/onboardingApi'
 
 // Sections reachable from the bottom nav are views, not a parallel routing
 // concept: that way back/forward, tabs and the command palette all work on
@@ -70,6 +71,17 @@ interface VaultState {
   leftOpen: boolean
   paletteOpen: boolean
   quickSwitchOpen: boolean
+
+  /** Collections currently being generated, as the status poll last saw
+   *  them.
+   *
+   *  It lives here rather than in the banner that fetches it because two
+   *  screens need it now: the banner announces the result, and the
+   *  collections home draws a card per build in progress. One poll, one
+   *  copy — a second fetcher for the same rows is how the card and the
+   *  banner would end up disagreeing about what is running. */
+  buildingJobs: OnboardingJob[]
+  setBuildingJobs: (jobs: OnboardingJob[]) => void
 
   // ── actions: loading ──
   loadSeed: () => Promise<void>
@@ -274,6 +286,8 @@ export const useVault = create<VaultState>((set, get) => {
     tree: null,
     tabs: [],
     activeTabId: null,
+    buildingJobs: [],
+    setBuildingJobs: (jobs) => set({ buildingJobs: jobs }),
     mode: 'read',
     leftOpen: true,
     paletteOpen: false,

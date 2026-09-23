@@ -227,6 +227,48 @@
 }
 .collection-bar span { display: block; height: 100%; background: var(--accent); }
 
+/* A collection that has been asked for and does not exist yet. Same card,
+   held back: dashed border so it reads as an outline of a thing rather than
+   the thing, and no hover, because there is nothing to open. */
+.collection-card.is-building {
+  border-style: dashed;
+  cursor: default;
+}
+.collection-card.is-building:hover { border-color: var(--border-strong); background: var(--bg-elevated); }
+.collection-card.is-failed { border-color: var(--text-error); border-style: solid; }
+.collection-card.is-failed .collection-meta { color: var(--text-error); }
+.collection-name .building-spinner {
+  width: 12px;
+  height: 12px;
+  margin-right: 7px;
+  vertical-align: -1px;
+  display: inline-block;
+}
+.collection-retry {
+  margin-top: 10px;
+  padding: 5px 12px;
+  border-radius: var(--radius-s, 6px);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  color: var(--text-normal);
+  font-size: 12.5px;
+}
+.collection-retry:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+/* Before the plan lands there is no honest percentage, so the bar sweeps
+   instead of filling. */
+.collection-bar span.is-indeterminate {
+  width: 35%;
+  animation: collection-sweep 1.3s ease-in-out infinite;
+}
+@keyframes collection-sweep {
+  0%   { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .collection-bar span.is-indeterminate { animation: none; width: 100%; opacity: 0.4; }
+}
+
 .collection-new { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--divider); }
 /* TopicLauncher renders nothing for an account that cannot generate yet, and
    for the demo vault, which has no account at all. Hide the wrapper with it —

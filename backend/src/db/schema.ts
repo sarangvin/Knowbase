@@ -184,7 +184,16 @@ export const onboardingJobs = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('onboarding_jobs_user_unique').on(t.userId)],
+  // One row per user *per topic*, not per user.
+  //
+  // It was per user, and that silently swallowed a second request: somebody
+  // asked for two collections in one sitting and got one, because /start
+  // saw a job already running and handed back the running one instead of
+  // starting theirs. Nothing failed and nothing said so.
+  //
+  // Keyed on the topic rather than the space because the space name is not
+  // known until the plan comes back, and the row has to exist before that.
+  (t) => [uniqueIndex('onboarding_jobs_user_topic_unique').on(t.userId, t.topic)],
 )
 
 /** The global queue of notes still to be written.

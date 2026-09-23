@@ -19,7 +19,7 @@
 // the server checks whether anything of that user's is starved and fixes one.
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { notes, usageEvents } from '../db/schema.js'
+import { usageEvents } from '../db/schema.js'
 import { SPACE_ROOT, archivedSpaces, getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { HIDDEN_BUFFER, VISIBLE_AHEAD, revealUpTo } from '../vault/hidden.js'
 import { growSpace } from './grow.js'

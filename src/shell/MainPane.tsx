@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useVault } from '../vault/vaultStore'
 import { NoteView } from '../features/reader/NoteView'
 import { GraphView } from '../features/graph/GraphView'
@@ -8,12 +9,15 @@ import { FlashcardsView } from '../features/flashcards/FlashcardsView'
 import { SearchPanel } from '../features/search/SearchPanel'
 import { TopicLauncher } from '../features/onboarding/TopicLauncher'
 import { listSpaces, isArchived } from '../features/automated-graph/engine'
-import { CollectionCard } from '../features/automated-graph/CollectionCard'
+import { CollectionCard, BuildingCard } from '../features/automated-graph/CollectionCard'
+import { startOnboarding } from '../features/onboarding/onboardingApi'
 import { RabbitSolid } from '../ui/icons'
 
 function HomeView() {
   const index = useVault((s) => s.index)
   const reload = useVault((s) => s.reload)
+  const buildingJobs = useVault((s) => s.buildingJobs)
+  const [retrying, setRetrying] = useState<string | null>(null)
   const notes = index ? [...index.notes.values()] : []
 
   // A "collection" is a generated space: Automated Graph/<Space>/Topics/…
@@ -34,10 +38,43 @@ function HomeView() {
   const nextUpOf = (space: string) =>
     notes.find((n) => n.path === `Automated Graph/${space}/Next Up.md`)?.path ?? null
 
+  // Builds worth drawing a card for: still running, or failed and not yet
+  // dealt with. A job whose space has already appeared in the vault is
+  // dropped — the real card is there, and two cards for one collection is
+  // worse than a moment without either.
+  const pending = buildingJobs.filter(
+    (j) =>
+      (j.status === 'running' || (j.status === 'failed' && !j.acknowledged)) &&
+      !(j.space && spaces.includes(j.space)),
+  )
+
+  const retry = async (topic: string) => {
+    setRetrying(topic)
+    try {
+      await startOnboarding(topic)
+    } catch {
+      // The card keeps showing the original failure, which is still true.
+    } finally {
+      setRetrying(null)
+    }
+  }
+
+  const buildingCards = pending.map((j) => (
+    <BuildingCard
+      key={j.topic}
+      topic={j.space ?? j.topic}
+      drafted={j.notesDrafted}
+      total={j.notesTotal}
+      error={j.status === 'failed' ? (j.error ?? 'Something went wrong on our side.') : null}
+      busy={retrying === j.topic}
+      onRetry={() => void retry(j.topic)}
+    />
+  ))
+
   return (
     <div className="note-scroll">
       <div className="note-container">
-        {spaces.length === 0 ? (
+        {spaces.length === 0 && pending.length === 0 ? (
           // An empty vault used to render "0 notes" and a graph button, which
           // is a dead end — most often reached right after resetting an
           // account. Ask the question that actually moves them forward.
@@ -60,10 +97,12 @@ function HomeView() {
           <>
             <h1 className="note-title">Your collections</h1>
             <p className="home-sub">
-              {spaces.length} collection{spaces.length === 1 ? '' : 's'}. Each one is its own
+              {spaces.length} collection{spaces.length === 1 ? '' : 's'}
+              {pending.length > 0 && `, ${pending.length} being built`}. Each one is its own
               subject, with its own order of study.
             </p>
             <div className="collection-grid">
+              {buildingCards}
               {spaces.map((space) => {
                 const { total, studied } = summary(space)
                 return (

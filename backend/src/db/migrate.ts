@@ -3,6 +3,17 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Pool } from 'pg'
 import { withStrictSsl } from './connectionString.js'
 
+// Run by `npm run db:migrate` locally and, since 0015, by `vercel-build` on
+// every deployment (`db:migrate:ci`, the same script without --env-file,
+// because the platform supplies the variables directly).
+//
+// Building the deploy is the only moment that has both the migration files
+// and the production credentials. There is no shell on the target, so the
+// alternative was applying DDL by hand at exactly the right second — and
+// 0015 is a migration that the code before it and the code after it disagree
+// about, which is the kind you least want to be doing by hand. Drizzle
+// records what it has applied, so a redeploy with nothing new is a no-op.
+//
 // Migrations deliberately do NOT reuse db/client.ts. That one points at the
 // pooled URL, and DDL through PgBouncer's transaction pooling misbehaves
 // (prepared statements, session state). Vercel Postgres exposes the direct

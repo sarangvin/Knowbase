@@ -13,7 +13,7 @@
 // Progress is written to onboarding_jobs as it goes, because once nobody is
 // watching a spinner the only way to tell someone their space is ready is to
 // have recorded that it is.
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes, onboardingJobs } from '../db/schema.js'
 import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
@@ -40,11 +40,16 @@ type JobPatch = Partial<{
   notesDrafted: number
 }>
 
-async function patchJob(userId: string, patch: JobPatch): Promise<void> {
+/** Patch *this* user's job for *this* topic.
+ *
+ *  The topic is not optional any more. A user may have several collections
+ *  building at once, and a patch that matched on the user alone would have
+ *  written one run's progress over another's the moment that was allowed. */
+async function patchJob(userId: string, topic: string, patch: JobPatch): Promise<void> {
   await db
     .update(onboardingJobs)
     .set({ ...patch, updatedAt: new Date() })
-    .where(eq(onboardingJobs.userId, userId))
+    .where(and(eq(onboardingJobs.userId, userId), eq(onboardingJobs.topic, topic)))
 }
 
 /** The sentence every placeholder body carries. Kept in step with
@@ -69,7 +74,7 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
       const adopted = await adoptSpaceInto(vaultId, existingSpace)
       if (adopted.ok) {
         const total = adopted.adopted + adopted.skipped
-        await patchJob(userId, {
+        await patchJob(userId, topic, {
           status: 'ready',
           space: existingSpace,
           openPath: adopted.openPath,
@@ -99,7 +104,7 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
     // Where the plan says to begin, and what Next Up will surface first.
     const firstIdx = Math.max(0, plan.subtopics.findIndex((s) => s.prerequisites.length === 0))
 
-    await patchJob(userId, { space, notesTotal: plan.subtopics.length })
+    await patchJob(userId, topic, { space, notesTotal: plan.subtopics.length })
 
     // 3. Draft the one note they will actually land on before telling them the
     //    space is ready. The rest can arrive behind them, but opening Next Up
@@ -200,7 +205,7 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
     )
 
     const drafted = firstDraft ? 1 : 0
-    await patchJob(userId, { status: 'ready', openPath, error: null, notesDrafted: drafted })
+    await patchJob(userId, topic, { status: 'ready', openPath, error: null, notesDrafted: drafted })
     void logUsageEvent({
       userId,
       eventType: 'note_write',
@@ -210,7 +215,7 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[onboarding] run failed', err)
-    await patchJob(userId, { status: 'failed', error: message }).catch((e) =>
+    await patchJob(userId, topic, { status: 'failed', error: message }).catch((e) =>
       console.error('[onboarding] could not even record the failure', e),
     )
   }
