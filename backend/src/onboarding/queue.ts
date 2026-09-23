@@ -175,7 +175,19 @@ async function claim(n: number): Promise<ClaimedRow[]> {
               WHERE r.status = 'running'
                 AND r.started_at > now() - interval '${sql.raw(String(IN_FLIGHT_SECONDS))} seconds'
             )
-      ORDER BY q.created_at
+      -- Onboarding first, then oldest.
+      --
+      -- Strict FIFO is the wrong order here, and it fails in exactly one
+      -- direction: somebody creating their first collection queues behind
+      -- every top-up draft already waiting, and their space — the only
+      -- thing they have — fills in last. A grow draft is a fourth note in a
+      -- collection the reader already has; an onboarding draft is whether
+      -- the product works at all for a person who has just arrived.
+      --
+      -- Within each class it is still oldest-first, so this starves nothing;
+      -- it only reorders between classes, and onboarding is a burst that
+      -- drains.
+      ORDER BY (q.source = 'onboarding') DESC, q.created_at
       LIMIT ${n}
       FOR UPDATE SKIP LOCKED
     )

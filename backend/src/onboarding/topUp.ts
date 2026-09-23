@@ -46,10 +46,16 @@ const WORST_GROW_MS = 135_000
 /** Stop spending when the shared daily quota is nearly gone.
  *
  *  Every model call in this product comes out of one free-tier key with a
- *  500-a-day ceiling that all users share. This pass runs unattended 144
- *  times a day, so it is the one thing that could quietly drain that ceiling
- *  and leave a real person unable to start a collection. It yields first. */
-const DAILY_CALL_BUDGET = 400
+ *  500-a-day ceiling that all users share. Background work — this pass and
+ *  the app's ensure loop — could quietly drain that ceiling and leave a real
+ *  person unable to start a collection, so it yields first.
+ *
+ *  The gap between this and the real ceiling is **reserved for onboarding**,
+ *  which is deliberately not budget-checked anywhere: topping up a
+ *  collection somebody already has must never be the reason somebody else
+ *  cannot create their first one. Lowered from 400 to widen that reserve,
+ *  after a first-collection build failed while top-ups were running. */
+export const DAILY_CALL_BUDGET = 320
 
 export interface TopUpResult {
   /** Collections found below the threshold. */
@@ -138,6 +144,20 @@ export interface PassDiagnostics {
    *  meter.ts records `timedOut: true` on the event, which is the only place
    *  a per-call deadline leaves a trace. */
   calls: { source: string | null; n: number; timedOut: number }[]
+  /** Every onboarding job, newest first. The one thing whose failure is
+   *  least acceptable and, until now, the one thing this endpoint could not
+   *  see — a first collection that never built looks from here exactly like
+   *  a user who never tried. */
+  onboarding: {
+    at: string
+    email: string
+    topic: string
+    status: string
+    space: string | null
+    error: string | null
+    notes: string
+    queued: number
+  }[]
   hasKey: boolean
 }
 
@@ -168,11 +188,42 @@ export async function passDiagnostics(): Promise<PassDiagnostics> {
     ORDER BY 2 DESC
   `)).rows as { source: string | null; n: number; timed_out: number }[]
 
+  const jobs = (await db.execute(sql`
+    SELECT j.updated_at, u.email, j.topic, j.status, j.space, j.error,
+           j.notes_drafted, j.notes_total,
+           (SELECT count(*)::int FROM draft_queue q
+             WHERE q.user_id = j.user_id AND q.status IN ('pending','running')) AS queued
+    FROM onboarding_jobs j
+    JOIN users u ON u.id = j.user_id
+    ORDER BY j.updated_at DESC
+    LIMIT 25
+  `)).rows as {
+    updated_at: Date
+    email: string
+    topic: string
+    status: string
+    space: string | null
+    error: string | null
+    notes_drafted: number
+    notes_total: number
+    queued: number
+  }[]
+
   return {
     llmCallsLast24h: calls,
     dailyCallBudget: DAILY_CALL_BUDGET,
     queue: q,
     calls: bySource.map((r) => ({ source: r.source, n: r.n, timedOut: r.timed_out })),
+    onboarding: jobs.map((j) => ({
+      at: new Date(j.updated_at).toISOString(),
+      email: j.email,
+      topic: j.topic,
+      status: j.status,
+      space: j.space,
+      error: j.error,
+      notes: `${j.notes_drafted}/${j.notes_total}`,
+      queued: j.queued,
+    })),
     recentGrows: grows.map((g) => ({
       at: new Date(g.created_at).toISOString(),
       space: (g.metadata?.space as string) ?? null,

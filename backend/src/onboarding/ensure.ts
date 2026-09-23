@@ -23,6 +23,10 @@ import { notes, usageEvents } from '../db/schema.js'
 import { SPACE_ROOT, archivedSpaces, getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { HIDDEN_BUFFER, VISIBLE_AHEAD, revealUpTo } from '../vault/hidden.js'
 import { growSpace } from './grow.js'
+/** Stop when the shared daily ceiling is close. Imported rather than
+ *  re-declared: two background spenders with two different ideas of the
+ *  reserve is how the reserve stops existing. */
+import { DAILY_CALL_BUDGET } from './topUp.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
 /** Don't attempt the same collection again for this long.
@@ -39,8 +43,9 @@ const COOLDOWN_MS = 15 * 60 * 1000
  *  calls. Several starved collections are fixed over several polls. */
 const MAX_PER_CALL = 1
 
-/** Stop when the shared daily ceiling is close, same as the cron. */
-const DAILY_CALL_BUDGET = 400
+/** Stop when the shared daily ceiling is close. Imported rather than
+ *  re-declared: two background spenders with two different ideas of the
+ *  reserve is how the reserve stops existing. */
 
 export interface EnsureResult {
   checked: number
