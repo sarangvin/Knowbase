@@ -18,10 +18,12 @@ import {
   type AdminQueueResponse,
   type AdminQueueRow,
   type AdminUserDetail,
+  fetchCompletions,
+  type AdminCompletionsResponse,
 } from './api'
 import './admin.css'
 
-type Tab = 'users' | 'signins' | 'spaces' | 'usage' | 'queue'
+type Tab = 'users' | 'signins' | 'spaces' | 'usage' | 'queue' | 'completions'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -238,9 +240,95 @@ function QueuePanel({
   )
 }
 
+/** Every note finished in the last 24 hours.
+ *
+ *  The one screen that answers "is anybody actually using this today", which
+ *  no other tab does: users counts who exists, model usage counts what was
+ *  spent, and the queue counts what is owed. A completion is the only event
+ *  in the product that means somebody read something.
+ *
+ *  Times are shown to the minute and in the viewer's own zone. The note's
+ *  `last_reviewed` is a date and cannot say when — this list is read from
+ *  the event log, which can.
+ */
+function CompletionsPanel({
+  data,
+  loading,
+}: {
+  data: AdminCompletionsResponse | null
+  loading: boolean
+}) {
+  if (loading && !data) return <div className="admin-dim">Loading…</div>
+  if (!data) return null
+  if (data.rows.length === 0) {
+    return (
+      <p className="admin-dim">
+        Nothing finished in the last 24 hours. Completions are recorded when a note is
+        marked reviewed; a quiet day looks exactly like this.
+      </p>
+    )
+  }
+
+  const when = (iso: string) => {
+    const d = new Date(iso)
+    const mins = Math.round((Date.now() - d.getTime()) / 60000)
+    const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ${mins % 60}m ago`
+    return { stamp: d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }), ago }
+  }
+
+  return (
+    <>
+      <p className="admin-dim">
+        {data.rows.length} {data.rows.length === 1 ? 'note' : 'notes'} finished in the last
+        24 hours, by {data.byUser.length} {data.byUser.length === 1 ? 'person' : 'people'}:{' '}
+        {data.byUser.map((u, i) => (
+          <span key={u.email}>
+            {i > 0 && ' · '}
+            {u.email.split('@')[0]} <strong>{u.n}</strong>
+          </span>
+        ))}
+      </p>
+      <div className="admin-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Who</th>
+              <th>Collection</th>
+              <th>Note</th>
+              <th>Conf.</th>
+              <th>Imp.</th>
+              <th>Int.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((r, i) => {
+              const t = when(r.created_at)
+              return (
+                <tr key={`${r.created_at}-${i}`}>
+                  <td title={r.created_at}>
+                    {t.stamp} <span className="admin-dim">· {t.ago}</span>
+                  </td>
+                  <td>{r.display_name || r.email.split('@')[0]}</td>
+                  <td>{r.space ?? '—'}</td>
+                  <td title={r.path ?? undefined}>{r.title ?? '—'}</td>
+                  <td>{r.confidence ? `${r.confidence}/5` : '—'}</td>
+                  <td>{r.importance ?? '—'}</td>
+                  <td>{r.interest ?? '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 export function AdminApp() {
   const [authState, setAuthState] = useState<'checking' | 'denied' | 'ok'>('checking')
   const [tab, setTab] = useState<Tab>('users')
+  const [completions, setCompletions] = useState<AdminCompletionsResponse | null>(null)
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState<AdminUserRow[]>([])
   const [signins, setSignins] = useState<AdminSigninRow[]>([])
@@ -296,6 +384,11 @@ export function AdminApp() {
         ? fetchUsage().then((data) => {
             setUsage(data)
             setTotal(data.models.length)
+          })
+        : tab === 'completions'
+        ? fetchCompletions().then((data) => {
+            setCompletions(data)
+            setTotal(data.rows.length)
           })
         : tab === 'spaces'
         ? fetchSpaces().then((data) => {
@@ -475,11 +568,24 @@ export function AdminApp() {
         >
           Model usage
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'completions'}
+          className={`admin-tab${tab === 'completions' ? ' admin-tab-active' : ''}`}
+          onClick={() => setTab('completions')}
+        >
+          Completions
+          {(completions?.rows.length ?? 0) > 0 && (
+            <span className="admin-badge">{completions!.rows.length}</span>
+          )}
+        </button>
       </div>
 
       {error && <div className="admin-error">{error}</div>}
 
-      {tab === 'queue' ? (
+      {tab === 'completions' ? (
+        <CompletionsPanel data={completions} loading={loading} />
+      ) : tab === 'queue' ? (
         <QueuePanel
           data={queue}
           loading={loading}
@@ -733,7 +839,7 @@ export function AdminApp() {
       {/* /spaces returns every row at once — it is one row per space, not per
           note, so it stays small. Showing a pager there would imply pages
           that do not exist. */}
-      {tab !== 'spaces' && tab !== 'queue' && (
+      {tab !== 'spaces' && tab !== 'queue' && tab !== 'completions' && (
         <div className="admin-pager">
           <button className="admin-btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
           <span className="admin-dim">Page {page} / {pageCount}</span>

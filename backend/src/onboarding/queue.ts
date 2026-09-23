@@ -36,7 +36,7 @@ import { SPACE_ROOT, contributeToLibrary } from '../vault/spaces.js'
  *  room for the writes either side. Two rather than three: the point of the
  *  small batch was never to be as large as fits, it was to lose at most one
  *  piece of work when an invocation dies. */
-const BATCH = 2
+const BATCH = 3
 
 /** The wall this has to stay inside when no caller supplies one: the
  *  function's maxDuration in vercel.json, less the response and the
@@ -60,11 +60,27 @@ const WORST_CASE_JOB_MS = timeoutFor('queue-draft') + 5_000
 
 /** How long a claimed job is treated as still in flight.
  *
- *  A drain claims nothing while another job is in flight, which is what
- *  keeps concurrent drains from stampeding. Set to the worst-case job time:
- *  shorter and a slow draft would let a second start beside it; longer and
- *  a genuinely dead invocation stalls the queue for no reason. */
-const IN_FLIGHT_SECONDS = 30
+ *  Set to the worst-case job time, and it has to move when that does: it was
+ *  30s against a 30s draft deadline, and the deadline is 60s now. Left at
+ *  30 it would have declared a perfectly healthy draft finished halfway
+ *  through and let a second start beside it — the stampede it exists to
+ *  prevent. */
+const IN_FLIGHT_SECONDS = 65
+
+/** How many drafts may be in flight across the whole system at once.
+ *
+ *  This used to be one, expressed as "claim nothing while anything is
+ *  running". That was a sound way to stop concurrent drains stampeding a
+ *  15-requests-a-minute free tier, and it became the bottleneck: one draft
+ *  at a time, at up to 60s each, against a queue that growth adds to faster
+ *  than that. The backlog sat between fifteen and twenty-five jobs and never
+ *  fell — every note behind it showing "Coming soon" to somebody.
+ *
+ *  Three is still far inside the rate limit (three calls per minute against
+ *  fifteen, even if every one ran the full 60s) and triples the drain rate.
+ *  The claim is atomic, so the only thing this number controls is how much
+ *  of the free tier the queue is allowed to use at once. */
+const MAX_IN_FLIGHT = 3
 
 /** A 'running' row older than this is assumed dead and is reclaimed. Longer
  *  than any legitimate single draft (~15s on flash-lite, ~55s on a thinking
@@ -170,11 +186,11 @@ async function claim(n: number): Promise<ClaimedRow[]> {
               q.status = 'pending'
               OR (q.status = 'running' AND q.started_at < now() - interval '${sql.raw(String(STALE_MINUTES))} minutes')
             )
-        AND NOT EXISTS (
-              SELECT 1 FROM draft_queue r
+        AND (
+              SELECT count(*) FROM draft_queue r
               WHERE r.status = 'running'
                 AND r.started_at > now() - interval '${sql.raw(String(IN_FLIGHT_SECONDS))} seconds'
-            )
+            ) < ${MAX_IN_FLIGHT}
       -- Onboarding first, then oldest.
       --
       -- Strict FIFO is the wrong order here, and it fails in exactly one

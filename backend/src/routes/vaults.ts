@@ -20,6 +20,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 import { NOT_HIDDEN } from '../vault/hidden.js'
+import { frontmatterValue } from '../vault/frontmatter.js'
 import { SPACE_ROOT, spaceOf, normalizeTopic, getOrCreatePersonalVaultId, getGlobalVaultId, adoptSpaceInto, contributeToLibrary, archivedSpaces, setSpaceArchived, deleteSpace } from '../vault/spaces.js'
 
 export const vaultsRouter = Router()
@@ -127,6 +128,17 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
 
   const vaultId = await getOrCreatePersonalVaultId(req.user!.id)
   const sizeBytes = Buffer.byteLength(content, 'utf8')
+
+  // Read the previous body before overwriting it, so a completion can be
+  // told from any other save. A review is not a distinct request — the
+  // client writes the whole note either way — so the only place the event
+  // exists is the difference between these two strings.
+  const [before] = await db
+    .select({ content: notes.content })
+    .from(notes)
+    .where(and(eq(notes.vaultId, vaultId), eq(notes.path, path)))
+    .limit(1)
+
   await db
     .insert(notes)
     .values({ vaultId, path, content, sizeBytes, mtime: new Date() })
@@ -136,6 +148,30 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
     })
   res.status(204).end()
   void logUsageEvent({ userId: req.user!.id, eventType: 'note_write', metadata: { vault: 'personal', path } })
+
+  // A completion, recorded with a real timestamp.
+  //
+  // `last_reviewed` in the note is a date, not a time — it has to be, it is
+  // also an Obsidian vault people read — so the note itself can never say
+  // *when* today a topic was finished. This event can, and it is the only
+  // record of the moment that exists.
+  const was = before ? frontmatterValue(before.content, 'last_reviewed') : null
+  const now = frontmatterValue(content, 'last_reviewed')
+  if (now && /^\d/.test(now) && now !== was) {
+    void logUsageEvent({
+      userId: req.user!.id,
+      eventType: 'note_review',
+      metadata: {
+        path,
+        space: spaceOf(path),
+        title: (path.split('/').pop() ?? path).replace(/\.md$/i, ''),
+        confidence: frontmatterValue(content, 'confidence'),
+        importance: frontmatterValue(content, 'importance'),
+        interest: frontmatterValue(content, 'interest'),
+        day: now,
+      },
+    })
+  }
 }))
 
 /** A collection's name, as a single path segment. Never a path: a slash or

@@ -389,6 +389,20 @@ export async function topUpEveryone(): Promise<TopUpResult> {
     // the rest of the pass pointless.
     if ((await callsInLastDay()) >= DAILY_CALL_BUDGET) return { ...out, skipped: 'quota' }
 
+    // Drain before growing, not after.
+    //
+    // It was the other way round, and growth ate the invocation: a pass
+    // grew two collections, had no budget left, drafted nothing, and queued
+    // two more jobs on its way out. The backlog sat between fifteen and
+    // twenty-five and never fell, which is a queue that is not a queue.
+    //
+    // The order follows from what each one is worth. A pending draft is a
+    // note somebody can already see, showing "Coming soon" where the body
+    // should be. A grow is a note nobody has been shown yet. Finishing what
+    // has been started beats starting more.
+    const first = await drainQueue()
+    out.drafted += first.drafted
+
     // A few more than we will grow, so archived ones can be filtered out
     // without the pass coming back empty-handed.
     const candidates = await findShortCollections(MAX_GROWS_PER_RUN * 4)

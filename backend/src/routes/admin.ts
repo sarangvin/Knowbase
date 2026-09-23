@@ -258,6 +258,50 @@ adminRouter.get('/usage', asyncHandler(async (_req, res) => {
  *  tell "nothing is running because it is all finished" from "nothing is
  *  running because nothing has run in an hour".
  */
+/** Every note finished in the last 24 hours, newest first.
+ *
+ *  Read from `usage_events`, not from the notes themselves: `last_reviewed`
+ *  is a date, because the vault is also an Obsidian vault people read, so
+ *  the note can say *that* a topic was finished today but never *when*. The
+ *  event is the only record of the moment.
+ *
+ *  Twenty-four hours because that is the window that answers the question
+ *  this is for — is anybody actually using it today — and because a log with
+ *  no horizon becomes a table scan eventually. Older events are not deleted;
+ *  they are simply not what this asks for.
+ */
+adminRouter.get('/completions', asyncHandler(async (_req, res) => {
+  const rows = (await db.execute(sql`
+    SELECT e.created_at, u.email, u.display_name,
+           e.metadata->>'space'      AS space,
+           e.metadata->>'title'      AS title,
+           e.metadata->>'path'       AS path,
+           e.metadata->>'confidence' AS confidence,
+           e.metadata->>'importance' AS importance,
+           e.metadata->>'interest'   AS interest
+    FROM usage_events e
+    JOIN users u ON u.id = e.user_id
+    WHERE e.event_type = 'note_review'
+      AND e.created_at > now() - interval '24 hours'
+    ORDER BY e.created_at DESC
+    LIMIT 500
+  `)).rows
+
+  // Counted over the same window, so the header and the list cannot
+  // disagree about how many there were.
+  const byUser = (await db.execute(sql`
+    SELECT u.email, count(*)::int AS n
+    FROM usage_events e
+    JOIN users u ON u.id = e.user_id
+    WHERE e.event_type = 'note_review'
+      AND e.created_at > now() - interval '24 hours'
+    GROUP BY 1
+    ORDER BY 2 DESC
+  `)).rows
+
+  res.json({ rows, byUser })
+}))
+
 adminRouter.get('/queue', asyncHandler(async (_req, res) => {
   const rows = (await db.execute(sql`
     SELECT q.id, q.status, q.attempts, q.last_error, q.source, q.space, q.title, q.path,

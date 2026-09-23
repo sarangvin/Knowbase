@@ -122,7 +122,8 @@ export const usageEvents = pgTable(
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    eventType: text('event_type').notNull(), // 'login' | 'vault_sync' | 'note_write' | 'llm_call'
+    // 'login' | 'vault_sync' | 'note_write' | 'note_review' | 'llm_call'
+    eventType: text('event_type').notNull(),
     provider: text('provider'), // 'anthropic' | 'groq' | 'ollama', nullable for non-llm events
     model: text('model'),
     inputTokens: integer('input_tokens'),

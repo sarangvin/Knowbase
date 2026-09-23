@@ -179,6 +179,27 @@ export function fetchUsage(): Promise<AdminUsageResponse> {
   return api('/api/admin/usage')
 }
 
+export interface AdminCompletionRow {
+  created_at: string
+  email: string
+  display_name: string | null
+  space: string | null
+  title: string | null
+  path: string | null
+  confidence: string | null
+  importance: string | null
+  interest: string | null
+}
+
+export interface AdminCompletionsResponse {
+  rows: AdminCompletionRow[]
+  byUser: { email: string; n: number }[]
+}
+
+export function fetchCompletions(): Promise<AdminCompletionsResponse> {
+  return api('/api/admin/completions')
+}
+
 export function fetchQueue(): Promise<AdminQueueResponse> {
   return api('/api/admin/queue')
 }
