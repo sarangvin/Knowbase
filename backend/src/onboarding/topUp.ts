@@ -21,6 +21,7 @@ import { db } from '../db/client.js'
 import { notes, usageEvents } from '../db/schema.js'
 import { SPACE_ROOT, archivedSpaces } from '../vault/spaces.js'
 import { growSpace, MAX_UNREVIEWED } from './grow.js'
+import { runOnboarding } from './run.js'
 import { HIDDEN_BUFFER, revealUpTo } from '../vault/hidden.js'
 import { drainQueue } from './queue.js'
 import { logUsageEvent } from '../usage/logEvent.js'
@@ -57,6 +58,54 @@ const WORST_GROW_MS = 135_000
  *  after a first-collection build failed while top-ups were running. */
 export const DAILY_CALL_BUDGET = 320
 
+/** How long a failed onboarding stays worth retrying.
+ *
+ *  A first collection that failed is not a stale job to tidy up, it is a
+ *  person who asked for something and did not get it. Three of them were
+ *  lost to a 20s plan deadline before anyone noticed, and the only recovery
+ *  on offer was a "Try again" button they would have to come back to find.
+ *  A week is long enough that someone who tried on Monday still gets their
+ *  space, and short enough that this is not archaeology. */
+const RETRY_FAILED_WITHIN_MS = 7 * 24 * 60 * 60 * 1000
+
+/** Don't retry the same job more often than this. `updated_at` moves on
+ *  every attempt, so it doubles as the cooldown. */
+const RETRY_COOLDOWN_MS = 30 * 60 * 1000
+
+/**
+ * Give one failed first-collection another go, before anything else runs.
+ *
+ * Deliberately ahead of growth and not subject to the background budget:
+ * topping up a collection somebody already has must never be the reason
+ * somebody else has no collection at all.
+ *
+ * One per pass. Onboarding is the most expensive thing in the product — a
+ * plan call plus five drafts — and the queue drains the drafts afterwards.
+ */
+export async function retryFailedOnboarding(): Promise<{ email: string; topic: string } | null> {
+  try {
+    const rows = (await db.execute(sql`
+      SELECT j.user_id, j.topic, u.email
+      FROM onboarding_jobs j
+      JOIN users u ON u.id = j.user_id
+      WHERE j.status = 'failed'
+        AND (u.access_approved OR u.role = 'owner')
+        AND j.updated_at > now() - ${sql.raw(`interval '${Math.round(RETRY_FAILED_WITHIN_MS / 1000)} seconds'`)}
+        AND j.updated_at < now() - ${sql.raw(`interval '${Math.round(RETRY_COOLDOWN_MS / 1000)} seconds'`)}
+      ORDER BY j.updated_at ASC
+      LIMIT 1
+    `)).rows as { user_id: string; topic: string; email: string }[]
+
+    const job = rows[0]
+    if (!job) return null
+    await runOnboarding(job.user_id, job.topic)
+    return { email: job.email, topic: job.topic }
+  } catch (err) {
+    console.error('[top-up] onboarding retry failed', err)
+    return null
+  }
+}
+
 export interface TopUpResult {
   /** Collections found below the threshold. */
   candidates: number
@@ -65,6 +114,8 @@ export interface TopUpResult {
   drafted: number
   /** Hidden notes handed over without spending anything. */
   revealed: number
+  /** A failed first collection that was given another go. */
+  retriedOnboarding?: string
   skipped?: 'quota' | 'no-key'
 }
 
@@ -319,6 +370,20 @@ export async function topUpEveryone(): Promise<TopUpResult> {
 
   try {
     if (!process.env.GEMINI_API_KEY) return { ...out, skipped: 'no-key' }
+
+    // First, and before the budget check: a failed first collection outranks
+    // every top-up, and it spends from the reserve that the budget below
+    // exists to protect.
+    const retried = await retryFailedOnboarding()
+    if (retried) {
+      out.retriedOnboarding = `${retried.email}: ${retried.topic}`
+      console.log('[top-up] retried onboarding', JSON.stringify(retried))
+      // Onboarding is a plan call plus five drafts. Stop here and let the
+      // next pass do the growing — cramming both into one invocation is how
+      // the thing that matters most gets killed by the thing that matters
+      // least.
+      return out
+    }
 
     // Asked before the candidate query, because a quota that is gone makes
     // the rest of the pass pointless.
