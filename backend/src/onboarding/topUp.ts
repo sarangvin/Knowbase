@@ -479,6 +479,7 @@ export interface ShelfReport {
 export async function shelfReport(limit: number): Promise<ShelfReport[]> {
   const rows = (await db.execute(sql`
     SELECT split_part(n.path, '/', 2) AS space,
+           u.email,
            count(*)::int AS topics,
            count(*) FILTER (WHERE n.content ~ '(?n)^last_reviewed: *[0-9]')::int AS reviewed,
            count(*) FILTER (WHERE n.content ~ '(?n)^hidden: *true')::int AS hidden,
