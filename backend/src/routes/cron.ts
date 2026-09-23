@@ -54,7 +54,7 @@ cronRouter.get('/top-up/preview', asyncHandler(async (req, res) => {
   // different fixes.
   res.json({
     candidates: candidates.map((c) => ({ space: c.space, unreviewed: c.unreviewed })),
-    shelves: await shelfReport(60),
+    shelves: await shelfReport(400),
     diagnostics: await passDiagnostics(),
     // Echoed so a deployment that was *rejected* is visible from outside.
     // Vercel refuses the whole deployment over an unsupported maxDuration —

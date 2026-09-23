@@ -453,6 +453,10 @@ export async function forgetDeletedBuilds(): Promise<number> {
 
 export interface ShelfReport {
   space: string
+  /** Whose it is. Collections were grouped by name alone, which merged one
+   *  person's Cloud Computing into another's and reported the two as a
+   *  single collection with the topics of both. */
+  email: string
   /** Unfinished and on the shelf. */
   visible: number
   /** Generated and waiting behind it. */
@@ -488,11 +492,16 @@ export async function shelfReport(limit: number): Promise<ShelfReport[]> {
     WHERE v.kind = 'personal'
       AND n.path LIKE ${SPACE_ROOT + '%/Topics/%'}
       AND (u.access_approved OR u.role = 'owner')
-    GROUP BY 1
-    ORDER BY 1
+    -- By owner as well as by name. Grouping on the name alone merged one
+    -- person's collection into another's with the same title and reported
+    -- the two as one with the topics of both, which is how "Cloud Computing,
+    -- 15 topics" appeared when nobody had a collection that size.
+    GROUP BY 1, 2
+    ORDER BY 1, 2
     LIMIT ${limit}
   `)).rows as {
     space: string
+    email: string
     topics: number
     reviewed: number
     hidden: number
@@ -502,6 +511,7 @@ export async function shelfReport(limit: number): Promise<ShelfReport[]> {
 
   return rows.map((r) => ({
     space: r.space,
+    email: r.email,
     visible: r.topics - r.reviewed - r.hidden,
     hidden: r.hidden,
     hiddenPending: r.hidden_pending,
