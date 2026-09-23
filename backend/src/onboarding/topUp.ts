@@ -111,6 +111,53 @@ export async function findShortCollections(limit: number): Promise<Candidate[]> 
   }))
 }
 
+/** Why a pass would or would not spend anything, in one object.
+ *
+ *  Three different causes produce the same symptom — "no new notes" — and
+ *  they are told apart only by these numbers: the shared daily quota being
+ *  gone, the queue holding failed drafts, or the planner returning nothing.
+ *  The last is recorded by grow.ts as a usage_event, which is why it can be
+ *  read back here at all. */
+export interface PassDiagnostics {
+  llmCallsLast24h: number
+  dailyCallBudget: number
+  queue: { status: string; n: number }[]
+  /** grow outcomes recorded in the last 48h, newest first. */
+  recentGrows: { at: string; space: string | null; outcome: string | null; count: number | null }[]
+  hasKey: boolean
+}
+
+export async function passDiagnostics(): Promise<PassDiagnostics> {
+  const calls = await callsInLastDay()
+
+  const q = (await db.execute(sql`
+    SELECT status, count(*)::int AS n FROM draft_queue GROUP BY 1 ORDER BY 1
+  `)).rows as { status: string; n: number }[]
+
+  const grows = (await db.execute(sql`
+    SELECT created_at, metadata
+    FROM usage_events
+    WHERE event_type IN ('vault_sync', 'note_write')
+      AND metadata->>'source' IN ('grow', 'cron-top-up')
+      AND created_at > now() - interval '48 hours'
+    ORDER BY created_at DESC
+    LIMIT 25
+  `)).rows as { created_at: Date; metadata: Record<string, unknown> | null }[]
+
+  return {
+    llmCallsLast24h: calls,
+    dailyCallBudget: DAILY_CALL_BUDGET,
+    queue: q,
+    recentGrows: grows.map((g) => ({
+      at: new Date(g.created_at).toISOString(),
+      space: (g.metadata?.space as string) ?? null,
+      outcome: (g.metadata?.outcome as string) ?? (g.metadata?.reason as string) ?? null,
+      count: (g.metadata?.count as number) ?? (g.metadata?.added as number) ?? null,
+    })),
+    hasKey: !!process.env.GEMINI_API_KEY,
+  }
+}
+
 export interface ShelfReport {
   space: string
   /** Unfinished and on the shelf. */

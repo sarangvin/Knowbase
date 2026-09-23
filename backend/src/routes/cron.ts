@@ -8,7 +8,7 @@
 // tier gets drained by a crawler.
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/asyncHandler.js'
-import { topUpEveryone, findShortCollections, shelfReport } from '../onboarding/topUp.js'
+import { topUpEveryone, findShortCollections, shelfReport, passDiagnostics } from '../onboarding/topUp.js'
 
 export const cronRouter = Router()
 
@@ -55,5 +55,6 @@ cronRouter.get('/top-up/preview', asyncHandler(async (req, res) => {
   res.json({
     candidates: candidates.map((c) => ({ space: c.space, unreviewed: c.unreviewed })),
     shelves: await shelfReport(60),
+    diagnostics: await passDiagnostics(),
   })
 }))
