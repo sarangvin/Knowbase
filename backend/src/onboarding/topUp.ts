@@ -238,6 +238,19 @@ export interface PassDiagnostics {
    *  meter.ts records `timedOut: true` on the event, which is the only place
    *  a per-call deadline leaves a trace. */
   calls: { source: string | null; n: number; timedOut: number }[]
+  /** Per hour, for the calls that actually do the writing. A timeout rate
+   *  and a latency distribution in the same row is the only way to tell a
+   *  slow model from a hung connection: a long tail shows up as high p95,
+   *  a hang shows up as timeouts beside a p95 that is nowhere near the
+   *  deadline. */
+  draftLatency: {
+    hour: string
+    n: number
+    timedOut: number
+    p50: number | null
+    p95: number | null
+    max: number | null
+  }[]
   /** Every onboarding job, newest first. The one thing whose failure is
    *  least acceptable and, until now, the one thing this endpoint could not
    *  see — a first collection that never built looks from here exactly like
@@ -304,12 +317,34 @@ export async function passDiagnostics(): Promise<PassDiagnostics> {
     queued: number
   }[]
 
+  const lat = (await db.execute(sql`
+    SELECT to_char(date_trunc('hour', created_at), 'MM-DD HH24:MI') AS hour,
+           count(*)::int AS n,
+           count(*) FILTER (WHERE metadata->>'timedOut' = 'true')::int AS timed_out,
+           percentile_disc(0.5) WITHIN GROUP (
+             ORDER BY latency_ms) FILTER (WHERE metadata->>'timedOut' IS NULL)::int AS p50,
+           percentile_disc(0.95) WITHIN GROUP (
+             ORDER BY latency_ms) FILTER (WHERE metadata->>'timedOut' IS NULL)::int AS p95,
+           max(latency_ms) FILTER (WHERE metadata->>'timedOut' IS NULL)::int AS max_ms
+    FROM usage_events
+    WHERE event_type = 'llm_call'
+      AND metadata->>'source' IN ('queue-draft', 'onboarding-draft')
+      AND created_at > now() - interval '48 hours'
+    GROUP BY 1 ORDER BY 1 DESC LIMIT 18
+  `)).rows as {
+    hour: string; n: number; timed_out: number
+    p50: number | null; p95: number | null; max_ms: number | null
+  }[]
+
   return {
     llmCallsToday: calls,
     dailyCallBudget: DAILY_CALL_BUDGET,
     secondsToReset: resetIn,
     queue: q,
     calls: bySource.map((r) => ({ source: r.source, n: r.n, timedOut: r.timed_out })),
+    draftLatency: lat.map((r) => ({
+      hour: r.hour, n: r.n, timedOut: r.timed_out, p50: r.p50, p95: r.p95, max: r.max_ms,
+    })),
     onboarding: jobs.map((j) => ({
       at: new Date(j.updated_at).toISOString(),
       email: j.email,
