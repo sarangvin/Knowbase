@@ -45,6 +45,7 @@ export function OnboardingBanner() {
   const source = useVault((s) => s.source)
   const loadRemote = useVault((s) => s.loadRemote)
   const openNote = useVault((s) => s.openNote)
+  const refreshVault = useVault((s) => s.refreshVault)
 
   const [job, setJob] = useState<OnboardingJob | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(readDismissed)
@@ -60,6 +61,9 @@ export function OnboardingBanner() {
       return
     }
     let cancelled = false
+    // Whether the previous pass saw work in flight, so the pass that finds
+    // the queue empty still syncs once before standing down.
+    let wasWorking = false
 
     const poll = async () => {
       const { job: next, queue } = await fetchOnboardingStatus()
@@ -74,6 +78,20 @@ export function OnboardingBanner() {
       // leave those notes as "Coming soon" until the next time somebody
       // happened to onboard.
       const working = next?.status === 'running' || (queue ? queue.pending + queue.running > 0 : false)
+
+      // Pull whatever has landed into the open vault. This is what turns
+      // "Coming soon" into a readable note, and an empty collection into a
+      // filling one, without the page being reloaded.
+      //
+      // Run one pass *after* the work finishes as well as during it —
+      // `wasWorking` — because the last note is written by the same request
+      // that reports the queue empty, and stopping on the report would
+      // leave exactly that note behind until the next reload. It is a
+      // single listing request when nothing has changed.
+      if (working || wasWorking) await refreshVault()
+      wasWorking = working
+      if (cancelled) return
+
       if (!working && timer.current !== null) {
         clearInterval(timer.current)
         timer.current = null
@@ -84,7 +102,17 @@ export function OnboardingBanner() {
     timer.current = window.setInterval(() => void poll(), POLL_MS)
     // Backgrounded tabs get their timers throttled hard, and a locked phone
     // runs none at all, so returning to the app is the signal that matters.
-    const onFocus = () => void poll()
+    //
+    // The vault is synced here unconditionally, not only when the poll finds
+    // work in flight. Notes are also written by the ten-minute cron, which
+    // drains its own queue server side and so leaves nothing for the poll to
+    // see — coming back to the tab is the moment to pick those up. One
+    // listing request.
+    const onFocus = () => {
+      if (document.visibilityState === 'hidden') return
+      void refreshVault()
+      void poll()
+    }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
 
@@ -105,7 +133,7 @@ export function OnboardingBanner() {
       document.removeEventListener('visibilitychange', onFocus)
       window.removeEventListener(ONBOARDING_STARTED, onStarted)
     }
-  }, [approved])
+  }, [approved, refreshVault])
 
   const dismissKey = job ? `${job.topic}|${job.status}` : ''
   const dismiss = () => {
@@ -126,12 +154,14 @@ export function OnboardingBanner() {
     if (!job.openPath || busy) return
     setBusy(true)
     try {
-      // Always reload from the server rather than trusting the in-memory
-      // index: the notes were written by the server, so a client that has had
-      // this vault open the whole time has never heard of them.
+      // Sync from the server rather than trusting the in-memory index: the
+      // notes were written by the server. On a vault that is already open
+      // this is the quiet refresh, not `reload()` — reload flashes the
+      // full-screen "Digging the tunnels…" and rebuilds the tabs, which is a
+      // jarring way to answer a button that says "Open it".
       const alreadyPersonal = source instanceof RemoteVaultSource && source.mode === 'personal'
       if (!alreadyPersonal) await loadRemote()
-      else await useVault.getState().reload()
+      else await refreshVault()
       openNote(job.openPath, { replace: true })
       await ackOnboarding()
       setJob({ ...job, acknowledged: true })

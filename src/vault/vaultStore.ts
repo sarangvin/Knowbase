@@ -77,6 +77,7 @@ interface VaultState {
   tryRestoreFolder: () => Promise<boolean>
   reload: () => Promise<void>
   refreshNote: (path: string) => Promise<void>
+  refreshVault: () => Promise<boolean>
 
   // ── actions: auth + cloud vault ──
   checkAuth: () => Promise<void>
@@ -187,6 +188,10 @@ function rememberSpace(userId: string | null | undefined, path: string): void {
     // Private mode, blocked storage. Nothing downstream depends on this.
   }
 }
+
+/** One quiet refresh at a time. The poll that drives it fires every five
+ *  seconds and a slow pass must not stack on the one before it. */
+let _refreshing = false
 
 export const useVault = create<VaultState>((set, get) => {
   async function loadFromSource(source: VaultSource) {
@@ -308,6 +313,75 @@ export const useVault = create<VaultState>((set, get) => {
      *  scratch, which lands the reader back on Next Up. Answering a question
      *  did exactly that. This is saveNote's cheap local re-index without the
      *  write, because the write already happened on the server. */
+    /** Pick up notes the server has written since this vault was loaded,
+     *  without disturbing the person reading it.
+     *
+     *  This is what makes a space fill in while you watch it. Notes are
+     *  drafted on the server, minutes after the collection is created and
+     *  again every time the tree grows, so the client's index is stale the
+     *  moment it is built — and until now the only cure was a page refresh.
+     *  `reload()` cannot do this job: it sets status to 'loading' (the
+     *  full-screen "Digging the tunnels…") and rebuilds `tabs`, which throws
+     *  the reader out of whatever note they are in and back to Next Up.
+     *
+     *  **Incremental, because the alternative is unaffordable.** A full
+     *  reload re-reads every note over HTTP, one request each; at a poll
+     *  every five seconds that is a steady flood for a vault of any size.
+     *  The listing already carries mtime and size, so a diff against what is
+     *  held costs one request, and only genuinely new or rewritten notes are
+     *  fetched. A quiet pass over an unchanged vault is that single request
+     *  and nothing else.
+     *
+     *  Returns whether anything actually changed, so a caller can decide
+     *  whether it has news worth reporting.
+     */
+    refreshVault: async () => {
+      const { source, index, files, status } = get()
+      // Only over a vault that is up and running. During 'loading' the real
+      // load is already in flight and would race this one.
+      if (!source || !index || status !== 'ready') return false
+      if (_refreshing) return false
+      _refreshing = true
+      try {
+        const next = await source.list()
+        const nextNotes = next.filter((f) => f.type === 'note')
+        // path → what we already hold, for the "has this changed" test.
+        const held = new Map(files.map((f) => [f.path, f]))
+        const parsed = index.notes
+
+        const stale = (m: VaultFileMeta): boolean => {
+          const was = held.get(m.path)
+          // Size as well as mtime: a clock that does not move between two
+          // writes in the same millisecond is not a reason to show the
+          // reader the older of the two.
+          return !was || !parsed.has(m.path) || was.mtime !== m.mtime || was.size !== m.size
+        }
+
+        const changed = nextNotes.filter(stale)
+        const removed = [...parsed.keys()].filter((p) => !nextNotes.some((m) => m.path === p))
+        if (changed.length === 0 && removed.length === 0 && next.length === files.length) return false
+
+        const fresh = await Promise.all(
+          changed.map(async (m) => parseNote(m.path, await source.readText(m.path), m.mtime)),
+        )
+        const byPath = new Map(fresh.map((n) => [n.path, n]))
+        // Everything else is reused as already parsed, not re-read.
+        const all = nextNotes.map((m) => byPath.get(m.path) ?? parsed.get(m.path)!).filter(Boolean)
+
+        _searchIndex = buildSearch(all)
+        // `index`, `files` and `tree` only. Not `status`, not `tabs` — this
+        // has to be invisible to anyone mid-note.
+        set({ index: buildIndex(all), files: next, tree: buildTree(next) })
+        return true
+      } catch {
+        // Polled on a timer: a blip is a blip, and the next pass will pick
+        // up whatever this one missed.
+        return false
+      } finally {
+        _refreshing = false
+      }
+    },
+
     refreshNote: async (path) => {
       const { source, index } = get()
       if (!source || !index) return

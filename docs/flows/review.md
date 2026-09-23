@@ -245,6 +245,12 @@ The flag exists rather than the client sniffing for the placeholder sentence:
 that string is prose, it will be reworded, and a UI that breaks when prose
 changes is exactly the coupling the rest of this document is about.
 
+The chip disappearing "on its own" is only true because the status poll now
+syncs the open vault as well as draining the queue — see **The vault fills in
+while they watch** in [onboarding.md](onboarding.md). Until that landed, the
+flag was removed on the server and the reader kept seeing "Coming soon" until
+they reloaded the page.
+
 ---
 
 ## What it writes

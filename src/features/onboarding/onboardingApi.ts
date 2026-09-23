@@ -44,15 +44,30 @@ export async function startOnboarding(topic: string): Promise<OnboardingJob> {
   })
   if (!res.ok) throw new Error(await readError(res, `Could not start building your space (${res.status}).`))
   const { job } = (await res.json()) as { job: OnboardingJob }
-  // The banner stops polling once nothing is running, so a job started from
-  // anywhere other than the banner itself would go unnoticed until the tab
-  // next regained focus. Tell it directly.
-  window.dispatchEvent(new CustomEvent(ONBOARDING_STARTED))
+  // The poll stops once nothing is running, so a job started from anywhere
+  // other than the banner itself would go unnoticed until the tab next
+  // regained focus. Tell it directly.
+  announceServerWork()
   return job
 }
 
-/** Fired when a new space starts building, so any listener can resume polling. */
+/** Fired when the server has been given work that will write notes, so the
+ *  status poll can restart and the vault can pick them up as they land.
+ *
+ *  Two things raise it: starting a collection, and asking a space to grow
+ *  after a review. Both enqueue drafting, and the poll is what drains the
+ *  queue *and* what notices the result — so without this, finishing a note
+ *  would leave the next three sitting as "Coming soon" until the tab
+ *  happened to regain focus.
+ *
+ *  The event name still says "onboarding" because it is persisted nowhere
+ *  and renaming a string costs nothing, but it is not onboarding-specific.
+ */
 export const ONBOARDING_STARTED = 'rabbithole:onboarding-started'
+
+export function announceServerWork(): void {
+  window.dispatchEvent(new CustomEvent(ONBOARDING_STARTED))
+}
 
 /** Null when there's nothing to report: no job, or the caller isn't approved
  *  (403) and so has nothing being built for them. Never throws — this is
@@ -110,6 +125,10 @@ export function requestSpaceGrowth(space: string): void {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ space }),
   }).catch((err) => console.warn('[grow] could not request more topics:', err))
+  // Announced immediately rather than on the response: the request is
+  // fire-and-forget, and the poll it restarts is what will report what
+  // actually happened.
+  announceServerWork()
 }
 
 export interface CollectionAllowance {

@@ -73,6 +73,44 @@ a second time at six model calls a go.
 phone stops timers, and focus is what actually covers that case. On `ready` it
 offers the space; `POST /api/onboarding/ack` stops it reappearing.
 
+### The vault fills in while they watch
+
+Every poll that sees work in flight also calls `useVault.refreshVault()`, so
+notes appear as the server writes them — a "Coming soon" row becomes a link,
+a stub the reader is sitting in becomes the full note, without the page being
+reloaded. Before this, the index was built once at load and only a browser
+refresh replaced it.
+
+**It is not `reload()`.** That sets status to `loading` (the full-screen
+"Digging the tunnels…") and rebuilds `tabs`, which throws the reader out of
+whatever note they are in and back to Next Up. `refreshVault` writes `index`,
+`files` and `tree` and nothing else.
+
+**It is incremental**, because a full reload re-reads every note over HTTP,
+one request each, and this runs every five seconds. The listing carries
+`mtime` and `size`, so an unchanged vault costs exactly one request and only
+genuinely new or rewritten notes are fetched. Size is compared as well as
+mtime: two writes inside one millisecond are not a reason to show the reader
+the older of them.
+
+Three things drive it:
+
+| Trigger | Covers |
+|---|---|
+| The 5s poll, while a job is running or the queue is non-empty | Notes landing during onboarding and after a grow |
+| One further pass once the queue reports empty (`wasWorking`) | The last note, written by the same request that reports the queue drained |
+| Window focus, unconditionally | Notes written by the ten-minute cron, which drains its own queue server side and leaves nothing for the poll to see |
+
+`requestSpaceGrowth` now raises the same "server has work" event that starting
+a collection does (`announceServerWork`). Without it, finishing a note left
+the next three as "Coming soon" until the tab happened to regain focus,
+because the poll had already stood down.
+
+**Still not covered:** a tab left open and untouched while the cron writes
+notes. Nothing polls for that, by choice — a background timer against an
+idle app is a cost paid by every user to serve a case that focus already
+fixes the moment they look at it.
+
 ---
 
 ## What it writes
