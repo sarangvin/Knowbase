@@ -31,8 +31,13 @@ export class RemoteVaultSource implements VaultSource {
     this.name = mode === 'global' ? 'Global Vault (owner edit)' : 'My Vault (cloud)'
   }
 
-  async list(): Promise<VaultFileMeta[]> {
-    return api<VaultFileMeta[]>(`${this.base}/notes`)
+  async list(opts?: { background?: boolean }): Promise<VaultFileMeta[]> {
+    // A background listing is the periodic sync checking for notes the
+    // server has written. It is the same query, but it is not somebody
+    // opening their vault, and logging it as one would bury the real
+    // figure under a row a minute per open tab.
+    const q = opts?.background ? '?background=1' : ''
+    return api<VaultFileMeta[]>(`${this.base}/notes${q}`)
   }
 
   async readText(path: string): Promise<string> {

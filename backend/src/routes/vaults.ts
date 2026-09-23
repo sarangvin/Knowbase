@@ -63,7 +63,12 @@ vaultsRouter.get('/mine/notes', asyncHandler(async (req, res) => {
   )
   // Fire-and-forget: logUsageEvent swallows its own errors, and the response
   // is already on its way — don't make the user wait on telemetry.
-  void logUsageEvent({ userId: req.user!.id, eventType: 'vault_sync' })
+  //
+  // Not logged when the client says this is its periodic background sync.
+  // That runs about once a minute per open tab, and counting it as a vault
+  // sync would turn a figure that means "somebody opened their vault" into
+  // a count of how long a tab was left open.
+  if (!req.query.background) void logUsageEvent({ userId: req.user!.id, eventType: 'vault_sync' })
 }))
 
 vaultsRouter.get('/mine/note', asyncHandler(async (req, res) => {

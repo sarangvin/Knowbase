@@ -343,7 +343,7 @@ export const useVault = create<VaultState>((set, get) => {
       if (_refreshing) return false
       _refreshing = true
       try {
-        const next = await source.list()
+        const next = await source.list({ background: true })
         const nextNotes = next.filter((f) => f.type === 'note')
         // path → what we already hold, for the "has this changed" test.
         const held = new Map(files.map((f) => [f.path, f]))

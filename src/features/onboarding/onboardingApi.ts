@@ -69,6 +69,43 @@ export function announceServerWork(): void {
   window.dispatchEvent(new CustomEvent(ONBOARDING_STARTED))
 }
 
+/** How long to keep watching after the server has been handed work, even
+ *  while nothing is visibly happening yet.
+ *
+ *  This is the number the whole "notes appear by themselves" behaviour turns
+ *  on. `POST /api/onboarding/grow` answers 202 straight away and *then*
+ *  spends up to two twenty-second plan calls before it writes a single row.
+ *  So the poll fired the instant a note is reviewed finds no job running and
+ *  an empty queue — the honest state of the world at that moment — and
+ *  without a grace window it concludes there is nothing to watch and stands
+ *  down about forty seconds before the placeholders exist. Nothing polls
+ *  again, so nothing drains the queue and nothing re-lists the vault: the
+ *  next topics stay invisible until the page is reloaded.
+ *
+ *  Two minutes covers both plan attempts, the writes, and several drains
+ *  after them. */
+export const WORK_GRACE_MS = 120_000
+
+/** Is there still a reason to poll?
+ *
+ *  Pulled out of the banner and given a name because getting it wrong is
+ *  invisible: everything still works, notes just quietly stop appearing.
+ *  The three clauses are three different ways of having work in flight —
+ *  one the server admits to, one sitting in the queue, and one that has been
+ *  promised but not yet started.
+ */
+export function workInFlight(o: {
+  job: OnboardingJob | null
+  queue?: QueueDepth
+  /** Date.now() + WORK_GRACE_MS, set when work was last announced. */
+  graceUntil: number
+  now?: number
+}): boolean {
+  if (o.job?.status === 'running') return true
+  if (o.queue && o.queue.pending + o.queue.running > 0) return true
+  return (o.now ?? Date.now()) < o.graceUntil
+}
+
 /** Null when there's nothing to report: no job, or the caller isn't approved
  *  (403) and so has nothing being built for them. Never throws — this is
  *  polled, and a blip must not surface as an error next to the user's notes. */

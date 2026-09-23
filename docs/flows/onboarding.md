@@ -93,23 +93,40 @@ genuinely new or rewritten notes are fetched. Size is compared as well as
 mtime: two writes inside one millisecond are not a reason to show the reader
 the older of them.
 
-Three things drive it:
+Four things drive it:
 
 | Trigger | Covers |
 |---|---|
-| The 5s poll, while a job is running or the queue is non-empty | Notes landing during onboarding and after a grow |
-| One further pass once the queue reports empty (`wasWorking`) | The last note, written by the same request that reports the queue drained |
-| Window focus, unconditionally | Notes written by the ten-minute cron, which drains its own queue server side and leaves nothing for the poll to see |
+| The 5s poll, while `workInFlight` says there is something to watch | Notes landing during onboarding and after a grow |
+| One further pass once that goes false (`wasWorking`) | The last note, written by the same request that reports the queue drained |
+| A 60s idle sync while the tab is visible | The ten-minute cron, which drains its own queue server side and leaves nothing for the poll to see |
+| Window focus | A phone that was locked, where no timer ran at all |
 
-`requestSpaceGrowth` now raises the same "server has work" event that starting
-a collection does (`announceServerWork`). Without it, finishing a note left
-the next three as "Coming soon" until the tab happened to regain focus,
-because the poll had already stood down.
+### Why the poll needs a grace window
 
-**Still not covered:** a tab left open and untouched while the cron writes
-notes. Nothing polls for that, by choice — a background timer against an
-idle app is a cost paid by every user to serve a case that focus already
-fixes the moment they look at it.
+`workInFlight` (in `onboardingApi.ts`) answers "is there still a reason to
+poll", and it has three clauses, not two. The third is the one that was
+missing, and its absence is why notes did not appear on their own even after
+`refreshVault` existed:
+
+`POST /api/onboarding/grow` answers **202 immediately** and *then* spends up
+to two twenty-second plan calls before it writes a single row. So the poll
+fired the instant a note is reviewed sees no job running and an empty queue —
+which is the honest state of the world at that moment — concludes there is
+nothing to watch, and **stands down about forty seconds before the
+placeholders exist**. Nothing polls again, so nothing drains the queue and
+nothing re-lists the vault. The next topics stay invisible until a reload.
+
+`WORK_GRACE_MS` (2 minutes) keeps the poll alive from the moment work is
+announced, covering both plan attempts, the writes, and several drains after
+them.
+
+`requestSpaceGrowth` raises the same "server has work" event that starting a
+collection does (`announceServerWork`), which is what sets that window.
+
+A background listing is flagged `?background=1` and the route skips its
+`vault_sync` usage event for it — otherwise a figure meaning "somebody opened
+their vault" would become a count of how long a tab was left open.
 
 ---
 

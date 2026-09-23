@@ -8,7 +8,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { RemoteVaultSource } from '../../vault/remoteSource'
-import { startOnboarding, fetchOnboardingStatus, ackOnboarding, ONBOARDING_STARTED, type OnboardingJob } from './onboardingApi'
+import {
+  startOnboarding,
+  fetchOnboardingStatus,
+  ackOnboarding,
+  workInFlight,
+  ONBOARDING_STARTED,
+  WORK_GRACE_MS,
+  type OnboardingJob,
+} from './onboardingApi'
 import { Sparkles, ArrowRight, X, RotateCw } from '../../ui/icons'
 import './onboarding.css'
 
@@ -17,6 +25,17 @@ import './onboarding.css'
  *  below is what actually covers the common case — a locked phone polls
  *  nothing, and catches up the moment it's picked up. */
 const POLL_MS = 5000
+
+/** A slower pass that runs whenever the app is open, whether or not the
+ *  poll thinks anything is happening.
+ *
+ *  The ten-minute cron tops collections up for everybody, drains its own
+ *  queue server side, and leaves nothing behind for the poll to notice — so
+ *  without this, a tab sitting on Next Up never learns about the notes it
+ *  just wrote. One listing request, skipped entirely while the tab is
+ *  hidden, and flagged `background` so it does not register as somebody
+ *  opening their vault. */
+const IDLE_SYNC_MS = 60_000
 
 /** Dismissal is per job *and per state*, not a single "hide the banner" flag.
  *
@@ -64,6 +83,8 @@ export function OnboardingBanner() {
     // Whether the previous pass saw work in flight, so the pass that finds
     // the queue empty still syncs once before standing down.
     let wasWorking = false
+    // Set when the server is handed work; see WORK_GRACE_MS.
+    let graceUntil = 0
 
     const poll = async () => {
       const { job: next, queue } = await fetchOnboardingStatus()
@@ -77,7 +98,10 @@ export function OnboardingBanner() {
       // long after the user's own onboarding finished. Stopping then would
       // leave those notes as "Coming soon" until the next time somebody
       // happened to onboard.
-      const working = next?.status === 'running' || (queue ? queue.pending + queue.running > 0 : false)
+      // Grace is part of this one answer rather than a separate branch: it
+      // has to keep the interval alive *and* keep the vault in sync, and
+      // those are the same condition.
+      const working = workInFlight({ job: next, queue, graceUntil })
 
       // Pull whatever has landed into the open vault. This is what turns
       // "Coming soon" into a readable note, and an empty collection into a
@@ -120,10 +144,15 @@ export function OnboardingBanner() {
     // interval restarted, not just one extra poll — it was cleared when the
     // last job finished.
     const onStarted = () => {
+      graceUntil = Date.now() + WORK_GRACE_MS
       void poll()
       if (timer.current === null) timer.current = window.setInterval(() => void poll(), POLL_MS)
     }
     window.addEventListener(ONBOARDING_STARTED, onStarted)
+
+    const idle = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshVault()
+    }, IDLE_SYNC_MS)
 
     return () => {
       cancelled = true
@@ -132,6 +161,7 @@ export function OnboardingBanner() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
       window.removeEventListener(ONBOARDING_STARTED, onStarted)
+      clearInterval(idle)
     }
   }, [approved, refreshVault])
 

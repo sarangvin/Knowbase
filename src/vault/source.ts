@@ -12,7 +12,11 @@ export interface VaultSource {
   readonly name: string
   /** Whether writes are supported (saving edits back to disk / local overlay). */
   readonly writable: boolean
-  list(): Promise<VaultFileMeta[]>
+  /** `background: true` marks a listing taken by the periodic sync rather
+   *  than by someone opening a vault. Sources that talk to a server use it
+   *  to keep housekeeping traffic out of the usage log; local sources have
+   *  no reason to care and may ignore it. */
+  list(opts?: { background?: boolean }): Promise<VaultFileMeta[]>
   readText(path: string): Promise<string>
   /** Returns an object URL for an asset (image/pdf). Caller may revoke it. */
   assetUrl(path: string): Promise<string>
