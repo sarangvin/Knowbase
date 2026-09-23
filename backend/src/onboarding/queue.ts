@@ -25,18 +25,17 @@ import { draftOne } from './draftNote.js'
 import { SPACE_ROOT, contributeToLibrary } from '../vault/spaces.js'
 import { isHidden } from '../vault/hidden.js'
 
-/** Notes drafted per drain.
+/** Notes drafted per drain, in sequence.
  *
- *  It was one. A drain runs inside a request's invocation, and under the
- *  old 60s ceiling a draft that normally takes 4s but has been observed at
- *  28 could not be attempted three times in sequence — so the batch was the
- *  thing that had to go, more invocations each doing one small piece rather
- *  than one invocation gambling on latency.
+ *  It was one, because under the old 60s ceiling a draft that normally
+ *  takes 4s but has been observed at 28 could not be attempted three times
+ *  in a row. The ceiling is 240s now, so three fit with room for the writes
+ *  either side.
  *
- *  The ceiling is 240s now and the draft deadline is 60s, so two fit with
- *  room for the writes either side. Two rather than three: the point of the
- *  small batch was never to be as large as fits, it was to lose at most one
- *  piece of work when an invocation dies. */
+ *  This is the safe way to go faster, and MAX_IN_FLIGHT is not: these run
+ *  one after another, so each pays only its own latency and nothing is
+ *  contended. The cost of an invocation dying part-way is bounded the same
+ *  way it always was — the rows go back to 'pending' and are reclaimed. */
 const BATCH = 3
 
 /** The wall this has to stay inside when no caller supplies one: the
@@ -70,18 +69,32 @@ const IN_FLIGHT_SECONDS = 65
 
 /** How many drafts may be in flight across the whole system at once.
  *
- *  This used to be one, expressed as "claim nothing while anything is
- *  running". That was a sound way to stop concurrent drains stampeding a
- *  15-requests-a-minute free tier, and it became the bottleneck: one draft
- *  at a time, at up to 60s each, against a queue that growth adds to faster
- *  than that. The backlog sat between fifteen and twenty-five jobs and never
- *  fell — every note behind it showing "Coming soon" to somebody.
+ *  **One. Measured, not guessed — and it was three for about three hours,
+ *  which is how the measurement exists.**
  *
- *  Three is still far inside the rate limit (three calls per minute against
- *  fifteen, even if every one ran the full 60s) and triples the drain rate.
- *  The claim is atomic, so the only thing this number controls is how much
- *  of the free tier the queue is allowed to use at once. */
-const MAX_IN_FLIGHT = 3
+ *  Hourly p50 for a draft call, from usage_events:
+ *
+ *      until 13:00 UTC   p50 ~6.5s   p95 ~7.5s    0 timeouts in 90 calls
+ *      14:00 UTC         p50  36.6s  p95 56.3s    9 timeouts in 65
+ *      15:00 UTC         p50  31.0s  p95 58.2s   40 timeouts in 87
+ *
+ *  The model did not get slower; it got shared. The free tier throttles by
+ *  making you wait rather than by refusing, so three calls at once are not
+ *  three times the work done — they are one call's work taking three times
+ *  as long, with a p95 that then sits *on* the deadline. Every call that
+ *  crosses it is lost entirely and still spends its quota.
+ *
+ *  The arithmetic is not close. Serial at 6.5s is about nine drafts a
+ *  minute and wastes nothing. Three-way at 31s with 46% timing out is about
+ *  three useful drafts a minute and burns the rest of the quota learning
+ *  that. Throughput was never the constraint here anyway — the backlog is
+ *  single digits and what limits it is how often an invocation runs, not
+ *  how many drafts each one may start.
+ *
+ *  BATCH is the knob that actually helps: those drafts run in sequence
+ *  inside one invocation, so three of them cost one request's latency each
+ *  and nothing is contended. */
+const MAX_IN_FLIGHT = 1
 
 /** A 'running' row older than this is assumed dead and is reclaimed. Longer
  *  than any legitimate single draft (~15s on flash-lite, ~55s on a thinking
