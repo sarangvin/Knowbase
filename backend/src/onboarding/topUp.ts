@@ -404,6 +404,19 @@ export async function topUpEveryone(): Promise<TopUpResult> {
       return out
     }
 
+    // Sweep for placeholders the queue never heard about, and do it *above*
+    // the quota gate, because it spends nothing — it is a scan and an insert.
+    //
+    // A note can be a stub with no queue row at all: an invocation that died
+    // between writing the space and enqueueing, or a landing note whose
+    // inline draft failed. Nothing anywhere knows to retry it, and the
+    // symptom is a collection stuck at "0 of 5 written" while the queue
+    // reports empty. Putting the row back costs nothing; drafting it is
+    // budgeted below like everything else. Leaving it below the gate meant
+    // the one day the budget ran out was the day the stranded notes stayed
+    // stranded.
+    out.reconciled = await reconcileQueue()
+
     // Asked before the candidate query, because a quota that is gone makes
     // the rest of the pass pointless.
     if ((await callsInLastDay()) >= DAILY_CALL_BUDGET) return { ...out, skipped: 'quota' }
@@ -419,17 +432,6 @@ export async function topUpEveryone(): Promise<TopUpResult> {
     // note somebody can already see, showing "Coming soon" where the body
     // should be. A grow is a note nobody has been shown yet. Finishing what
     // has been started beats starting more.
-    // Sweep for placeholders the queue never heard about, then drain.
-    //
-    // A note can be a stub with no queue row at all — an invocation that
-    // died between writing the space and enqueueing, or the landing note
-    // whose inline draft failed before it was included in the enqueue. That
-    // note has nothing anywhere that knows to retry it, and the symptom is a
-    // collection that sits at "0 of 5 written" forever while the queue
-    // reports empty. The scan is too heavy for a five-second poll and is
-    // exactly right for a pass that runs a few times an hour.
-    out.reconciled = await reconcileQueue()
-
     const first = await drainQueue()
     out.drafted += first.drafted
 
@@ -478,13 +480,12 @@ export async function topUpEveryone(): Promise<TopUpResult> {
       })
     }
 
-    // Whatever was just created is a placeholder until something drafts it.
-    // The status poll only runs while somebody has the app open, which is
-    // exactly the case this pass exists to cover.
-    // Room for a draft or two at their 60s deadline, plus the writes.
+    // And again on the way out, if the grows left room: whatever they just
+    // created is a placeholder until something drafts it. `+=`, not `=` —
+    // this used to overwrite what the first drain reported, so a pass that
+    // drafted three notes and then had no room left said it drafted none.
     if (Date.now() - started < RUN_BUDGET_MS - 140_000) {
-      const drained = await drainQueue()
-      out.drafted = drained.drafted
+      out.drafted += (await drainQueue()).drafted
     }
 
     console.log('[top-up]', JSON.stringify({ ...out, ms: Date.now() - started }))

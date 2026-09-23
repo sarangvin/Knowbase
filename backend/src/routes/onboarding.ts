@@ -183,19 +183,38 @@ async function viewOf(
   // reported ready, and the banner, finding notesTotal of 0, said "All its
   // notes are written." Somebody was told their collection on Racism was
   // ready when it was an empty folder. Ready now requires notes.
-  const salvageable = stale && !!row.space && !!row.openPath && (progress?.total ?? row.notesTotal) > 0
+  //
+  // "Built the space" has to mean a space with something readable in it.
+  // `space && openPath` are both set the instant the folder is written,
+  // before a single body exists, so they cannot be the test.
+  const readable = !!row.space && !!row.openPath && (progress?.drafted ?? 0) > 0
 
   return {
     topic: row.topic,
-    // A stale run with retries left stays 'running': something is coming
-    // back for it, and the card says so on its own after thirty seconds.
-    status: salvageable
+    // **Ready means there is something written to open.** Computed here from
+    // what is on disk, not taken from the row, because the row has been
+    // wrong in both directions.
+    //
+    // It said ready when nothing had been drafted: the run writes the space,
+    // drafts the landing note inline, and marks ready — and when that one
+    // call timed out it marked ready anyway. Somebody was told their space
+    // on Racism was ready when all five notes were one-line stubs.
+    //
+    // And it says running when the space is plainly usable: a run that died
+    // after the queue had drafted something leaves a row nobody updates.
+    //
+    // One rule covers both. A stale run with retries left stays 'running',
+    // because something is coming back for it and the card says so on its
+    // own after thirty seconds.
+    status: readable
       ? 'ready'
       : stale && exhausted
         ? 'failed'
-        : (row.status as OnboardingJobView['status']),
+        : row.status === 'ready'
+          ? 'running'
+          : (row.status as OnboardingJobView['status']),
     error:
-      stale && !salvageable && exhausted
+      stale && !readable && exhausted
         ? 'This one stopped part-way through more than once. Nothing was lost — starting it again is safe.'
         : row.error,
     space: row.space,
