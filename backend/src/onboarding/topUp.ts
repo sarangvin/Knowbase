@@ -23,7 +23,7 @@ import { SPACE_ROOT, archivedSpaces } from '../vault/spaces.js'
 import { growSpace, MAX_UNREVIEWED } from './grow.js'
 import { runOnboarding, MAX_ONBOARDING_ATTEMPTS } from './run.js'
 import { HIDDEN_BUFFER, revealUpTo } from '../vault/hidden.js'
-import { drainQueue } from './queue.js'
+import { drainQueue, reconcileQueue } from './queue.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
 /** How many collections one pass will grow.
@@ -133,6 +133,8 @@ export interface TopUpResult {
   revealed: number
   /** A failed first collection that was given another go. */
   retriedOnboarding?: string
+  /** Stub notes found with no queue row, and put back on it. */
+  reconciled: number
   skipped?: 'quota' | 'no-key'
 }
 
@@ -383,7 +385,7 @@ async function callsInLastDay(): Promise<number> {
  */
 export async function topUpEveryone(): Promise<TopUpResult> {
   const started = Date.now()
-  const out: TopUpResult = { candidates: 0, grown: 0, added: 0, drafted: 0, revealed: 0 }
+  const out: TopUpResult = { candidates: 0, grown: 0, added: 0, drafted: 0, revealed: 0, reconciled: 0 }
 
   try {
     if (!process.env.GEMINI_API_KEY) return { ...out, skipped: 'no-key' }
@@ -417,6 +419,17 @@ export async function topUpEveryone(): Promise<TopUpResult> {
     // note somebody can already see, showing "Coming soon" where the body
     // should be. A grow is a note nobody has been shown yet. Finishing what
     // has been started beats starting more.
+    // Sweep for placeholders the queue never heard about, then drain.
+    //
+    // A note can be a stub with no queue row at all — an invocation that
+    // died between writing the space and enqueueing, or the landing note
+    // whose inline draft failed before it was included in the enqueue. That
+    // note has nothing anywhere that knows to retry it, and the symptom is a
+    // collection that sits at "0 of 5 written" forever while the queue
+    // reports empty. The scan is too heavy for a five-second poll and is
+    // exactly right for a pass that runs a few times an hour.
+    out.reconciled = await reconcileQueue()
+
     const first = await drainQueue()
     out.drafted += first.drafted
 

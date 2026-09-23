@@ -189,10 +189,19 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
     //    note you land on is written — the banner already says "n of 5
     //    notes written" for the rest, which is the honest version of a
     //    promise this run can no longer keep in one invocation.
+    //
+    // The landing note is enqueued too when its inline draft did not come
+    // back. It used to be excluded unconditionally, which meant a timeout on
+    // that one call left the note a permanent stub: nothing retried it,
+    // because the retry lives in the queue and the note was never in the
+    // queue. A space was declared ready with 0 of 5 notes written and no
+    // path back — and the job did not appear in the draft queue either, so
+    // there was nothing to see wrong. Including it costs nothing when the
+    // inline draft worked, because then it is simply not in this list.
     const queued = await enqueueDrafts(
       plan.subtopics
         .map((s, i) => ({ s, i }))
-        .filter(({ i }) => i !== firstIdx)
+        .filter(({ i }) => i !== firstIdx || !firstDraft)
         .map(({ s, i }) => ({
           userId,
           vaultId,
@@ -205,6 +214,10 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
         })),
     )
 
+    // Ready means the space exists and can be walked into. It does not wait
+    // for every note — the rest arrive behind them and the card counts them
+    // — but it does now require that the landing note is real, or that the
+    // queue has been told to make it so.
     const drafted = firstDraft ? 1 : 0
     await patchJob(userId, topic, { status: 'ready', openPath, error: null, notesDrafted: drafted })
     void logUsageEvent({
