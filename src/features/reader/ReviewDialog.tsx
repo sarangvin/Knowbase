@@ -1,12 +1,13 @@
 // What finishing a note actually records.
 //
-// The gesture used to write the scores for you: +1 confidence, and nothing
+// The control used to write the scores for you: +1 confidence, and nothing
 // at all for importance or interest. That was a guess standing in for a
 // judgement — the moment you have just finished reading something is the
 // only moment you can say how well it landed, how much it matters and
 // whether you want more of it, and it was being thrown away.
 //
-// So the swipe now opens this. Three questions, five taps, submit.
+// So the Mark reviewed button opens this. Three questions, five taps,
+// submit.
 //
 // Taps rather than sliders: a slider is a drag with a target, on a control
 // six pixels tall, which is the worst possible shape for a thumb. A row of

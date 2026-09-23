@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { Fragment, useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { slugify } from '../../vault/parse'
 import { MarkdownView } from './MarkdownView'
@@ -53,25 +54,59 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
   // note title (common in this vault), drop that leading H1 from the rendered body.
   const body = stripLeadingTitle(note.body, note.title)
 
-  // "My Notes" is rendered as an editor rather than as markdown, so the body
-  // is split around it: prose before, the box, prose after. Split on the
-  // rendered body rather than the raw note so the offsets line up with what
-  // MarkdownView is given — the frontmatter and any stripped title are
-  // already gone from this string.
-  // Two sections are components rather than markdown: My Notes is an editor,
-  // and Questions has a button per question. Both draw their own heading, so
-  // each split stops where its heading starts.
+  // Three things in a topic note are components rather than markdown, and
+  // each has to be spliced into the prose at the right offset:
+  //
+  //   the review control, at the foot of "AI Notes" — the end of the
+  //   reading, and deliberately above the optional exercises below it
+  //   "My Notes", which is an editor
+  //   "Questions", which has a button per question
+  //
+  // Offsets are taken against the *rendered* body rather than the raw note,
+  // so they line up with what MarkdownView is handed — the frontmatter and
+  // any stripped title are already gone from this string. My Notes and
+  // Questions each draw their own heading, so their slices start where the
+  // heading starts; the review control has no heading and is a pure
+  // insertion point, so it starts and ends at the same offset.
+  //
+  // Built as a sorted list rather than as a nest of orderings. The template
+  // puts these in one order, but a note edited by hand can have them in any,
+  // and enumerating the permutations is how a branch nobody tested renders
+  // the same paragraph twice.
+  const ai = extractSection(body, 'AI Notes')
   const mine = extractSection(body, 'My Notes')
   const mineStart = mine ? body.lastIndexOf('##', mine.contentStart) : -1
   const qs = questionsSection(body)
   const qsStart = qs ? body.lastIndexOf('##', qs.start) : -1
-  const questions = qs ? parseQuestions(body) : []
 
-  // Rendered in document order. Questions follows My Notes in the template,
-  // and a note that has been edited by hand could have them either way
-  // round — so the middle slice is whatever sits between them.
-  const hasBoth = mineStart >= 0 && qsStart >= 0
-  const mineFirst = hasBoth ? mineStart < qsStart : mineStart >= 0
+  const inserts: { start: number; end: number; node: ReactNode }[] = []
+  if (ai) inserts.push({ start: ai.contentEnd, end: ai.contentEnd, node: <ReviewBar note={note} /> })
+  if (mine && mineStart >= 0) {
+    inserts.push({
+      start: mineStart,
+      end: mine.contentEnd,
+      node: <MyNotes note={note} initial={mine.text.trim()} />,
+    })
+  }
+  if (qs && qsStart >= 0) {
+    inserts.push({ start: qsStart, end: qs.end, node: <Questions note={note} items={parseQuestions(body)} /> })
+  }
+  inserts.sort((a, b) => a.start - b.start)
+
+  const blocks: ReactNode[] = []
+  let cursor = 0
+  inserts.forEach((ins, i) => {
+    // An empty slice still renders a <MarkdownView>, which is harmless, but
+    // skipping it keeps the DOM honest about what the note contains.
+    if (ins.start > cursor) {
+      blocks.push(<MarkdownView key={`md${i}`} content={body.slice(cursor, ins.start)} notePath={note.path} />)
+    }
+    blocks.push(<Fragment key={`c${i}`}>{ins.node}</Fragment>)
+    cursor = Math.max(cursor, ins.end)
+  })
+  if (cursor < body.length) {
+    blocks.push(<MarkdownView key="md-last" content={body.slice(cursor)} notePath={note.path} />)
+  }
 
   return (
     <div className="note-scroll" ref={scrollRef}>
@@ -87,44 +122,12 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
           </div>
         )}
         <Properties frontmatter={note.frontmatter} notePath={note.path} />
-        {hasBoth ? (
-          mineFirst ? (
-            <>
-              <MarkdownView content={body.slice(0, mineStart)} notePath={note.path} />
-              <MyNotes note={note} initial={mine!.text.trim()} />
-              <MarkdownView content={body.slice(mine!.contentEnd, qsStart)} notePath={note.path} />
-              <Questions note={note} items={questions} />
-              <MarkdownView content={body.slice(qs!.end)} notePath={note.path} />
-            </>
-          ) : (
-            <>
-              <MarkdownView content={body.slice(0, qsStart)} notePath={note.path} />
-              <Questions note={note} items={questions} />
-              <MarkdownView content={body.slice(qs!.end, mineStart)} notePath={note.path} />
-              <MyNotes note={note} initial={mine!.text.trim()} />
-              <MarkdownView content={body.slice(mine!.contentEnd)} notePath={note.path} />
-            </>
-          )
-        ) : mineStart >= 0 ? (
-          <>
-            <MarkdownView content={body.slice(0, mineStart)} notePath={note.path} />
-            <MyNotes note={note} initial={mine!.text.trim()} />
-            <MarkdownView content={body.slice(mine!.contentEnd)} notePath={note.path} />
-          </>
-        ) : qsStart >= 0 ? (
-          <>
-            <MarkdownView content={body.slice(0, qsStart)} notePath={note.path} />
-            <Questions note={note} items={questions} />
-            <MarkdownView content={body.slice(qs!.end)} notePath={note.path} />
-          </>
-        ) : (
-          <MarkdownView content={body} notePath={note.path} />
-        )}
+        {blocks}
+        {/* A note with no "AI Notes" section — a hand-written one, or one
+            whose template has drifted — still needs a way to be reviewed, so
+            the control falls back to the end of the note. */}
+        {!ai && <ReviewBar note={note} />}
       </div>
-      {/* Outside .note-container on purpose: as a sibling it can stick to the
-          foot of the scroller for the whole note, rather than only once the
-          container's own bottom edge comes into view. */}
-      <ReviewBar note={note} scrollRef={scrollRef} />
     </div>
   )
 }
