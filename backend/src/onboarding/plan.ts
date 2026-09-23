@@ -6,7 +6,7 @@
 // keeping; only the transport differs, calling Gemini directly the way
 // routes/draftNotes.ts already does instead of going back out through the
 // app's own /api/llm/free proxy, which would be this process calling itself.
-import { meteredGeminiCall, ModelTimeoutError } from '../llm/meter.js'
+import { meteredGeminiCall } from '../llm/meter.js'
 import { breakCycles, ensureFoundational, type Subtopic } from './notePlan.js'
 
 function callModel(system: string, user: string, userId: string | undefined, source: string): Promise<string> {
@@ -171,11 +171,21 @@ export async function generateLearningPlan(topic: string, userId?: string): Prom
     } catch (err) {
       console.warn('[learning-plan] request failed:', err)
       lastError = err
-      // A second attempt after a timeout spends another 20s of the same
-      // invocation to learn what the first one just established. Whatever
-      // made the model slow is still true; stop and let the caller retry in
-      // a fresh one.
-      if (err instanceof ModelTimeoutError) break
+      // A timeout no longer stops the loop.
+      //
+      // It used to, on the reasoning that a second attempt spends another
+      // 20s of the same 60s invocation to learn what the first one just
+      // established. Two things have since made that wrong. The measured
+      // one: latency on this model is wildly variable, so a retry after a
+      // timeout usually succeeds — the same finding that removed this break
+      // from generateNextTopics. The structural one: the invocation is 240s
+      // now and the deadline is 60s, so a second attempt costs budget that
+      // is there rather than budget that is not.
+      //
+      // And the cost of stopping fell on the worst possible person. This is
+      // the call that builds somebody's first collection; giving up after
+      // one slow response is how three accounts were told "the model did
+      // not answer within 20s" and left with nothing.
     }
   }
 

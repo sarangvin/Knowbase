@@ -174,8 +174,20 @@ export const onboardingJobs = pgTable(
     status: text('status').notNull(),
     space: text('space'),
     openPath: text('open_path'),
-    /** User-facing message when status is 'failed'. Safe to display verbatim. */
+    /** User-facing message when status is 'failed'. Safe to display verbatim
+     *  — and *only* ever prose written here, never a model or transport
+     *  error passed through. "The model did not answer within 20s
+     *  (onboarding-plan)" was shown to three people; it names an internal
+     *  deadline, blames a component they have never heard of, and tells them
+     *  nothing they can act on. The real error goes to the log. */
     error: text('error'),
+    /** How many times generation has been tried for this job.
+     *
+     *  A transient failure — a slow model, a 429 — leaves the row 'running'
+     *  and bumps this, so the reader is never told their collection failed
+     *  over something a retry fixes. The count is what keeps "retry until it
+     *  works" from meaning "retry a genuinely impossible topic forever". */
+    attempts: integer('attempts').notNull().default(0),
     notesTotal: integer('notes_total').notNull().default(0),
     notesDrafted: integer('notes_drafted').notNull().default(0),
     /** Set once the user has actually been taken to the new space, so the

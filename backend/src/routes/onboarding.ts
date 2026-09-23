@@ -16,6 +16,7 @@ import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { runOnboarding } from '../onboarding/run.js'
 import { growSpace, MAX_UNREVIEWED } from '../onboarding/grow.js'
+import { MAX_ONBOARDING_ATTEMPTS } from '../onboarding/run.js'
 import { drainQueue, queueDepth, reconcileQueue } from '../onboarding/queue.js'
 import { ensureStocked } from '../onboarding/ensure.js'
 import { collectionAllowance, recordCollectionStart } from '../onboarding/limits.js'
@@ -82,6 +83,11 @@ export interface OnboardingJobView {
   notesTotal: number
   notesDrafted: number
   acknowledged: boolean
+  /** When it was asked for, ISO. The card uses it to say "taking longer
+   *  than expected" without having to remember across a reload. */
+  startedAt: string
+  /** Generation attempts so far. Surfaced for admin, not for the reader. */
+  attempts: number
 }
 
 /** How many of a space's topic notes actually hold a draft, straight from the
@@ -151,33 +157,58 @@ async function viewOf(
   // /start below stops refusing. Writing it back would need this read path to
   // take a write, and there is nothing it would buy — the next /start
   // overwrites the row anyway.
-  const stale =
-    row.status === 'running' && Date.now() - row.updatedAt.getTime() > STALE_JOB_MS
-
-  // A stale job that already has a space and a landing note is not failed —
-  // it built the space and died before saying so. Calling that failed offers
-  // a "Try again" that would generate the whole thing a second time under a
-  // disambiguated name, which is worse than the state it is recovering from.
-  // Ready is the truthful answer, and the queue finishes the notes.
-  const salvageable = stale && !!row.space && !!row.openPath
-
   // Counted, not remembered. Only the landing note is drafted in the run
   // itself; the rest are written by the queue, which has no business writing
   // to this table. A stored counter would need every writer to keep it in
   // step, and the thing it counts is already on disk.
   const progress = row.space ? await draftedCount(userId, row.space) : null
 
+  const stale =
+    row.status === 'running' && Date.now() - row.updatedAt.getTime() > STALE_JOB_MS
+  // Out of retries as well as out of time. A stale job with attempts left is
+  // one a retry loop is about to pick up, and calling that failed puts a
+  // "Couldn't build your space" in front of somebody seconds before it
+  // works.
+  const exhausted = row.attempts >= MAX_ONBOARDING_ATTEMPTS
+
+  // A stale job that already has a space and a landing note is not failed —
+  // it built the space and died before saying so. Calling that failed offers
+  // a "Try again" that would generate the whole thing a second time under a
+  // disambiguated name, which is worse than the state it is recovering from.
+  // Ready is the truthful answer, and the queue finishes the notes.
+  //
+  // And "built the space" has to mean a space with something in it. It was
+  // `space && openPath`, both of which are set the instant the folder is
+  // written — before a single topic exists — so a run that died right there
+  // reported ready, and the banner, finding notesTotal of 0, said "All its
+  // notes are written." Somebody was told their collection on Racism was
+  // ready when it was an empty folder. Ready now requires notes.
+  const salvageable = stale && !!row.space && !!row.openPath && (progress?.total ?? row.notesTotal) > 0
+
   return {
     topic: row.topic,
-    status: salvageable ? 'ready' : stale ? 'failed' : (row.status as OnboardingJobView['status']),
-    error: stale && !salvageable
-      ? 'Generation stopped before it finished — nothing was lost, but it needs starting again.'
-      : row.error,
+    // A stale run with retries left stays 'running': something is coming
+    // back for it, and the card says so on its own after thirty seconds.
+    status: salvageable
+      ? 'ready'
+      : stale && exhausted
+        ? 'failed'
+        : (row.status as OnboardingJobView['status']),
+    error:
+      stale && !salvageable && exhausted
+        ? 'This one stopped part-way through more than once. Nothing was lost — starting it again is safe.'
+        : row.error,
     space: row.space,
     openPath: row.openPath,
     notesTotal: progress?.total || row.notesTotal,
     notesDrafted: progress ? progress.drafted : row.notesDrafted,
     acknowledged: row.acknowledgedAt !== null,
+    // The moment it was asked for, so the card can say "taking longer than
+    // expected" without the client having to remember when it started —
+    // which it cannot do across a reload, and a reload is exactly what
+    // somebody does when they are waiting.
+    startedAt: row.createdAt.toISOString(),
+    attempts: row.attempts,
   }
 }
 

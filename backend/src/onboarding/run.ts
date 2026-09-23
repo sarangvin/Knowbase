@@ -38,6 +38,7 @@ type JobPatch = Partial<{
   error: string | null
   notesTotal: number
   notesDrafted: number
+  attempts: number
 }>
 
 /** Patch *this* user's job for *this* topic.
@@ -213,10 +214,68 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
     })
 
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
     console.error('[onboarding] run failed', err)
-    await patchJob(userId, topic, { status: 'failed', error: message }).catch((e) =>
+    await recordFailure(userId, topic, err).catch((e) =>
       console.error('[onboarding] could not even record the failure', e),
     )
   }
+}
+
+/** How many times a build is retried before the reader is told it did not
+ *  work.
+ *
+ *  "Retry until it works" with no bound is "retry a topic the model will
+ *  never plan, forever, out of a shared daily quota". Five is enough that a
+ *  slow model never surfaces — the observed failure rate per attempt is
+ *  about a quarter, so five independent attempts miss roughly once in a
+ *  thousand — and small enough that a genuinely impossible request stops. */
+export const MAX_ONBOARDING_ATTEMPTS = 5
+
+/** Is this worth trying again, or is it the same answer every time?
+ *
+ *  Timeouts, rate limits and upstream 5xx are the model having a bad
+ *  moment. A missing key or a refusal is not going to change. Unknown
+ *  errors are treated as transient: the cost of retrying something
+ *  permanent is bounded by MAX_ONBOARDING_ATTEMPTS, and the cost of not
+ *  retrying something transient is a person with no collection. */
+function isTransient(err: unknown): boolean {
+  const m = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+  if (/GEMINI_API_KEY|no api key|not configured/i.test(m)) return false
+  if (/didn't match the expected format|different topic phrasing/i.test(m)) return false
+  return true
+}
+
+/**
+ * Write down what happened, in language the reader can do something with.
+ *
+ * **The raw error never reaches the row.** "The model did not answer within
+ * 20s (onboarding-plan)" went to three accounts: it names an internal
+ * deadline, blames a component nobody outside this repo has heard of, and
+ * offers nothing to act on. It belongs in the log, which is where it stays.
+ *
+ * A transient failure does not even set `failed` — the row stays 'running'
+ * with a bumped attempt count, because a retry is coming and telling
+ * somebody their collection failed, seconds before it succeeds, is worse
+ * than saying nothing.
+ */
+async function recordFailure(userId: string, topic: string, err: unknown): Promise<void> {
+  const [row] = await db
+    .select({ attempts: onboardingJobs.attempts })
+    .from(onboardingJobs)
+    .where(and(eq(onboardingJobs.userId, userId), eq(onboardingJobs.topic, topic)))
+    .limit(1)
+  const attempts = (row?.attempts ?? 0) + 1
+
+  if (isTransient(err) && attempts < MAX_ONBOARDING_ATTEMPTS) {
+    await patchJob(userId, topic, { attempts, status: 'running', error: null })
+    return
+  }
+
+  await patchJob(userId, topic, {
+    attempts,
+    status: 'failed',
+    error: isTransient(err)
+      ? `We tried ${attempts} times and couldn't get this one written. It is not something you did — try again in a few minutes.`
+      : "We couldn't build a plan for this topic. Try naming it a little differently.",
+  })
 }

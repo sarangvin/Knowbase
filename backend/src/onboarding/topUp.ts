@@ -21,7 +21,7 @@ import { db } from '../db/client.js'
 import { notes, usageEvents } from '../db/schema.js'
 import { SPACE_ROOT, archivedSpaces } from '../vault/spaces.js'
 import { growSpace, MAX_UNREVIEWED } from './grow.js'
-import { runOnboarding } from './run.js'
+import { runOnboarding, MAX_ONBOARDING_ATTEMPTS } from './run.js'
 import { HIDDEN_BUFFER, revealUpTo } from '../vault/hidden.js'
 import { drainQueue } from './queue.js'
 import { logUsageEvent } from '../usage/logEvent.js'
@@ -69,8 +69,14 @@ export const DAILY_CALL_BUDGET = 320
 const RETRY_FAILED_WITHIN_MS = 7 * 24 * 60 * 60 * 1000
 
 /** Don't retry the same job more often than this. `updated_at` moves on
- *  every attempt, so it doubles as the cooldown. */
-const RETRY_COOLDOWN_MS = 30 * 60 * 1000
+ *  every attempt, so it doubles as the cooldown.
+ *
+ *  Three minutes, not thirty. This is somebody waiting on their first
+ *  collection with an empty screen; the gap between attempts is the gap
+ *  between asking and having, and MAX_ONBOARDING_ATTEMPTS is what stops it
+ *  running away. Half an hour was a number for a background top-up nobody
+ *  is watching, which this is not. */
+const RETRY_COOLDOWN_MS = 3 * 60 * 1000
 
 /**
  * Give one failed first-collection another go, before anything else runs.
@@ -84,11 +90,22 @@ const RETRY_COOLDOWN_MS = 30 * 60 * 1000
  */
 export async function retryFailedOnboarding(): Promise<{ email: string; topic: string } | null> {
   try {
+    // Two kinds of job need another go, and the second is the one that
+    // matters most.
+    //
+    // 'failed' is the obvious one. But a transient failure no longer writes
+    // 'failed' at all — it leaves the row 'running' with a bumped attempt
+    // count, precisely so nobody is told their collection failed over
+    // something a retry fixes. That row is now the thing with no other way
+    // back: the invocation that was building it is gone, and nothing else
+    // looks at it. A 'running' row that has not been touched in longer than
+    // the cooldown is not slow, it is abandoned.
     const rows = (await db.execute(sql`
       SELECT j.user_id, j.topic, u.email
       FROM onboarding_jobs j
       JOIN users u ON u.id = j.user_id
-      WHERE j.status = 'failed'
+      WHERE j.status IN ('failed', 'running')
+        AND j.attempts < ${MAX_ONBOARDING_ATTEMPTS}
         AND (u.access_approved OR u.role = 'owner')
         AND j.updated_at > now() - ${sql.raw(`interval '${Math.round(RETRY_FAILED_WITHIN_MS / 1000)} seconds'`)}
         AND j.updated_at < now() - ${sql.raw(`interval '${Math.round(RETRY_COOLDOWN_MS / 1000)} seconds'`)}

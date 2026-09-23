@@ -19,6 +19,9 @@ export interface OnboardingJob {
   notesDrafted: number
   /** True once they've been taken to the space — the notification is done. */
   acknowledged: boolean
+  /** ISO, when the build was asked for. */
+  startedAt?: string
+  attempts?: number
 }
 
 async function readError(res: Response, fallback: string): Promise<string> {

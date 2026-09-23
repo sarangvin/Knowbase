@@ -8,7 +8,7 @@ import { QuizView } from '../features/quiz/QuizView'
 import { FlashcardsView } from '../features/flashcards/FlashcardsView'
 import { SearchPanel } from '../features/search/SearchPanel'
 import { TopicLauncher } from '../features/onboarding/TopicLauncher'
-import { listSpaces, isArchived } from '../features/automated-graph/engine'
+import { listSpaces, isArchived, isPending } from '../features/automated-graph/engine'
 import { CollectionCard, BuildingCard } from '../features/automated-graph/CollectionCard'
 import { startOnboarding } from '../features/onboarding/onboardingApi'
 import { RabbitSolid } from '../ui/icons'
@@ -32,7 +32,11 @@ function HomeView() {
   const summary = (space: string) => {
     const topics = notes.filter((n) => n.path.startsWith(`Automated Graph/${space}/Topics/`))
     const studied = topics.filter((n) => !!n.frontmatter.last_reviewed).length
-    return { total: topics.length, studied }
+    // `pending` is the queue's own flag for "this body is still a stub", the
+    // same one Next Up draws "Coming soon" from — so the card and the page
+    // agree about what exists to read.
+    const written = topics.filter((n) => !isPending(n.frontmatter)).length
+    return { total: topics.length, studied, written }
   }
 
   const nextUpOf = (space: string) =>
@@ -65,6 +69,7 @@ function HomeView() {
       topic={j.space ?? j.topic}
       drafted={j.notesDrafted}
       total={j.notesTotal}
+      startedAt={j.startedAt}
       error={j.status === 'failed' ? (j.error ?? 'Something went wrong on our side.') : null}
       busy={retrying === j.topic}
       onRetry={() => void retry(j.topic)}
@@ -104,11 +109,11 @@ function HomeView() {
             <div className="collection-grid">
               {buildingCards}
               {spaces.map((space) => {
-                const { total, studied } = summary(space)
+                const { total, studied, written } = summary(space)
                 return (
                   <CollectionCard
                     key={space}
-                    summary={{ space, total, studied, openPath: nextUpOf(space) }}
+                    summary={{ space, total, studied, written, openPath: nextUpOf(space) }}
                     onChanged={() => void reload()}
                   />
                 )

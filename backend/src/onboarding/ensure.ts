@@ -23,6 +23,7 @@ import { usageEvents } from '../db/schema.js'
 import { SPACE_ROOT, archivedSpaces, getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { HIDDEN_BUFFER, VISIBLE_AHEAD, revealUpTo } from '../vault/hidden.js'
 import { growSpace } from './grow.js'
+import { retryFailedOnboarding } from './topUp.js'
 /** Stop when the shared daily ceiling is close. Imported rather than
  *  re-declared: two background spenders with two different ideas of the
  *  reserve is how the reserve stops existing. */
@@ -48,6 +49,7 @@ const MAX_PER_CALL = 1
  *  reserve is how the reserve stops existing. */
 
 export interface EnsureResult {
+  retriedOnboarding?: string
   checked: number
   revealed: number
   grown: number
@@ -94,6 +96,16 @@ async function recentlyAttempted(userId: string): Promise<Set<string>> {
 export async function ensureStocked(userId: string): Promise<EnsureResult> {
   const out: EnsureResult = { checked: 0, revealed: 0, grown: 0, added: 0 }
   try {
+    // Before anything else: a build of this user's that stalled. They are in
+    // the app right now, most likely looking at the card for it, so this is
+    // the best moment there will be to try again — better than waiting for a
+    // cron that runs a handful of times a day.
+    const again = await retryFailedOnboarding()
+    if (again) {
+      out.retriedOnboarding = `${again.email}: ${again.topic}`
+      return out
+    }
+
     const vaultId = await getOrCreatePersonalVaultId(userId)
 
     const rows = (await db.execute(sql`

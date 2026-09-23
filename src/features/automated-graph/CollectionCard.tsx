@@ -12,6 +12,11 @@ export interface CollectionSummary {
   space: string
   total: number
   studied: number
+  /** Topics whose body has actually been written — the rest are one-line
+   *  stubs the draft queue has not reached, which Next Up marks "Coming
+   *  soon". A card that counted those as topics said "5 topics · 0 studied"
+   *  for a collection with nothing in it yet to read. */
+  written: number
   openPath: string | null
 }
 
@@ -24,7 +29,7 @@ export function CollectionCard({
    *  in memory has no idea until it is re-read. */
   onChanged: () => void
 }) {
-  const { space, total, studied, openPath } = summary
+  const { space, total, studied, written, openPath } = summary
   const openNote = useVault((s) => s.openNote)
   const [menuOpen, setMenuOpen] = useState(false)
   const [busy, setBusy] = useState<null | 'archive' | 'delete'>(null)
@@ -95,7 +100,18 @@ export function CollectionCard({
       >
         <div className="collection-name">{space}</div>
         <div className="collection-meta">
-          {total} topic{total === 1 ? '' : 's'} · {studied} studied
+          {written < total ? (
+            // Still filling in. The honest number here is how much there is
+            // to read, not how many folders exist.
+            <>
+              {written} of {total} notes written
+              {studied > 0 && ` · ${studied} studied`}
+            </>
+          ) : (
+            <>
+              {total} topic{total === 1 ? '' : 's'} · {studied} studied
+            </>
+          )}
         </div>
         {total > 0 && (
           <div className="collection-bar" aria-hidden="true">
@@ -149,10 +165,22 @@ export function CollectionCard({
  *  looks pressable and does nothing is worse than one that plainly is not
  *  ready.
  */
-export function BuildingCard({ topic, drafted, total, error, onRetry, busy }: {
+/** How long a build may run before the card says so.
+ *
+ *  A collection normally appears in a few seconds. Past half a minute
+ *  something is being retried, and the reader is watching a spinner with no
+ *  idea whether it is stuck — which is when people reload, and reloading is
+ *  the one thing that cannot help. Saying "come back in a bit" is both true
+ *  and the most useful instruction available. */
+const SLOW_AFTER_MS = 30_000
+
+export function BuildingCard({ topic, drafted, total, error, onRetry, busy, startedAt }: {
   topic: string
   drafted: number
   total: number
+  /** ISO, from the server. Read from the job rather than remembered here,
+   *  so the message survives the reload it is trying to prevent. */
+  startedAt?: string
   /** Set when the build failed; the card carries the retry rather than a
    *  separate banner, so the failure is reported where the thing was
    *  expected to appear. */
@@ -161,6 +189,20 @@ export function BuildingCard({ topic, drafted, total, error, onRetry, busy }: {
   busy?: boolean
 }) {
   const failed = !!error
+
+  // Re-rendered on a timer rather than computed once: the card is usually
+  // mounted before the thirty seconds are up, and nothing else would make
+  // it say so when they pass. Cleared as soon as the message is showing —
+  // there is no second thing to wait for.
+  const began = startedAt ? new Date(startedAt).getTime() : null
+  const [now, setNow] = useState(() => Date.now())
+  const slow = !failed && began !== null && now - began > SLOW_AFTER_MS
+  useEffect(() => {
+    if (failed || began === null || slow) return
+    const id = setInterval(() => setNow(Date.now()), 2000)
+    return () => clearInterval(id)
+  }, [failed, began, slow])
+
   return (
     <div className={'collection-card is-building' + (failed ? ' is-failed' : '')} aria-live="polite">
       <div className="collection-name">
@@ -170,9 +212,11 @@ export function BuildingCard({ topic, drafted, total, error, onRetry, busy }: {
       <div className="collection-meta">
         {failed
           ? error
-          : total > 0
-            ? `Writing the notes — ${drafted} of ${total} done`
-            : 'Working out what to cover…'}
+          : slow
+            ? 'Taking longer than expected — come back in some time.'
+            : total > 0
+              ? `Writing the notes — ${drafted} of ${total} done`
+              : 'Working out what to cover…'}
       </div>
       {failed ? (
         onRetry && (
