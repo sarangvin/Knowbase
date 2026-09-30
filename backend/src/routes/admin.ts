@@ -288,7 +288,6 @@ adminRouter.get('/completions', asyncHandler(async (_req, res) => {
            e.metadata->>'title'      AS title,
            e.metadata->>'path'       AS path,
            e.metadata->>'confidence' AS confidence,
-           e.metadata->>'importance' AS importance,
            e.metadata->>'interest'   AS interest
     FROM usage_events e
     JOIN users u ON u.id = e.user_id

@@ -1,20 +1,25 @@
-// Feeding a quiz answer back into the note it came from.
+// Moving a note's confidence from something that happened *outside* the note.
 //
-// Getting a question right raises that note's confidence by one; getting it
-// wrong lowers it by one. This is what makes the quiz part of the system
-// rather than a game attached to the side of it: confidence is what orders
-// the review list (lowest first), so a wrong answer floats the note back up
-// to be read again, and a right one settles it.
+// Confidence is earned, not typed in. Four things move it, all by one:
+//
+//   reviewing the note            +1   (client-side — see ReviewBar.tsx)
+//   turning over one of its cards +1   (routes/flashcards.ts)
+//   answering its quiz question   +1 right, -1 wrong   (routes/quiz.ts)
+//
+// The last two land here. This lived in quiz/score.ts while the quiz was the
+// only thing outside the reader that touched confidence; flashcards made it a
+// second caller, and one rule with two homes is how the clamp or the status
+// flip ends up applied in one and not the other.
 //
 // What this deliberately does NOT touch is `last_reviewed`. Answering a
-// question about a note is not reading it, and writing the date here would
-// silently consume the note's once-a-day review and move it out of the
+// question or turning a card is not reading the note, and writing the date
+// here would silently consume its once-a-day review and move it out of the
 // "study next" queue on the strength of one lucky guess.
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
-import { SPACE_ROOT } from '../vault/spaces.js'
-import { frontmatterNumber, frontmatterValue, setFrontmatterValue } from '../vault/frontmatter.js'
+import { SPACE_ROOT } from './spaces.js'
+import { frontmatterNumber, frontmatterValue, setFrontmatterValue } from './frontmatter.js'
 
 export const MIN_CONFIDENCE = 0
 export const MAX_CONFIDENCE = 5
@@ -52,7 +57,7 @@ export interface ConfidenceChange {
  * Never throws: the caller has already recorded the answer, and a note write
  * failing must not turn a successful answer into an error.
  */
-export async function applyQuizResult(
+export async function adjustConfidence(
   vaultId: string,
   notePath: string,
   delta: number,
@@ -72,9 +77,8 @@ export async function applyQuizResult(
 
     let content = setFrontmatterValue(row.content, 'confidence', to)
 
-    // Keep `status` honest in both directions. Review only ever wrote
-    // "known" on the way up, which was fine while nothing went down; a quiz
-    // that can lower confidence makes a note stuck on "known" at 1/5 a real
+    // Keep `status` honest in both directions. A wrong quiz answer can lower
+    // confidence, which makes a note stuck on "known" at 1/5 a real
     // possibility, and status is what an exported Obsidian vault sorts by.
     const threshold = await thresholdFor(vaultId, notePath)
     const status = frontmatterValue(content, 'status')
@@ -89,7 +93,7 @@ export async function applyQuizResult(
 
     return { notePath, from, to }
   } catch (err) {
-    console.warn('[quiz] could not apply the result to', notePath, err)
+    console.warn('[confidence] could not adjust', notePath, err)
     return null
   }
 }

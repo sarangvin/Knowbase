@@ -4,9 +4,8 @@
 const TOPICS_FOLDER = '"Automated Graph/Economics/Topics"';
 
 const config = dv.page("Automated Graph/Economics/_config") ?? {};
-const W_IMPORTANCE = config.weight_importance ?? 1;
 const W_UNLOCKS = config.weight_unlocks ?? 2;
-const W_INTEREST = config.weight_interest ?? 0.5;
+const W_INTEREST = config.weight_interest ?? 1;
 
 const pages = dv.pages(TOPICS_FOLDER);
 const pageByPath = new Map(pages.array().map(p => [p.file.path, p]));
@@ -41,7 +40,7 @@ const ranked = frontier
   .where(p => isReady(p) && !p.last_reviewed)
   .map(p => {
     const unlocks = unlockCount(p);
-    const score = (p.importance ?? 0) * W_IMPORTANCE + unlocks * W_UNLOCKS + (p.interest ?? 0) * W_INTEREST;
+    const score = unlocks * W_UNLOCKS + (p.interest ?? 0) * W_INTEREST;
     return { page: p, unlocks, score };
   })
   .sort(c => c.score, 'desc');
@@ -49,15 +48,15 @@ const ranked = frontier
 if (ranked.length) {
   const top = ranked[0];
   dv.header(3, "Pick: " + top.page.file.link);
-  dv.paragraph(`Score **${top.score.toFixed(1)}** — importance ${top.page.importance}, unlocks ${top.unlocks} other topic(s), interest ${top.page.interest}.`);
+  dv.paragraph(`Score **${top.score.toFixed(1)}** — unlocks ${top.unlocks} other topic(s), interest ${top.page.interest}.`);
 } else {
   dv.paragraph("No new topics are ready — either every unlocked topic has been opened already (see Review below), or a prerequisite has not been reviewed yet.");
 }
 
 dv.header(4, "New topics (ready now)");
 dv.table(
-  ["Topic", "Confidence", "Importance", "Unlocks", "Interest", "Score"],
-  ranked.array().map(c => [c.page.file.link, `${c.page.confidence ?? 0}/5`, c.page.importance, c.unlocks, c.page.interest, c.score.toFixed(1)])
+  ["Topic", "Confidence", "Unlocks", "Interest", "Score"],
+  ranked.array().map(c => [c.page.file.link, `${c.page.confidence ?? 0}/5`, c.unlocks, c.page.interest, c.score.toFixed(1)])
 );
 
 const notReady = frontier.where(p => !isReady(p) && !p.last_reviewed);
@@ -107,7 +106,7 @@ if (review.length) {
 
 ## How this works
 - **A prerequisite is met once you have reviewed it**, not once you have mastered it. Having read the groundwork is what earns you the right to read on; how well it stuck is what the review list is for. **Confidence** (0-5) still records that, and reaching `confidence_threshold` in [[_config]] is what flips a topic to `status: known`.
-- **New topics (ready now)** — topics you have never opened, whose prerequisites are met, ranked by `score = importance * weight_importance + unlocks * weight_unlocks + interest * weight_interest`. Leverage (unlocks) is weighted highest by default.
+- **New topics (ready now)** — topics you have never opened, whose prerequisites are met, ranked by `score = unlocks * weight_unlocks + interest * weight_interest`. Leverage (unlocks) is weighted highest by default.
 - **Locked** — new topics still waiting on a prerequisite to reach the confidence threshold.
 - **Review** — every topic you have opened at least once, whatever its confidence, ordered by interest first, then lowest confidence, then longest since last reviewed.
 

@@ -14,7 +14,7 @@ import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectCandidates, pickQuestions, buildQuestions, QUIZ_LENGTH } from '../quiz/build.js'
-import { applyQuizResult } from '../quiz/score.js'
+import { adjustConfidence } from '../vault/confidence.js'
 
 export const quizRouter = Router()
 quizRouter.use(requireAuth)
@@ -179,7 +179,7 @@ quizRouter.post('/answer', asyncHandler(async (req, res) => {
     .where(eq(quizzes.id, row.id))
 
   const vaultId = await getOrCreatePersonalVaultId(userId)
-  const confidence = await applyQuizResult(vaultId, q.notePath, correct ? 1 : -1)
+  const confidence = await adjustConfidence(vaultId, q.notePath, correct ? 1 : -1)
 
   res.json({ correct, answer: q.answer, score, completed, confidence })
 }))

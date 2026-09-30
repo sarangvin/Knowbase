@@ -3,7 +3,6 @@ space: Economics
 status: frontier
 prerequisites:
   - "[[Elasticity]]"
-importance: 3
 interest: 3
 confidence: 0
 last_reviewed:

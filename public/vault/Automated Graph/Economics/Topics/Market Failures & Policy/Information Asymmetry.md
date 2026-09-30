@@ -4,7 +4,6 @@ status: known
 prerequisites:
   - "[[Market Structures]]"
   - "[[Externalities]]"
-importance: 4
 interest: 5
 confidence: 3
 last_reviewed: 2026-06-21

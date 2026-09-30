@@ -337,6 +337,14 @@ export function FlashcardsView() {
               {scheduled[at] && !bookmarked && ` · back in ${scheduled[at].intervalDays} days`}
             </span>
           )}
+          {/* Said here because it happened here: the note's confidence moved
+              on another screen, and a number that changes out of sight reads
+              as the app deciding things behind your back. */}
+          {scheduled[at]?.confidence && (
+            <span className="fc-moved">
+              Confidence {scheduled[at].confidence!.from} → {scheduled[at].confidence!.to}
+            </span>
+          )}
           {bookmarked && <span className="fc-bookmarked-note">Back tomorrow</span>}
           {/* The note is the point: a term you could not place should be one
               tap from the thing that explains it. */}

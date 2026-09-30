@@ -2,7 +2,6 @@
 space: 
 status: frontier
 prerequisites: []
-importance: 
 interest: 
 confidence: 0
 last_reviewed:

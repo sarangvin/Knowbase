@@ -43,12 +43,10 @@ const TERMS_PER_NOTE = 4
 //
 // Confidence dominates, and it is the *gap* to mastery that counts, not the
 // score itself: flashcards are for the material that has not stuck, and a
-// note at 5/5 has nothing left to drill. Importance and interest break the
-// ties — what matters to the subject, and what the reader said they wanted
-// more of. The same three dials the review list sorts by, weighted for a
-// different question.
+// note at 5/5 has nothing left to drill. Interest breaks the ties — what the
+// reader swiped right on. The same two dials the review list sorts by,
+// weighted for a different question.
 const W_CONFIDENCE_GAP = 2
-const W_IMPORTANCE = 1
 const W_INTEREST = 0.5
 const MAX_CONFIDENCE = 5
 
@@ -127,16 +125,13 @@ export async function collectSources(vaultId: string): Promise<NoteSource[]> {
     if (context.length < 200) continue
 
     const confidence = frontmatterNumber(r.content, 'confidence', 0)
-    const importance = frontmatterNumber(r.content, 'importance', 3)
     const interest = frontmatterNumber(r.content, 'interest', 3)
     out.push({
       notePath: r.path,
       noteTitle: titleOf(r.path),
       context,
       weight:
-        (MAX_CONFIDENCE - confidence) * W_CONFIDENCE_GAP +
-        importance * W_IMPORTANCE +
-        interest * W_INTEREST,
+        (MAX_CONFIDENCE - confidence) * W_CONFIDENCE_GAP + interest * W_INTEREST,
     })
   }
   return out

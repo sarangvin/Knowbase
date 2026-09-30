@@ -4,7 +4,6 @@ status: frontier
 prerequisites:
   - "[[Market Structures]]"
   - "[[Consumer & Producer Surplus]]"
-importance: 4
 interest: 4
 confidence: 0
 last_reviewed:

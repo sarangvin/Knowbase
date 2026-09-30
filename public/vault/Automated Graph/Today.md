@@ -24,9 +24,8 @@ const reviews = [];
 for (const [space, pages] of Object.entries(spaces)) {
   const config = dv.page(`Automated Graph/${space}/_config`) ?? {};
   const CONF_THRESHOLD = config.confidence_threshold ?? 3;
-  const W_IMPORTANCE = config.weight_importance ?? 1;
   const W_UNLOCKS = config.weight_unlocks ?? 2;
-  const W_INTEREST = config.weight_interest ?? 0.5;
+  const W_INTEREST = config.weight_interest ?? 1;
   const REVIEW_DAYS = config.review_interval_days ?? 30;
 
   const pageByPath = new Map(pages.map(p => [p.file.path, p]));
@@ -41,7 +40,7 @@ for (const [space, pages] of Object.entries(spaces)) {
     .filter(isReady)
     .map(p => {
       const unlocks = unlockCount(p);
-      const score = (p.importance ?? 0) * W_IMPORTANCE + unlocks * W_UNLOCKS + (p.interest ?? 0) * W_INTEREST;
+      const score = unlocks * W_UNLOCKS + (p.interest ?? 0) * W_INTEREST;
       return { page: p, score };
     })
     .sort((a, b) => b.score - a.score);

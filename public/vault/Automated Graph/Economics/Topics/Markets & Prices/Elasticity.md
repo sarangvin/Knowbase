@@ -3,7 +3,6 @@ space: Economics
 status: known
 prerequisites:
   - "[[Supply and Demand]]"
-importance: 5
 interest: 5
 confidence: 5
 last_reviewed: 2026-06-13

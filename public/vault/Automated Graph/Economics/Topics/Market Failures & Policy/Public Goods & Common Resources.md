@@ -3,7 +3,6 @@ space: Economics
 status: frontier
 prerequisites:
   - "[[Externalities]]"
-importance: 4
 interest: 4
 confidence: 0
 last_reviewed:

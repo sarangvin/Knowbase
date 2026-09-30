@@ -193,7 +193,6 @@ export interface AdminCompletionRow {
   title: string | null
   path: string | null
   confidence: string | null
-  importance: string | null
   interest: string | null
 }
 

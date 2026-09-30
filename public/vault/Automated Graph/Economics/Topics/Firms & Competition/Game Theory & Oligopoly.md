@@ -3,7 +3,6 @@ space: Economics
 status: known
 prerequisites:
   - "[[Market Structures]]"
-importance: 4
 interest: 5
 confidence: 4
 last_reviewed: 2026-07-01

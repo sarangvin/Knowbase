@@ -7,7 +7,6 @@ const topicTemplate = (title: string) => `---
 space:
 status: frontier
 prerequisites: []
-importance: 3
 interest: 3
 confidence: 0
 last_reviewed:

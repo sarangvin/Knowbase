@@ -19,20 +19,30 @@
 //
 // **Both are this one component.** The sheet is portalled into the
 // scroller rather than mounted separately, so there is a single `asking`
-// flag, a single dialog and a single submit. Two components each holding
+// flag, a single swipe card and a single submit.
+//
+// Either way in, finishing is the same two writes:
+//   - confidence +1, because a review is one of the four things that earn it
+//     (see backend/src/vault/confidence.ts for the other three);
+//   - interest, which is what steers which topics get written next. How it
+//     is asked depends on the device: on touch, a card you swipe away —
+//     right for more like this (5), left for not for me (1); on a desktop,
+//     the form it replaced there, one row of 1-5. A thumb is built for a
+//     swipe and a mouse is not, so neither device gets the other's control. Two components each holding
 // their own copy of that state is how one control ends up reporting
 // "Review complete" while the other still offers to review — the same
 // drift this codebase has paid for elsewhere.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties, RefObject } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { setFrontmatterValue } from '../../vault/parse'
 import type { Note } from '../../vault/types'
 import { requestSpaceGrowth } from '../onboarding/onboardingApi'
-import { configOf, isReviewedToday, localDay, spaceOfPath } from '../automated-graph/engine'
+import { computeNextUp, configOf, isReviewedToday, localDay, spaceOfPath } from '../automated-graph/engine'
 import { Check, RotateCw } from '../../ui/icons'
 import { useScrollReview } from './useScrollReview'
+import { InterestSwipe, type NextCard } from './InterestSwipe'
 import { ReviewDialog, type ReviewScores } from './ReviewDialog'
 import './score.css'
 
@@ -73,15 +83,12 @@ function currentConfidence(fm: Record<string, unknown>): number {
   return Number.isFinite(n) ? Math.min(MAX_CONFIDENCE, Math.max(0, Math.round(n))) : 0
 }
 
-function scoreOf(fm: Record<string, unknown>, key: string, fallback: number): number {
-  const raw = fm[key]
-  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN
-  return Number.isFinite(n) ? Math.round(n) : fallback
-}
-
-function clamp(n: number, min: number): number {
-  return Math.min(MAX_CONFIDENCE, Math.max(min, n))
-}
+/** What a swipe writes. The ends of the scale, not a nudge: a ±1 step from
+ *  the model's opening guess would let "I want more of this" land on a
+ *  neutral 3, and the grower reads 4+ and 2- as the reader's votes. The
+ *  desktop form writes whatever 1-5 was picked. */
+const INTERESTED = 5
+const NOT_INTERESTED = 1
 
 /** Ring plus glyph in one 36-unit box, so the whole thing scales with the
  *  sheet from a single CSS width — no second size to keep in step. */
@@ -119,7 +126,7 @@ export function ReviewBar({
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Neither control writes anything by itself: both open this.
+  // Neither control writes anything by itself: both open the swipe card.
   const [asking, setAsking] = useState(false)
 
   // A ref is not enough to portal into: it holds no value on the first
@@ -132,8 +139,8 @@ export function ReviewBar({
   // control there would write frontmatter nobody asked for.
   const tracked = 'confidence' in note.frontmatter || 'last_reviewed' in note.frontmatter
   const writable = !!source?.writable && (source.isPathWritable?.(note.path) ?? true)
-  // The starting point for the dialog, not an increment: the score is
-  // asked for now rather than assumed, so there is nothing to add one to.
+  // Reviewing earns one step. Not asked for — confidence is what you have
+  // done with a note, not how you feel about it.
   const conf = currentConfidence(note.frontmatter)
   // One review per note per day. A second pass on the same day is not a
   // second review — spacing is the whole mechanism, and letting confidence
@@ -144,6 +151,23 @@ export function ReviewBar({
   // _config so the reader and the Next Up ranking agree on what "known"
   // means rather than each holding its own idea of it.
   const space = spaceOfPath(note.path)
+
+  // The card underneath the one being swiped away: what Next Up would pick
+  // once this note is done. The same ranking, not a guess at it, so the card
+  // that is revealed is the note you are then taken to — the stack is a
+  // literal picture of where finishing sends you. This note is excluded
+  // because it is about to stop being new; anything already reviewed today
+  // is excluded because the reader will refuse to review it again.
+  // Touch only — the desktop form has no deck to reveal — and only while it
+  // is open, because it walks the whole space.
+  const next = useMemo<NextCard | null>(() => {
+    if (!asking || !touch || !index || !space) return null
+    const r = computeNextUp(index, space)
+    const fresh = r.ranked.find((t) => t.path !== note.path)
+    if (fresh) return { path: fresh.path, title: fresh.title, kind: 'new', pending: fresh.pending }
+    const again = r.review.find((t) => t.path !== note.path && t.lastReviewed !== localDay())
+    return again ? { path: again.path, title: again.title, kind: 'review', pending: again.pending } : null
+  }, [asking, touch, index, space, note.path])
   const threshold = index && space ? configOf(index, space).confidence_threshold : 3
 
   // Held in a ref so the gesture's onComplete — attached once, outside
@@ -158,44 +182,47 @@ export function ReviewBar({
     setAsking(true)
   }
 
-  const submit = async (scores: ReviewScores) => {
+  const submit = async (interest: number) => {
     if (busy) return
     setBusy(true)
     setError(null)
     try {
       // Re-read rather than trusting the rendered copy: a background draft
-      // may have rewritten the body since this note was displayed.
+      // may have rewritten the body since this note was displayed, and a
+      // quiz answer or a flashcard may have moved its confidence.
       const current = getNote(note.path)
       if (!current) throw new Error('note not found')
+      const confidence = Math.min(MAX_CONFIDENCE, currentConfidence(current.frontmatter) + 1)
       let raw = setFrontmatterValue(current.raw, 'last_reviewed', localDay())
-      // The user's own numbers, not a guess. Every one of these is written,
-      // including ones they left where they were — a slider left alone is
-      // still an answer, and writing it keeps the note's three scores a
-      // single consistent snapshot rather than a mix of eras.
-      raw = setFrontmatterValue(raw, 'confidence', scores.confidence)
-      raw = setFrontmatterValue(raw, 'importance', scores.importance)
-      raw = setFrontmatterValue(raw, 'interest', scores.interest)
-      // Status follows confidence in both directions. It only ever moved up
-      // while the gesture could only add one; now that the number is typed
-      // in, it can come down, and a note stuck on "known" at 1/5 would lie
-      // to anyone reading the vault in Obsidian.
-      const status = note.frontmatter.status
-      if (scores.confidence >= threshold && status === 'frontier') {
+      raw = setFrontmatterValue(raw, 'confidence', confidence)
+      raw = setFrontmatterValue(raw, 'interest', interest)
+      // Status follows confidence. A review only ever adds, so this can only
+      // flip a note up to "known" — but written as both directions anyway,
+      // because a wrong quiz answer can have taken it down since the note
+      // was last saved, and the two paths should agree on the rule.
+      const status = current.frontmatter.status
+      if (confidence >= threshold && status === 'frontier') {
         raw = setFrontmatterValue(raw, 'status', 'known')
-      } else if (scores.confidence < threshold && status === 'known') {
+      } else if (confidence < threshold && status === 'known') {
         raw = setFrontmatterValue(raw, 'status', 'frontier')
       }
       if (raw !== current.raw) await saveNote(note.path, raw)
       // Finishing a topic is exactly when the tree should grow: the server
-      // tops it back up to three unstudied topics, using what they now know
-      // as the prerequisites for what comes next. Not awaited, and its
-      // failure cannot surface here — the review is already saved.
+      // tops it back up, using what they now know as the prerequisites and
+      // what they just swiped as the steer. Not awaited, and its failure
+      // cannot surface here — the review is already saved.
       if (space) requestSpaceGrowth(space)
       setAsking(false)
-      // Back to where the decision about what to read next gets made. The
-      // note is finished; leaving them in the middle of it with nothing to
-      // do would make them find their own way out.
-      if (space) openNote(`Automated Graph/${space}/Next Up.md`)
+      // Onto the card they just uncovered. Next Up's own top pick, so this
+      // is the page's decision, just without making them go and read it;
+      // with nothing left to uncover, back to Next Up, where the empty state
+      // explains why. Leaving them in the finished note with nothing to do
+      // would make them find their own way out.
+      // Only after a swipe: there the next card was on screen, so landing on
+      // it is keeping a promise. The desktop form showed no such card, and
+      // goes back to Next Up as it always did.
+      if (touch && next) openNote(next.path)
+      else if (space) openNote(`Automated Graph/${space}/Next Up.md`)
       else setDone(true)
       holdRef.current = setTimeout(() => setDone(false), (touch ? OPEN_MS : 0) + HOLD_MS)
     } catch (e) {
@@ -232,15 +259,13 @@ export function ReviewBar({
   // without this both controls would vanish mid-"Review complete".
   if (reviewedToday && !done) return null
 
-  const detail = 'Asks how it went, then records your scores and today’s date.'
+  const detail =
+    conf >= MAX_CONFIDENCE
+      ? 'Records today’s review, then asks how much you want more like this.'
+      : 'Adds one to confidence, then asks how much you want more like this.'
 
-  // Pre-filled with what the note already says, so leaving a row alone
-  // keeps its value rather than resetting it to some default.
-  const initial: ReviewScores = {
-    confidence: conf,
-    importance: clamp(scoreOf(note.frontmatter, 'importance', 3), 1),
-    interest: clamp(scoreOf(note.frontmatter, 'interest', 3), 1),
-  }
+  const rawInterest = Number(note.frontmatter.interest)
+  const initialInterest = Number.isFinite(rawInterest) ? Math.min(5, Math.max(1, Math.round(rawInterest))) : 3
 
   // ── The sheet, at the foot of the scroller, touch only ───────────────────
   // One number drives height, ring and glyph size. Held at full while the
@@ -302,13 +327,29 @@ export function ReviewBar({
         {(!asking && error) || (writable ? detail : 'This vault is read-only.')}
       </span>
       {touch && scroller && createPortal(sheet, scroller)}
-      {asking && (
+      {asking && !touch && (
         <ReviewDialog
           title={note.title}
-          initial={initial}
+          // Pre-filled with what the note already says, so submitting without
+          // touching the row keeps its value rather than resetting it.
+          initial={{ interest: initialInterest }}
           busy={busy}
           error={error}
-          onSubmit={(sc) => void submit(sc)}
+          onSubmit={(sc: ReviewScores) => void submit(sc.interest)}
+          onCancel={() => {
+            if (busy) return
+            setAsking(false)
+            setError(null)
+          }}
+        />
+      )}
+      {asking && touch && (
+        <InterestSwipe
+          title={note.title}
+          next={next}
+          busy={busy}
+          error={error}
+          onChoose={(interested) => void submit(interested ? INTERESTED : NOT_INTERESTED)}
           onCancel={() => {
             if (busy) return
             setAsking(false)

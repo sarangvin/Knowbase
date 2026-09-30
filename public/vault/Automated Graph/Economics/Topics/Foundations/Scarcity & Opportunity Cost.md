@@ -2,7 +2,6 @@
 space: Economics
 status: known
 prerequisites: []
-importance: 5
 interest: 3
 confidence: 4
 last_reviewed: 2026-06-11

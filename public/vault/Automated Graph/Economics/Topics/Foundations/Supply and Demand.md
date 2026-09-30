@@ -3,7 +3,6 @@ space: Economics
 status: known
 prerequisites:
   - "[[Scarcity & Opportunity Cost]]"
-importance: 5
 interest: 4
 confidence: 5
 last_reviewed: 2026-06-11

@@ -64,6 +64,10 @@ export interface TurnResult {
   nextDue: string
   intervalDays: number
   reps: number
+  /** The source note's confidence, before and after — completing a card
+   *  earns its note +1. Null when it did not move (already 5/5, or a card
+   *  turned before). Same shape the quiz reports. */
+  confidence: { notePath: string; from: number; to: number } | null
 }
 
 export async function turnCard(index: number): Promise<TurnResult> {

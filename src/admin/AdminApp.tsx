@@ -303,7 +303,6 @@ function CompletionsPanel({
               <th>Collection</th>
               <th>Note</th>
               <th>Conf.</th>
-              <th>Imp.</th>
               <th>Int.</th>
             </tr>
           </thead>
@@ -319,7 +318,6 @@ function CompletionsPanel({
                   <td>{r.space ?? '—'}</td>
                   <td title={r.path ?? undefined}>{r.title ?? '—'}</td>
                   <td>{r.confidence ? `${r.confidence}/5` : '—'}</td>
-                  <td>{r.importance ?? '—'}</td>
                   <td>{r.interest ?? '—'}</td>
                 </tr>
               )

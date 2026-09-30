@@ -17,7 +17,9 @@ export interface Subtopic {
   summary: string
   /** Titles of OTHER subtopics in the same batch — must resolve in-batch only. */
   prerequisites: string[]
-  importance: number
+  /** 1-5. The model's guess until the reader swipes on the note, then the
+   *  reader's own answer (5 right, 1 left). The one preference that ranks
+   *  topics and steers what gets generated next. */
   interest: number
 }
 
@@ -65,7 +67,7 @@ export function disambiguateSpace(name: string, existingSpaces: string[]): strin
 }
 
 /** DFS cycle detection over the small (<=5 node) title graph. On a cycle,
- * clears prerequisites on the lowest-importance node in it and re-checks —
+ * clears prerequisites on the lowest-interest node in it and re-checks —
  * bounded by subtopics.length iterations, can't loop forever. */
 export function breakCycles(subtopics: Subtopic[]): Subtopic[] {
   const result = subtopics.map((s) => ({ ...s, prerequisites: [...s.prerequisites] }))
@@ -101,7 +103,10 @@ export function breakCycles(subtopics: Subtopic[]): Subtopic[] {
   for (let i = 0; i < result.length; i++) {
     const cycle = findCycle()
     if (!cycle || cycle.length === 0) break
-    const weakest = cycle.reduce((a, b) => (a.importance <= b.importance ? a : b))
+    // Cut the loop at the topic least likely to be missed — the one the
+    // model thought least engaging. With importance gone, interest is the
+    // only per-topic judgement left to choose by.
+    const weakest = cycle.reduce((a, b) => (a.interest <= b.interest ? a : b))
     weakest.prerequisites = []
   }
   return result
@@ -110,7 +115,7 @@ export function breakCycles(subtopics: Subtopic[]): Subtopic[] {
 /** Backstop: cycle-breaking alone should already guarantee this, but force it if not. */
 export function ensureFoundational(subtopics: Subtopic[]): Subtopic[] {
   if (subtopics.some((s) => s.prerequisites.length === 0)) return subtopics
-  const weakest = subtopics.reduce((a, b) => (a.importance <= b.importance ? a : b))
+  const weakest = subtopics.reduce((a, b) => (a.interest <= b.interest ? a : b))
   return subtopics.map((s) => (s === weakest ? { ...s, prerequisites: [] } : s))
 }
 
@@ -213,7 +218,6 @@ export function buildTopicNote(
 space:
 status: frontier
 ${hiddenLine}${pendingLine}${prereqLine}
-importance: ${s.importance}
 interest: ${s.interest}
 confidence: 0
 last_reviewed:
@@ -258,9 +262,8 @@ export function buildNextUpNote(space: string): string {
     `const TOPICS_FOLDER = '"Automated Graph/${space}/Topics"';`,
     '',
     `const config = dv.page("Automated Graph/${space}/_config") ?? {};`,
-    'const W_IMPORTANCE = config.weight_importance ?? 1;',
     'const W_UNLOCKS = config.weight_unlocks ?? 2;',
-    'const W_INTEREST = config.weight_interest ?? 0.5;',
+    'const W_INTEREST = config.weight_interest ?? 1;',
     '',
     'const pages = dv.pages(TOPICS_FOLDER);',
     'const pageByPath = new Map(pages.array().map(p => [p.file.path, p]));',
@@ -295,7 +298,7 @@ export function buildNextUpNote(space: string): string {
     '  .where(p => isReady(p) && !p.last_reviewed)',
     '  .map(p => {',
     '    const unlocks = unlockCount(p);',
-    '    const score = (p.importance ?? 0) * W_IMPORTANCE + unlocks * W_UNLOCKS + (p.interest ?? 0) * W_INTEREST;',
+    '    const score = unlocks * W_UNLOCKS + (p.interest ?? 0) * W_INTEREST;',
     '    return { page: p, unlocks, score };',
     '  })',
     "  .sort(c => c.score, 'desc');",
@@ -303,15 +306,15 @@ export function buildNextUpNote(space: string): string {
     'if (ranked.length) {',
     '  const top = ranked[0];',
     '  dv.header(3, "Pick: " + top.page.file.link);',
-    '  dv.paragraph(`Score **${top.score.toFixed(1)}** — importance ${top.page.importance}, unlocks ${top.unlocks} other topic(s), interest ${top.page.interest}.`);',
+    '  dv.paragraph(`Score **${top.score.toFixed(1)}** — unlocks ${top.unlocks} other topic(s), interest ${top.page.interest}.`);',
     '} else {',
     '  dv.paragraph("No new topics are ready — either every unlocked topic has been opened already (see Review below), or a prerequisite has not been reviewed yet.");',
     '}',
     '',
     'dv.header(4, "New topics (ready now)");',
     'dv.table(',
-    '  ["Topic", "Confidence", "Importance", "Unlocks", "Interest", "Score"],',
-    '  ranked.array().map(c => [c.page.file.link, `${c.page.confidence ?? 0}/5`, c.page.importance, c.unlocks, c.page.interest, c.score.toFixed(1)])',
+    '  ["Topic", "Confidence", "Unlocks", "Interest", "Score"],',
+    '  ranked.array().map(c => [c.page.file.link, `${c.page.confidence ?? 0}/5`, c.unlocks, c.page.interest, c.score.toFixed(1)])',
     ');',
     '',
     'const notReady = frontier.where(p => !isReady(p) && !p.last_reviewed);',
@@ -361,13 +364,15 @@ export function buildNextUpNote(space: string): string {
     '',
     '## How this works',
     '- **A prerequisite is met once you have reviewed it**, not once you have mastered it. Having read the groundwork is what earns you the right to read on; how well it stuck is what the review list is for. **Confidence** (0-5) still records that, and reaching `confidence_threshold` in [[_config]] is what flips a topic to `status: known`.',
-    '- **New topics (ready now)** — topics you have never opened, whose prerequisites are met, ranked by `score = importance * weight_importance + unlocks * weight_unlocks + interest * weight_interest`. Leverage (unlocks) is weighted highest by default.',
+    '- **Confidence is earned, one step at a time**: +1 each time you review a topic, +1 for each of its flashcards you complete, and +1 or -1 for each of its quiz questions you get right or wrong.',
+    '- **Interest is yours** — finishing a topic asks one thing: swipe right if you want more like it, left if not. That sets `interest` to 5 or 1, and it is what steers which topics get written for you next.',
+    '- **New topics (ready now)** — topics you have never opened, whose prerequisites are met, ranked by `score = unlocks * weight_unlocks + interest * weight_interest`. Leverage (unlocks) is weighted highest by default.',
     '- **Locked** — new topics still waiting on a prerequisite to reach the confidence threshold.',
     "- **Review** — every topic you have opened at least once, whatever its confidence, ordered by interest first, then lowest confidence, then longest since last reviewed.",
     '',
     'Each topic appears in exactly one of the three, and the split is on one question: does it have a `last_reviewed` date? A topic can be reviewed once a day; the pick skips anything already done today.',
     '',
-    'To progress a topic: study it, update its `confidence` and `last_reviewed` in frontmatter, and the rankings recalculate automatically.',
+    'To progress a topic: study it and mark it reviewed; `confidence`, `interest` and `last_reviewed` are updated for you and the rankings recalculate automatically.',
     '',
     'Thresholds and weights are tunable in [[_config]]. Exported to Obsidian, the block above needs the Dataview plugin with JavaScript queries enabled; here it is rendered natively. Both implement the same rules.',
     '',

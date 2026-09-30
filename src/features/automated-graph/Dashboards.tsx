@@ -103,8 +103,7 @@ export function NextUp({ space }: { space: string }) {
               </>
             ) : (
               <>
-                Score <strong>{r.pick.score.toFixed(1)}</strong> · importance {r.pick.importance} ·
-                unlocks {r.pick.unlocks} · interest {r.pick.interest} · confidence{' '}
+                Score <strong>{r.pick.score.toFixed(1)}</strong> · unlocks {r.pick.unlocks} · interest {r.pick.interest} · confidence{' '}
                 {r.pick.confidence}/5
               </>
             )}
@@ -121,14 +120,13 @@ export function NextUp({ space }: { space: string }) {
       {r.ranked.length ? (
         <table className="dv-table">
           <thead>
-            <tr><th>Topic</th><th>Conf.</th><th>Imp.</th><th>Unlocks</th><th>Int.</th><th>Score</th></tr>
+            <tr><th>Topic</th><th>Conf.</th><th>Unlocks</th><th>Int.</th><th>Score</th></tr>
           </thead>
           <tbody>
             {r.ranked.map((c) => (
               <tr key={c.path}>
                 <td><NoteLink path={c.path} label={c.title} pending={c.pending} isNew={c.isNew} /></td>
                 <td>{c.confidence}/5</td>
-                <td>{c.importance}</td>
                 <td>{c.unlocks}</td>
                 <td>{c.interest}</td>
                 <td><strong>{c.score.toFixed(1)}</strong></td>

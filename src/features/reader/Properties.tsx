@@ -5,7 +5,7 @@ import './properties.css'
 // The three frontmatter fields that feed the Next Up ranking, and the only
 // ones the reader is expected to change from day to day. Everything else in
 // frontmatter stays read-only here — it is structure, not a dial.
-const SCORE_KEYS = new Set(['importance', 'interest', 'confidence'])
+const SCORE_KEYS = new Set(['interest', 'confidence'])
 
 /** Frontmatter may carry these as numbers, numeric strings, or nothing at
  *  all for a note that declares the key but leaves it blank. */

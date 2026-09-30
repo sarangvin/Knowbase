@@ -1,4 +1,4 @@
-// importance / interest / confidence as draggable 0-5 sliders.
+// interest / confidence as draggable 0-5 sliders.
 //
 // These three are the inputs to the Next Up ranking, so they are the numbers
 // a reader most often wants to change — and changing them used to mean

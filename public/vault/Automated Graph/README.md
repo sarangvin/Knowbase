@@ -12,9 +12,8 @@ space: Economics
 status: known | frontier   # known = no longer "next up" material; frontier = candidate
 prerequisites:
   - "[[Supply and Demand]]"
-importance: 5    # 1-5, how foundational/valuable this is
-interest: 5      # 1-5, your current curiosity
-confidence: 0    # 0-5, how well YOU know this — drives readiness + review scheduling
+interest: 5      # 1-5; set to 5 or 1 when you swipe on finishing a topic
+confidence: 0    # 0-5, earned: +1 per review, +1 per flashcard, ±1 per quiz answer
 last_reviewed: 2026-06-11   # date you last studied/reviewed this; empty if never
 ---
 ```
@@ -34,12 +33,11 @@ last_reviewed: 2026-06-11   # date you last studied/reviewed this; empty if neve
 Each space has its own `_config.md` with the scoring weights:
 ```yaml
 confidence_threshold: 3
-weight_importance: 1
 weight_unlocks: 2
-weight_interest: 0.5
+weight_interest: 1
 review_interval_days: 30
 ```
-`score = importance * weight_importance + unlocks * weight_unlocks + interest * weight_interest`.
+`score = unlocks * weight_unlocks + interest * weight_interest`.
 Tune these per space without touching any dataview code.
 
 ## Dashboards
@@ -54,12 +52,12 @@ installed in this vault under `.obsidian/plugins/dataview/`). If Obsidian was op
 it was installed, reload the vault (Cmd+R) to pick it up.
 
 A no-install partial alternative: `<Space>/Next Up (Bases-only).base` filters/sorts by
-`status`/`importance`/`interest` using Obsidian's built-in **Bases** — it can't compute
+`status`/`interest` using Obsidian's built-in **Bases** — it can't compute
 "unlocks" or confidence-based readiness, so treat it as a fallback only.
 
 ## Workflow
 1. Add new topics with `status: frontier`, `confidence: 0`, and fill in
-   `prerequisites`/`importance`/`interest`.
+   `prerequisites`/`interest`.
 2. Study the current "Next Up" pick. Jot your own understanding in `## My Notes`.
 3. Run the **`sync-knowledge-notes`** skill — it refines `## AI Notes` from what you
    wrote, spins off new topic notes for concepts you mentioned, and bumps
@@ -68,7 +66,7 @@ A no-install partial alternative: `<Space>/Next Up (Bases-only).base` filters/so
 
 ## Adding a new space
 Use the **`new-knowledge-space`** skill — it researches the domain, generates a starter
-8-15 topic graph (prerequisites, importance/interest/confidence), `_config.md`, and
+8-15 topic graph (prerequisites, interest/confidence), `_config.md`, and
 `Next Up.md`, calibrated to how much you already know.
 
 ## Maintenance

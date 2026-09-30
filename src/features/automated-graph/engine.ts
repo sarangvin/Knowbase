@@ -7,7 +7,6 @@ import { spaceOfPath } from '../../vault/collections'
 
 export interface SpaceConfig {
   confidence_threshold: number
-  weight_importance: number
   weight_unlocks: number
   weight_interest: number
   review_interval_days: number
@@ -15,9 +14,12 @@ export interface SpaceConfig {
 
 const DEFAULT_CONFIG: SpaceConfig = {
   confidence_threshold: 3,
-  weight_importance: 1,
   weight_unlocks: 2,
-  weight_interest: 0.5,
+  // 1, not the 0.5 it used to be: interest took importance's weight when
+  // importance was dropped, so the score still has one real preference in it
+  // rather than being unlocks with a rounding error. Must match
+  // DEFAULT_WEIGHTS in backend/src/vault/hidden.ts.
+  weight_interest: 1,
   review_interval_days: 30,
 }
 
@@ -52,7 +54,6 @@ export function configOf(index: VaultIndex, space: string): SpaceConfig {
   const cfg = index.notes.get(`Automated Graph/${space}/_config.md`)?.frontmatter ?? {}
   return {
     confidence_threshold: num(cfg.confidence_threshold, DEFAULT_CONFIG.confidence_threshold),
-    weight_importance: num(cfg.weight_importance, DEFAULT_CONFIG.weight_importance),
     weight_unlocks: num(cfg.weight_unlocks, DEFAULT_CONFIG.weight_unlocks),
     weight_interest: num(cfg.weight_interest, DEFAULT_CONFIG.weight_interest),
     review_interval_days: num(cfg.review_interval_days, DEFAULT_CONFIG.review_interval_days),
@@ -144,7 +145,6 @@ export interface RankedTopic {
   /** Arrived from the buffer when the last note was finished. */
   isNew: boolean
   confidence: number
-  importance: number
   interest: number
   unlocks: number
   score: number
@@ -199,14 +199,13 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
   // Frontier is new material only — topics with no last_reviewed at all.
   // Anything you have touched has a history, and a history is what the
   // review list is ordered by; mixing the two put a topic you had taken to
-  // 4/5 at the top of "what to learn next" on importance alone, where it
+  // 4/5 at the top of "what to learn next" on its score alone, where it
   // outranked everything indefinitely.
   const unopened = frontier.filter(isReady).filter((p) => !lastReviewedDay(p.frontmatter))
 
   const ranked: RankedTopic[] = unopened
     .map((p) => {
       const unlocks = unlockCount(p)
-      const importance = num(p.frontmatter.importance)
       const interest = num(p.frontmatter.interest)
       return {
         path: p.path,
@@ -214,13 +213,9 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
         pending: isPending(p.frontmatter),
         isNew: isNewlyRevealed(p.frontmatter),
         confidence: num(p.frontmatter.confidence),
-        importance,
         interest,
         unlocks,
-        score:
-          importance * cfg.weight_importance +
-          unlocks * cfg.weight_unlocks +
-          interest * cfg.weight_interest,
+        score: unlocks * cfg.weight_unlocks + interest * cfg.weight_interest,
       }
     })
     // A written note before an unwritten one, whatever the scores. Sending
@@ -286,7 +281,6 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
           // not new whatever its frontmatter says.
           isNew: false,
           confidence: fallback.confidence,
-          importance: num(index.notes.get(fallback.path)?.frontmatter.importance),
           interest: fallback.interest,
           unlocks: 0,
           score: 0,

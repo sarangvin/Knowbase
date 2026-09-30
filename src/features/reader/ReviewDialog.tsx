@@ -1,36 +1,35 @@
-// What finishing a note actually records.
+// What finishing a note asks on a desktop: how much do you want more of this?
 //
-// The control used to write the scores for you: +1 confidence, and nothing
-// at all for importance or interest. That was a guess standing in for a
-// judgement — the moment you have just finished reading something is the
-// only moment you can say how well it landed, how much it matters and
-// whether you want more of it, and it was being thrown away.
+// Desktop only. On a phone the same question is a card you swipe away (see
+// InterestSwipe.tsx) — a thumb is built for that and a mouse is not, and a
+// row of numbers is the shape a pointer is good at. ReviewBar picks between
+// them.
 //
-// So the Mark reviewed button opens this. Three questions, five taps,
-// submit.
+// This used to be three rows — confidence, importance and interest. Two
+// went: confidence is earned now rather than declared (+1 for the review
+// itself, and see backend/src/vault/confidence.ts for the rest), and
+// importance was dropped from the app. Interest is the one answer only the
+// reader has, and it steers what gets generated next.
 //
-// Taps rather than sliders: a slider is a drag with a target, on a control
-// six pixels tall, which is the worst possible shape for a thumb. A row of
-// numbers is five separate targets that each only need to be hit once.
+// A 1-5 here and a swipe on a phone land on the same scale: the swipe
+// writes the ends (5 or 1), and the grower reads 4+ as "more like this" and
+// 2- as "not for me", with 3 counting as no opinion.
+//
+// Taps rather than a slider: a slider is a drag with a target on a control
+// six pixels tall. A row of numbers is five targets that each only need
+// hitting once.
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, X } from '../../ui/icons'
 import './reviewDialog.css'
 
 export interface ReviewScores {
-  confidence: number
-  importance: number
   interest: number
 }
 
-/** Confidence can be zero — "read it, none of it stuck" is a real answer and
- *  the one the review list most needs to hear. Importance and interest start
- *  at one: a topic in your vault that matters none at all should be deleted,
- *  not scored. */
+/** Starts at one: a topic you want none of at all is a 1, not a 0. */
 const ROWS: { key: keyof ReviewScores; label: string; hint: string; min: number }[] = [
-  { key: 'confidence', label: 'Confidence', hint: 'How well do you know this now?', min: 0 },
-  { key: 'importance', label: 'Importance', hint: 'How much does it matter to the subject?', min: 1 },
-  { key: 'interest', label: 'Interest', hint: 'How much do you want more of it?', min: 1 },
+  { key: 'interest', label: 'Interest', hint: 'How much do you want more like this?', min: 1 },
 ]
 const MAX = 5
 
@@ -81,7 +80,7 @@ export function ReviewDialog({
       >
         <div className="rd-head">
           <div>
-            <div className="rd-eyebrow">Finished</div>
+            <div className="rd-eyebrow">Finished · confidence +1</div>
             <h2 className="rd-title" id="rd-title">{title}</h2>
           </div>
           <button className="rd-close" onClick={onCancel} disabled={busy} aria-label="Cancel">

@@ -302,3 +302,14 @@
   font-size: 11.5px;
   color: var(--accent);
 }
+
+/* A completed card's +1 to its note — the quiz's pill, in the up colour,
+   since a card can only ever raise confidence. */
+.fc-moved {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--text-success);
+  border: 1px solid color-mix(in srgb, var(--text-success) 45%, transparent);
+}

@@ -60,10 +60,14 @@ export function isReviewed(content: string): boolean {
  *  `src/features/automated-graph/engine.ts`. The two are deliberately the
  *  same numbers and must be changed together — the workspaces do not share a
  *  build, which is also why `frontmatter.ts` exists twice. */
-const DEFAULT_WEIGHTS = { importance: 1, unlocks: 2, interest: 0.5 }
+const DEFAULT_WEIGHTS = { unlocks: 2, interest: 1 }
 
+/** Importance used to be a third weight. It was dropped: the model's view of
+ *  how "core" a topic is duplicated what unlocks already measures, and the
+ *  reader never had a real way to disagree with it. Interest is the one
+ *  preference left, so it took importance's default weight of 1. A
+ *  `weight_importance` still sitting in an old `_config.md` is ignored. */
 export interface Weights {
-  importance: number
   unlocks: number
   interest: number
 }
@@ -77,7 +81,6 @@ export async function weightsOf(vaultId: string, space: string): Promise<Weights
     .limit(1)
   if (!row) return { ...DEFAULT_WEIGHTS }
   return {
-    importance: frontmatterNumber(row.content, 'weight_importance', DEFAULT_WEIGHTS.importance),
     unlocks: frontmatterNumber(row.content, 'weight_unlocks', DEFAULT_WEIGHTS.unlocks),
     interest: frontmatterNumber(row.content, 'weight_interest', DEFAULT_WEIGHTS.interest),
   }
@@ -111,7 +114,7 @@ interface TopicRow {
 /**
  * Order hidden notes the way Next Up orders visible ones.
  *
- * `score = importance * w + unlocks * w + interest * w`, written notes ahead
+ * `score = unlocks * w + interest * w`, written notes ahead
  * of unwritten ones. **This mirrors `computeNextUp` in
  * `src/features/automated-graph/engine.ts`** — the same formula, the same
  * tie-break, deliberately. It is the one rule in this file that exists twice,
@@ -140,7 +143,6 @@ export function rankForReveal(hidden: TopicRow[], all: TopicRow[], w: Weights): 
         ready,
         pending: isPending(r.content),
         score:
-          frontmatterNumber(r.content, 'importance', 3) * w.importance +
           unlocksOf(title) * w.unlocks +
           frontmatterNumber(r.content, 'interest', 3) * w.interest,
       }

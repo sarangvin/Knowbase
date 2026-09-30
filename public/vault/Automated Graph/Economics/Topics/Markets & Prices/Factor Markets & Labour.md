@@ -4,7 +4,6 @@ status: known
 prerequisites:
   - "[[Supply and Demand]]"
   - "[[Elasticity]]"
-importance: 4
 interest: 4
 confidence: 3
 last_reviewed: 2026-06-22

@@ -35,7 +35,6 @@ Rules:
       "title": string,            // short, specific subtopic name, Title Case
       "summary": string,          // 1-2 sentence plain-English description of what it covers
       "prerequisites": string[],  // titles of OTHER subtopics in this list needed first; [] if none
-      "importance": number,       // 1-5, how core this subtopic is to the overall topic
       "interest": number          // 1-5, how independently engaging this subtopic tends to be
     }
     // ... exactly 5 of these
@@ -66,7 +65,6 @@ interface RawSubtopic {
   title?: unknown
   summary?: unknown
   prerequisites?: unknown
-  importance?: unknown
   interest?: unknown
 }
 interface RawPlan {
@@ -117,7 +115,6 @@ export function parseAndValidate(raw: string): ValidatedPlan | null {
       prerequisites: Array.isArray(r.prerequisites)
         ? r.prerequisites.filter((p): p is string => typeof p === 'string')
         : [],
-      importance: clampInt(r.importance, 3, 1, 5),
       interest: clampInt(r.interest, 3, 1, 5),
     }))
     .filter((s) => s.title.length > 0)
@@ -212,7 +209,6 @@ Rules:
       "summary": string,          // 1-2 sentence plain-English description of what it covers
       "prerequisites": string[],  // titles they must know first — may reference EXISTING topics
                                   // listed in the prompt, or other new subtopics in this list
-      "importance": number,       // 1-5, how core this subtopic is to the overall subject
       "interest": number          // 1-5, how independently engaging this subtopic tends to be
     }
   ]
@@ -220,6 +216,10 @@ Rules:
 - Propose exactly the number of subtopics asked for.
 - They build on what the learner already knows: prefer prerequisites drawn from the topics
   marked as studied, so the new work is reachable rather than blocked.
+- The learner has said which studied topics they want more of and which they do not. Steer
+  toward the directions they were INTERESTED in, and away from the ones marked NOT
+  INTERESTED — do not propose topics that are close variations of those. This is the most
+  important signal you are given about what to propose.
 - Do NOT repeat or rephrase any topic already in their plan. These must be genuinely new
   ground in the same subject.
 - Every prerequisite string must exactly match either an existing topic title given to you or
@@ -227,14 +227,38 @@ Rules:
   subtopic as its own prerequisite.
 - Keep titles short (a few words) and free of colons, slashes, brackets, or quotation marks.`
 
-function buildNextUserPrompt(space: string, studied: string[], all: string[], count: number): string {
+/** What the reader told us when they finished each note: a swipe right is
+ *  "more like this", a swipe left is "not for me". Titles, not paths — the
+ *  prompt lists topics by title. */
+export interface InterestSignals {
+  interested: string[]
+  notInterested: string[]
+}
+
+function buildNextUserPrompt(
+  space: string,
+  studied: string[],
+  all: string[],
+  count: number,
+  signals: InterestSignals,
+): string {
   const unstudied = all.filter((t) => !studied.includes(t))
+  const mark = (t: string) =>
+    signals.interested.includes(t)
+      ? ' (STUDIED — INTERESTED)'
+      : signals.notInterested.includes(t)
+        ? ' (STUDIED — NOT INTERESTED)'
+        : studied.includes(t)
+          ? ' (STUDIED)'
+          : ''
   return `Subject: "${space}"
 
 Topics already in their plan:
-${all.map((t) => `- ${t}${studied.includes(t) ? ' (STUDIED)' : ''}`).join('\n')}
+${all.map((t) => `- ${t}${mark(t)}`).join('\n')}
 
 ${studied.length ? `They have studied: ${studied.join(', ')}.` : 'They have not finished any topic yet.'}
+${signals.interested.length ? `They want MORE like: ${signals.interested.join(', ')}.` : ''}
+${signals.notInterested.length ? `They are NOT interested in: ${signals.notInterested.join(', ')}.` : ''}
 ${unstudied.length ? `Still unstudied: ${unstudied.join(', ')}.` : ''}
 
 Propose exactly ${count} new subtopic${count === 1 ? '' : 's'} that take${count === 1 ? 's' : ''} them further into "${space}", building on what they have studied.`
@@ -274,7 +298,6 @@ export function parseNextTopics(raw: string, existingTitles: string[], want: num
       prerequisites: Array.isArray(r.prerequisites)
         ? r.prerequisites.filter((p): p is string => typeof p === 'string')
         : [],
-      importance: clampInt(r.importance, 3, 1, 5),
       interest: clampInt(r.interest, 3, 1, 5),
     })
     if (out.length === want) break
@@ -299,10 +322,16 @@ export async function generateNextTopics(
   all: string[],
   count: number,
   userId?: string,
+  signals: InterestSignals = { interested: [], notInterested: [] },
 ): Promise<Subtopic[] | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const raw = await callModel(NEXT_SYSTEM_PROMPT, buildNextUserPrompt(space, studied, all, count), userId, 'grow-plan')
+      const raw = await callModel(
+        NEXT_SYSTEM_PROMPT,
+        buildNextUserPrompt(space, studied, all, count, signals),
+        userId,
+        'grow-plan',
+      )
       const parsed = parseNextTopics(raw, all, count)
       if (parsed) return parsed
       console.warn('[grow] response failed validation:', raw.slice(0, 400))

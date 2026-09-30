@@ -166,7 +166,6 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
         space: spaceOf(path),
         title: (path.split('/').pop() ?? path).replace(/\.md$/i, ''),
         confidence: frontmatterValue(content, 'confidence'),
-        importance: frontmatterValue(content, 'importance'),
         interest: frontmatterValue(content, 'interest'),
         day: now,
       },

@@ -15,7 +15,8 @@
 import { and, eq, like } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
-import { generateNextTopics } from './plan.js'
+import { generateNextTopics, type InterestSignals } from './plan.js'
+import { frontmatterNumber } from '../vault/frontmatter.js'
 import { enqueueDrafts } from './queue.js'
 import { buildTopicNote, dedupeSegments, sanitizeSegment } from './notePlan.js'
 import { SPACE_ROOT, getOrCreatePersonalVaultId, archivedSpaces } from '../vault/spaces.js'
@@ -42,6 +43,33 @@ export const MAX_UNREVIEWED = VISIBLE_AHEAD
  *  That is the right trade: a pass that returns two notes is progress, and a
  *  pass that returns nothing is a collection nobody can read. */
 const MAX_PER_RUN = 2
+
+/** Where a reviewed note's interest counts as a vote either way.
+ *
+ *  The swipe writes the ends of the scale — 5 for right, 1 for left — so
+ *  these thresholds only matter for notes reviewed before the swipe existed,
+ *  when interest was picked from 1-5 on a form. A 3 there was "no opinion",
+ *  and reading it as either would put words in the reader's mouth. */
+const INTERESTED_AT = 4
+const NOT_INTERESTED_AT = 2
+
+/** The reader's own verdicts, from reviewed notes only.
+ *
+ *  Unreviewed notes carry an interest too, but it is the model's guess at
+ *  how engaging a topic tends to be — feeding that back into the model as
+ *  though it were the reader's opinion would be the model agreeing with
+ *  itself. Only a note someone has finished has an interest they chose. */
+export function interestSignals(rows: { path: string; content: string }[]): InterestSignals {
+  const interested: string[] = []
+  const notInterested: string[] = []
+  for (const r of rows) {
+    if (!isReviewed(r.content)) continue
+    const v = frontmatterNumber(r.content, 'interest', 3)
+    if (v >= INTERESTED_AT) interested.push(titleFromPath(r.path))
+    else if (v <= NOT_INTERESTED_AT) notInterested.push(titleFromPath(r.path))
+  }
+  return { interested, notInterested }
+}
 
 function titleFromPath(path: string): string {
   return (path.split('/').pop() ?? '').replace(/\.md$/i, '')
@@ -108,7 +136,10 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) return { added: 0, reason: 'no-key' }
 
-    const fresh = await generateNextTopics(space, studied, all, want, userId)
+    // What they swiped on is the steer. This is the only place the reader's
+    // interest reaches generation: everything else about a new topic is the
+    // model's call, but *which direction* the collection grows in is theirs.
+    const fresh = await generateNextTopics(space, studied, all, want, userId, interestSignals(rows))
     if (!fresh || fresh.length === 0) {
       // Recorded, not just logged. Growth happens behind a fire-and-forget
       // request with nobody watching, so when it silently does nothing the

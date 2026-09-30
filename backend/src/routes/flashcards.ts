@@ -14,6 +14,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectSources, pickSources, extractTerms, dealDeck, cardsPerDay } from '../flashcards/build.js'
 import { schedulesFor, recordTurn, setBookmark, scheduleKey } from '../flashcards/schedule.js'
+import { adjustConfidence, type ConfidenceChange } from '../vault/confidence.js'
 
 export const flashcardsRouter = Router()
 flashcardsRouter.use(requireAuth)
@@ -157,9 +158,15 @@ flashcardsRouter.post('/turn', asyncHandler(async (req, res) => {
   }
 
   const already = card.turnedAt != null
+  let confidence: ConfidenceChange | null = null
   if (!already) {
     card.turnedAt = new Date().toISOString()
     await db.update(flashcardDecks).set({ cards }).where(eq(flashcardDecks.id, row.id))
+    // Completing a card is evidence the note is sticking: +1 to the note it
+    // came from. Inside the `if`, so it is once per card — turning the same
+    // card back over to look again is looking again, not a second
+    // completion, and it must not walk the note up to 5 on repeat taps.
+    confidence = await adjustConfidence(await getOrCreatePersonalVaultId(userId), card.notePath, 1)
   }
 
   // Outside the `if`: recordTurn is itself idempotent per day, and a deck
@@ -173,6 +180,9 @@ flashcardsRouter.post('/turn', asyncHandler(async (req, res) => {
     nextDue: schedule.dueOn,
     intervalDays: schedule.intervalDays,
     reps: schedule.reps,
+    /** How the source note's confidence moved, or null — same shape as the
+     *  quiz's, so the two screens report it the same way. */
+    confidence,
   })
 }))
 
