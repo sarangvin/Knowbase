@@ -199,3 +199,147 @@
 }
 .qa-ask-note { font-size: 12px; color: var(--text-faint); }
 .qa-error { margin-top: 10px; font-size: 12.5px; color: var(--text-error); }
+
+/* ── The note as the top card of a deck (touch only) ───────────────────────
+   On a phone, finishing a topic can be done by throwing the note itself:
+   right for more like this, left for not. The note moves as one card, the
+   note you would go to next is underneath, and the "More like this" / "Not
+   for me" stamps are inked on as it moves. Physics in useCardThrow.ts. */
+
+.note-deck {
+  position: relative;
+  height: 100%;
+  /* A thrown note leaves the reader entirely; it must not widen the page or
+     leave a scrollbar behind for a frame on its way out. */
+  overflow: hidden;
+}
+
+.note-deck .note-scroll {
+  position: relative;
+  z-index: 1;
+}
+
+.note-deck.is-swipeable .note-scroll {
+  /* The one line that makes this possible: vertical drags stay the
+     browser's, so reading and scrolling are untouched, and sideways ones come
+     to us. Pinch-zoom kept for anyone who needs the text larger. */
+  touch-action: pan-y pinch-zoom;
+  /* Opaque, because the next note is right behind it. */
+  background: var(--bg-primary);
+}
+
+/* The transform is only there while the note is actually moving. A transform
+   makes the scroller a containing block for anything fixed inside it, and
+   there is no reason to change that for a note nobody is touching. Removing
+   it is what animates the spring back: none is interpolated as identity. */
+.note-deck .note-scroll,
+.note-stamps {
+  transform-origin: var(--origin, 50% 120%);
+  transition:
+    transform 0.46s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s ease,
+    border-radius 0.2s ease;
+}
+.note-deck.is-live .note-scroll,
+.note-deck.is-live .note-stamps {
+  transform: translate3d(var(--x, 0px), var(--y, 0px), 0) rotate(var(--rot, 0deg));
+}
+/* Picked up: it stops being a page and becomes a card — corners, and a
+   shadow that lifts it off what is underneath. */
+.note-deck.is-live .note-scroll {
+  border-radius: 18px;
+  box-shadow: 0 22px 50px -18px hsl(0 0% 0% / 0.9);
+}
+/* Held: exactly under the finger. Easing here reads as dragging through
+   syrup. */
+.note-deck.is-dragging .note-scroll,
+.note-deck.is-dragging .note-stamps {
+  transition: box-shadow 0.2s ease, border-radius 0.2s ease;
+}
+/* Thrown: the duration comes from the release speed, and the curve only
+   eases in — it is already moving, not starting from rest. */
+.note-deck.is-thrown .note-scroll,
+.note-deck.is-thrown .note-stamps {
+  transition: transform var(--throw-ms, 260ms) cubic-bezier(0.3, 0.6, 0.6, 1);
+  pointer-events: none;
+}
+/* The next note has just arrived in this element: in place, no flight home. */
+.note-deck.is-instant .note-scroll,
+.note-deck.is-instant .note-stamps,
+.note-deck.is-instant .note-under-page {
+  transition: none;
+}
+
+/* What is underneath: the next note, as a page seen from slightly further
+   away, rising and growing into place in step with the pull. */
+.note-under {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--bg-deep, var(--bg-secondary));
+  padding: 14px;
+}
+.note-under-page {
+  height: 100%;
+  border-radius: 18px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  padding: 24px var(--note-pad-x, 20px);
+  transform:
+    translateY(calc((1 - var(--reveal, 0)) * 22px))
+    scale(calc(0.93 + var(--reveal, 0) * 0.07));
+  opacity: calc(0.45 + var(--reveal, 0) * 0.55);
+  transition:
+    transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.3s ease;
+}
+.note-deck.is-dragging .note-under-page { transition: none; }
+.note-deck.is-thrown .note-under-page {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+}
+.note-under-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+/* The same size and weight as a note's own title, because in a moment it is
+   one. */
+.note-under-title {
+  font-size: 2.1em;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-normal);
+}
+.note-under-hint { margin-top: 10px; font-size: 13px; color: var(--text-faint); }
+
+.note-stamps {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.note-stamp {
+  position: absolute;
+  top: 22px;
+  padding: 4px 10px;
+  border: 2.5px solid currentColor;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: hsl(var(--soil-h) 12% 10% / 0.7);
+  opacity: 0;
+}
+/* On the edge it is leaving from, so the word stays on screen the whole way. */
+.note-stamp-yes { left: 22px; color: var(--accent); transform: rotate(-11deg); }
+.note-stamp-no { right: 22px; color: var(--text-muted); transform: rotate(11deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .note-deck .note-scroll,
+  .note-stamps,
+  .note-under-page { transition: none; }
+}

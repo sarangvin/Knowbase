@@ -139,6 +139,7 @@
      read as a scroll or a back-navigation gesture. */
   touch-action: none;
   transform: translate3d(var(--x, 0px), var(--y, 0px), 0) rotate(var(--rot, 0deg));
+  transform-origin: var(--origin, 50% 120%);
   box-shadow: 0 12px 30px -14px hsl(0 0% 0% / 0.85);
   /* Released without committing: spring back with overshoot, the way
      something with weight comes back to rest. */
