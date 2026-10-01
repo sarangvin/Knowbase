@@ -235,6 +235,20 @@
 .collection-card:disabled { opacity: 0.6; cursor: default; }
 .collection-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
 .collection-meta { color: var(--text-faint); font-size: 12.5px; }
+/* The collection's next note, under its name. One line, cut with an ellipsis
+   rather than wrapping, so every card in the grid keeps the same shape. */
+.collection-next {
+  font-size: 13px;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+.collection-next-label { color: var(--accent); font-weight: 600; }
+.collection-next-title { color: var(--text-normal); }
+.collection-next-soon,
+.collection-next-none { color: var(--text-faint); }
 .collection-bar {
   margin-top: 10px;
   height: 3px;

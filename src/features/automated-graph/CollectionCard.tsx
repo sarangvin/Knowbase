@@ -17,6 +17,11 @@ export interface CollectionSummary {
    *  soon". A card that counted those as topics said "5 topics · 0 studied"
    *  for a collection with nothing in it yet to read. */
   written: number
+  /** What its Next Up page would recommend right now, or null if nothing
+   *  is ready. `isReview` when there is nothing new and the pick is the top
+   *  of the review list instead; `pending` while its body is still being
+   *  written. */
+  next: { title: string; isReview: boolean; pending: boolean } | null
   openPath: string | null
 }
 
@@ -29,7 +34,7 @@ export function CollectionCard({
    *  in memory has no idea until it is re-read. */
   onChanged: () => void
 }) {
-  const { space, total, studied, written, openPath } = summary
+  const { space, total, studied, written, next, openPath } = summary
   const openNote = useVault((s) => s.openNote)
   const [menuOpen, setMenuOpen] = useState(false)
   const [busy, setBusy] = useState<null | 'archive' | 'delete'>(null)
@@ -99,6 +104,21 @@ export function CollectionCard({
         }}
       >
         <div className="collection-name">{space}</div>
+        {/* Directly under the name, because it is the answer to the
+            question you open a collection to ask. */}
+        {total > 0 && (
+          <div className="collection-next">
+            <span className="collection-next-label">{next?.isReview ? 'Review next:' : 'Next up:'}</span>{' '}
+            {next ? (
+              <span className="collection-next-title">
+                {next.title}
+                {next.pending && <span className="collection-next-soon"> · coming soon</span>}
+              </span>
+            ) : (
+              <span className="collection-next-none">nothing ready right now</span>
+            )}
+          </div>
+        )}
         <div className="collection-meta">
           {written < total ? (
             // Still filling in. The honest number here is how much there is

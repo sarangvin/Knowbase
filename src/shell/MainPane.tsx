@@ -8,7 +8,7 @@ import { QuizView } from '../features/quiz/QuizView'
 import { FlashcardsView } from '../features/flashcards/FlashcardsView'
 import { SearchPanel } from '../features/search/SearchPanel'
 import { TopicLauncher } from '../features/onboarding/TopicLauncher'
-import { listSpaces, isArchived, isPending } from '../features/automated-graph/engine'
+import { listSpaces, isArchived, isPending, computeNextUp } from '../features/automated-graph/engine'
 import { CollectionCard, BuildingCard } from '../features/automated-graph/CollectionCard'
 import { startOnboarding } from '../features/onboarding/onboardingApi'
 import { RabbitSolid } from '../ui/icons'
@@ -36,7 +36,14 @@ function HomeView() {
     // same one Next Up draws "Coming soon" from — so the card and the page
     // agree about what exists to read.
     const written = topics.filter((n) => !isPending(n.frontmatter)).length
-    return { total: topics.length, studied, written }
+    // The note this collection's Next Up page would put at the top — taken
+    // from that page's own ranking rather than worked out again here, so the
+    // card can never name a different note from the one you find when you
+    // open it. Null when nothing is ready (everything reviewed today, or
+    // waiting on a prerequisite).
+    const pick = index ? computeNextUp(index, space).pick : null
+    const next = pick ? { title: pick.title, isReview: !!pick.isReview, pending: pick.pending } : null
+    return { total: topics.length, studied, written, next }
   }
 
   const nextUpOf = (space: string) =>
@@ -109,11 +116,11 @@ function HomeView() {
             <div className="collection-grid">
               {buildingCards}
               {spaces.map((space) => {
-                const { total, studied, written } = summary(space)
+                const { total, studied, written, next } = summary(space)
                 return (
                   <CollectionCard
                     key={space}
-                    summary={{ space, total, studied, written, openPath: nextUpOf(space) }}
+                    summary={{ space, total, studied, written, next, openPath: nextUpOf(space) }}
                     onChanged={() => void reload()}
                   />
                 )
