@@ -177,7 +177,24 @@
   .bottomnav { grid-template-columns: 1fr; padding-inline: 4px; }
   .bottomnav-side { display: none; }
   .bottomnav-tabs { justify-content: space-between; gap: 0; }
-  .navtab { flex: 1; min-width: 0; padding-inline: 2px; font-size: 10px; }
+  /* About 1.5x the desktop size: these five are what a thumb hits most, and
+     at 16px icons over 10px labels they were small enough to miss. The
+     label goes to 14px rather than a full 15 so "Flashcards" still fits a
+     fifth of a narrow phone without being cut off. */
+  .navtab {
+    flex: 1;
+    min-width: 0;
+    gap: 5px;
+    padding: 8px 0 6px;
+    font-size: 14px;
+  }
+  .navtab svg { width: 24px; height: 24px; }
+
+  /* The top bar's controls — back, forward, search and the rest — at 1.5x:
+     42px targets with 24px icons, in a bar grown from 40 to 56 to hold them. */
+  .topbar { padding: 0 6px; }
+  .topbar .icon-btn { width: 42px; height: 42px; border-radius: var(--radius-m); }
+  .topbar .icon-btn svg { width: 24px; height: 24px; }
 }
 
 /* ── Settings as a pane (the Settings tab) ───────────────────────────────── */
