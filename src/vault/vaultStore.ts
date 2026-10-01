@@ -234,7 +234,13 @@ export const useVault = create<VaultState>((set, get) => {
         parsed.find((n) => /(^|\/)Today\.md$/i.test(n.path)) ??
         parsed[0]
       const firstView: View = preferred ? { kind: 'note', path: preferred.path } : { kind: 'home' }
-      const tab: Tab = { id: newTabId(), history: [firstView], pos: 0 }
+      // The collections screen goes underneath the landing note in history,
+      // so Back from where the app put you leads to the list of collections.
+      // Landing straight in a collection with nothing behind it left Back
+      // greyed out, and the only way to your other collections was to know
+      // that the Learn tab is where they live.
+      const history: View[] = firstView.kind === 'home' ? [firstView] : [{ kind: 'home' }, firstView]
+      const tab: Tab = { id: newTabId(), history, pos: history.length - 1 }
 
       set({
         status: 'ready',
