@@ -44,6 +44,10 @@ export interface NextCard {
 /** Speed a button press or arrow key throws at, px per ms: a brisk hand,
  *  not a flick. */
 const BUTTON_THROW_SPEED = 1.8
+/** And twice as long in the air as that would give (~0.6s on a phone, from
+ *  ~0.3s). Tapping a button gives the hand nothing to feel; watching the card
+ *  go is how the reader sees which answer was taken. */
+const BUTTON_THROW_SLOWER = 2
 
 export function InterestSwipe({
   title,
@@ -85,8 +89,8 @@ export function InterestSwipe({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !busy) onCancel()
       else if (locked) return
-      else if (e.key === 'ArrowLeft') throwCard('left', -BUTTON_THROW_SPEED, -0.15)
-      else if (e.key === 'ArrowRight') throwCard('right', BUTTON_THROW_SPEED, -0.15)
+      else if (e.key === 'ArrowLeft') throwCard('left', -BUTTON_THROW_SPEED, -0.15, BUTTON_THROW_SLOWER)
+      else if (e.key === 'ArrowRight') throwCard('right', BUTTON_THROW_SPEED, -0.15, BUTTON_THROW_SLOWER)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -166,10 +170,10 @@ export function InterestSwipe({
         {error && <div className="sw-error" role="alert">{error}</div>}
 
         <div className="sw-foot">
-          <button className="sw-btn sw-no" onClick={() => !locked && throwCard('left', -BUTTON_THROW_SPEED, -0.15)} disabled={locked}>
+          <button className="sw-btn sw-no" onClick={() => !locked && throwCard('left', -BUTTON_THROW_SPEED, -0.15, BUTTON_THROW_SLOWER)} disabled={locked}>
             <X width={16} height={16} /> Not for me
           </button>
-          <button className="sw-btn sw-yes" onClick={() => !locked && throwCard('right', BUTTON_THROW_SPEED, -0.15)} disabled={locked}>
+          <button className="sw-btn sw-yes" onClick={() => !locked && throwCard('right', BUTTON_THROW_SPEED, -0.15, BUTTON_THROW_SLOWER)} disabled={locked}>
             {busy ? <span className="spinner" /> : <Check width={16} height={16} />} More like this
           </button>
         </div>

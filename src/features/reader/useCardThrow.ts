@@ -130,8 +130,13 @@ export function useCardThrow(o: CardThrowOptions) {
 
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), [])
 
-  /** Send it off along a vector, let what is underneath settle, report. */
-  const throwCard = useCallback((dir: Direction, vx: number, vy: number) => {
+  /** Send it off along a vector, let what is underneath settle, report.
+   *
+   *  `slower` multiplies the flight time, after the usual bounds. For throws
+   *  nobody's hand made — a button press — where the card's leaving is the
+   *  only feedback that the answer was taken, so it should be watched rather
+   *  than missed. A finger's own throw keeps the speed it was given. */
+  const throwCard = useCallback((dir: Direction, vx: number, vy: number, slower = 1) => {
     if (thrownRef.current) return
     drag.current = null
     setDragging(false)
@@ -145,7 +150,9 @@ export function useCardThrow(o: CardThrowOptions) {
     // Far enough that it is fully off screen at any tilt.
     const outX = sign * (window.innerWidth * 0.6 + w)
     const speed = Math.max(Math.hypot(vx, vy), 0.9)
-    const ms = Math.round(Math.min(THROW_MAX_MS, Math.max(THROW_MIN_MS, Math.abs(outX - from.x) / speed)))
+    const ms = Math.round(
+      Math.min(THROW_MAX_MS, Math.max(THROW_MIN_MS, Math.abs(outX - from.x) / speed)) * slower,
+    )
     // Keep the vertical momentum it was released with.
     const outY = from.y + vy * ms * 0.6
     const next: Throw = { dir, x: outX, y: outY, rot: sign * opts.current.maxTilt * 2 * pivotRef.current, ms }
