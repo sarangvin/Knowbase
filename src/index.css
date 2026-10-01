@@ -100,6 +100,19 @@ body {
   overflow: hidden;
 }
 
+/* The shell is a fixed frame and all scrolling happens in panes inside it —
+   the note, Files, Search, Settings. When one of those hits its end, the
+   browser hands the leftover scroll up the chain to the document, and the
+   document is what overscrolls: on iOS the whole app rubber-bands, top bar
+   and bottom tabs sliding with the finger; on Android it can start a
+   pull-to-refresh. `overflow: hidden` above does not stop either — this
+   does. Panes still scroll normally; the scroll just stops at their end.
+   (The swipe-up-to-review gesture is unaffected: it measures the pull past
+   the note's end itself and cancels the browser's handling of it.) */
+html, body {
+  overscroll-behavior: none;
+}
+
 button {
   font-family: inherit;
   color: inherit;
