@@ -219,17 +219,68 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
         />
       )}
       {/* Only worth a key when there is more than one colour to tell apart. */}
-      {!compact && legend.length > 1 && (
-        <ul className="graph-legend" aria-label="Collections">
-          {legend.map(({ space, color }) => (
-            <li key={space}>
-              <span className="graph-legend-dot" style={{ background: color }} />
-              {space}
-            </li>
-          ))}
-        </ul>
-      )}
+      {!compact && legend.length > 1 && <Legend items={legend} />}
       {data.nodes.length === 0 && <div className="empty-state">No linked notes here.</div>}
+    </div>
+  )
+}
+
+/** Rows the key shows before it scrolls. */
+const LEGEND_ROWS = 7
+
+/**
+ * The key: which colour is which collection.
+ *
+ * Past seven collections it scrolls, with a scroll bar that is always
+ * there. Drawn here rather than left to the browser, because phones hide
+ * scroll bars until you are already scrolling — which is no help in saying
+ * there is more to scroll to. It used to have no scrolling at all: a height
+ * cap with the rows allowed to shrink, which at fifty collections squashed
+ * every name into an unreadable stripe.
+ */
+function Legend({ items }: { items: { space: string; color: string }[] }) {
+  const listRef = useRef<HTMLUListElement>(null)
+  const [thumb, setThumb] = useState<{ top: number; height: number } | null>(null)
+  const scrolls = items.length > LEGEND_ROWS
+
+  useEffect(() => {
+    const el = listRef.current
+    if (!el || !scrolls) {
+      setThumb(null)
+      return
+    }
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el
+      if (scrollHeight <= clientHeight) return setThumb(null)
+      const height = Math.max(18, (clientHeight / scrollHeight) * clientHeight)
+      const top = (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - height)
+      setThumb({ top, height })
+    }
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', update)
+      ro.disconnect()
+    }
+  }, [scrolls, items.length])
+
+  return (
+    <div className={'graph-legend' + (scrolls ? ' is-scrolling' : '')}>
+      <ul ref={listRef} className="graph-legend-list" aria-label="Collections">
+        {items.map(({ space, color }) => (
+          <li key={space}>
+            <span className="graph-legend-dot" style={{ background: color }} />
+            <span className="graph-legend-name">{space}</span>
+          </li>
+        ))}
+      </ul>
+      {thumb && (
+        <div className="graph-legend-track" aria-hidden="true">
+          <div className="graph-legend-thumb" style={{ top: thumb.top, height: thumb.height }} />
+        </div>
+      )}
     </div>
   )
 }

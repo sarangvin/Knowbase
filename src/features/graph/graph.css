@@ -20,34 +20,63 @@
   justify-content: center;
 }
 
-/* Which colour is which collection. Top left, out of the way of the
-   nodes zoomToFit centres, and never taking pointer events from the graph. */
+/* Which colour is which collection. Top left, out of the way of the nodes
+   zoomToFit centres. Rows never shrink: past seven they scroll instead (see
+   Legend in GraphView.tsx), with a drawn scroll bar that is always shown. */
 .graph-legend {
+  --legend-row: 18px;
+  --legend-gap: 4px;
   position: absolute;
   top: 10px;
   left: 12px;
-  margin: 0;
-  padding: 8px 10px;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   max-width: min(240px, 60%);
-  max-height: 45%;
-  overflow: hidden;
+  padding: 8px 10px;
   font-size: 12px;
   color: var(--text-muted);
   background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  pointer-events: none;
 }
-.graph-legend li {
+.graph-legend.is-scrolling { padding-right: 18px; }
+.graph-legend-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--legend-gap);
+  /* Exactly seven rows tall. */
+  max-height: calc(var(--legend-row) * 7 + var(--legend-gap) * 6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* The drawn bar replaces the browser's, so there are never two. */
+  scrollbar-width: none;
+}
+.graph-legend-list::-webkit-scrollbar { display: none; }
+.graph-legend-list li {
+  flex: none;
+  height: var(--legend-row);
   display: flex;
   align-items: center;
   gap: 7px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
 }
+.graph-legend-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .graph-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.graph-legend-track {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  right: 6px;
+  width: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-faint) 25%, transparent);
+  pointer-events: none;
+}
+.graph-legend-thumb {
+  position: absolute;
+  left: 0;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--text-muted);
+}
