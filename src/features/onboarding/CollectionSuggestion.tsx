@@ -55,6 +55,7 @@ function pickRandom(list: LibrarySpace[], avoid: string | null): LibrarySpace | 
 export function CollectionSuggestion({
   owned,
   building,
+  title = 'Start an existing collection',
 }: {
   /** Every collection the reader already has, archived ones included —
    *  suggesting something you set aside is not a suggestion. */
@@ -62,9 +63,12 @@ export function CollectionSuggestion({
   /** Topics currently being built, so a collection that is on its way is
    *  not offered again in the meantime. */
   building: string[]
+  /** The Learn page says "Start an existing collection"; the first-run
+   *  screen, where it sits under "What do you want to learn?", says "Or…". */
+  title?: string
 }) {
   const user = useVault((s) => s.user)
-  const approved = !!user?.accessApproved
+  const approved = !!user
 
   const [library, setLibrary] = useState<LibrarySpace[] | null>(null)
   const [current, setCurrent] = useState<LibrarySpace | null>(null)
@@ -138,7 +142,7 @@ export function CollectionSuggestion({
 
   return (
     <div className="launcher suggestion">
-      <div className="launcher-title">Start an existing collection</div>
+      <div className="launcher-title">{title}</div>
 
       {started ? (
         <div className="launcher-started">

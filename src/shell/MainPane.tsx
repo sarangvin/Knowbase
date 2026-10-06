@@ -54,10 +54,16 @@ function HomeView() {
   // dealt with. A job whose space has already appeared in the vault is
   // dropped — the real card is there, and two cards for one collection is
   // worse than a moment without either.
+  // Matched on the topic as well as the space, and loosely: a library start
+  // copies the notes in before the job is told which space it produced, so
+  // for one poll the vault already holds the collection while the job still
+  // has no space — and the grid showed the same collection twice.
+  const keyOf = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const spaceKeys = new Set(spaces.map(keyOf))
   const pending = buildingJobs.filter(
     (j) =>
       (j.status === 'running' || (j.status === 'failed' && !j.acknowledged)) &&
-      !(j.space && spaces.includes(j.space)),
+      !spaceKeys.has(keyOf(j.space ?? j.topic)),
   )
 
   const retry = async (topic: string) => {
@@ -97,6 +103,18 @@ function HomeView() {
               title="What do you want to learn?"
               hint="Name a topic and Rabbithole digs the tunnels — the subtopics worth knowing, what to study in what order, and a first draft of notes for each."
             />
+            {/* The quickest first collection there is: already written, so
+                it is ready in seconds where a new topic takes a while to
+                build — and someone with nothing yet is exactly who should
+                see that. Below the question rather than above it, because
+                naming your own subject is still the main way in. */}
+            <div className="home-suggestion">
+              <CollectionSuggestion
+                owned={index ? listSpaces(index) : []}
+                building={pending.map((j) => j.space ?? j.topic)}
+                title="Or start an existing collection"
+              />
+            </div>
             {/* Without this, archiving your last collection drops you on the
                 first-run screen with no sign your notes still exist. */}
             {archivedCount > 0 && (

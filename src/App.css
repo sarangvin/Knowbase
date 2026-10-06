@@ -309,6 +309,12 @@
 .collection-new:empty { display: none; }
 
 /* ── Start an existing collection ────────────────────────────────────────── */
+/* On the first-run screen it follows the topic box, set off by a rule the
+   way the two halves of the Learn page are. Hidden with its rule when the
+   component renders nothing (an account that cannot start collections). */
+.home-suggestion { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--divider); text-align: left; }
+.home-suggestion:empty { display: none; }
+.home-suggestion .launcher.suggestion { margin-bottom: 0; }
 /* The first of the two ways to add a collection, so it is spaced off the
    brand-new one below it rather than running into it. */
 .launcher.suggestion { margin-bottom: 30px; }
