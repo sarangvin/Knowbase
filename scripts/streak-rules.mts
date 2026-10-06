@@ -51,6 +51,11 @@ check('limits: shared new-account pool = 300', NEW_ACCOUNTS_DAILY_MODEL_CALLS ==
 check('tier: unapproved is new', tierOf({ accessApproved: false, planTier: 'free' }) === 'new')
 check('tier: approved is its plan', tierOf({ accessApproved: true, planTier: 'pro' }) === 'pro')
 check('tier: pro wins even unapproved (admin grant)', tierOf({ accessApproved: false, planTier: 'pro' }) === 'pro')
+check('tier: max wins even unapproved (admin grant)', tierOf({ accessApproved: false, planTier: 'max' }) === 'max')
+check('sources: free and new cannot, pro can once, max can again',
+  limitsFor('free').sourcesPerDay === 0 && limitsFor('new').sourcesPerDay === 0 &&
+  limitsFor('pro').sourcesPerDay > 0 && !limitsFor('pro').recheckSources &&
+  limitsFor('max').sourcesPerDay > 0 && limitsFor('max').recheckSources)
 
 // Model fallback chain.
 delete process.env.GEMINI_MODEL

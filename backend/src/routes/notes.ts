@@ -13,7 +13,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId, spaceOf } from '../vault/spaces.js'
 import { limitsFor, isUnlimited, remainingOf, tierOf } from '../plans.js'
 import { usageEvents } from '../db/schema.js'
-import { findSources, writeSources } from '../notes/sources.js'
+import { findSources, writeSources, hasSourcesBlock, sourcesCheckedOn } from '../notes/sources.js'
 import {
   parseQuestions,
   setAnswer,
@@ -275,9 +275,11 @@ notesRouter.post('/sources', asyncHandler(async (req, res) => {
     res.status(400).json({ error: 'path required' })
     return
   }
-  const limit = user.role === 'owner' ? limitsFor('pro').sourcesPerDay : limitsFor(tierOf(user)).sourcesPerDay
+  // The owner gets Max's rules whatever their plan row says.
+  const plan = limitsFor(user.role === 'owner' ? 'max' : tierOf(user))
+  const limit = plan.sourcesPerDay
   if (limit <= 0) {
-    res.status(403).json({ error: 'Finding sources is part of Pro.' })
+    res.status(403).json({ error: 'Finding sources is part of Pro.', upgrade: 'pro' })
     return
   }
   if ((await sourcesUsed(user.id)) >= limit) {
@@ -290,9 +292,20 @@ notesRouter.post('/sources', asyncHandler(async (req, res) => {
     res.status(404).json({ error: 'Note not found' })
     return
   }
+  // Pro finds a note's sources once; finding them again is Max.
+  if (!plan.recheckSources && hasSourcesBlock(note.content)) {
+    res.status(403).json({ error: 'Checking sources again is part of Max.', upgrade: 'max' })
+    return
+  }
+  // Checking again is once per note per day. The day is the one written
+  // into the block when it was checked, so there is nothing else to store.
+  const day = new Date().toISOString().slice(0, 10)
+  if (sourcesCheckedOn(note.content) === day) {
+    res.status(429).json({ error: 'These sources were checked today. You can check them again tomorrow.' })
+    return
+  }
   const title = (path.split('/').pop() ?? path).replace(/\.md$/i, '')
   const result = await findSources(title, note.content, { space: spaceOf(path) ?? undefined, userId: user.id })
-  const day = new Date().toISOString().slice(0, 10)
   // Re-read before writing: a page fetch takes seconds, and the reader may
   // have typed into My Notes meanwhile.
   const fresh = await loadOwnNote(vaultId, path)

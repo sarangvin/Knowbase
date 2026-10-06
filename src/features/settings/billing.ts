@@ -3,7 +3,7 @@
 // the Razorpay webhook, not synchronously in these responses.
 export interface SubscriptionStatus {
   status: string
-  planTier: 'free' | 'pro'
+  planTier: 'free' | 'pro' | 'max'
   currentPeriodEnd: string | null
 }
 

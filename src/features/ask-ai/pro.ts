@@ -12,7 +12,7 @@ export const proProvider: LlmProvider = {
   async checkReady() {
     try {
       const { planTier } = await getSubscriptionStatus()
-      return planTier === 'pro'
+      return planTier === 'pro' || planTier === 'max'
         ? { ready: true }
         : { ready: false, message: 'Upgrade to Pro in Settings to use the better model.' }
     } catch {

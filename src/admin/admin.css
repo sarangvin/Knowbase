@@ -240,3 +240,4 @@
 .admin-plan:hover:not(:disabled) { border-color: var(--accent); color: var(--text-normal); }
 .admin-plan:disabled { opacity: 0.5; cursor: default; }
 .admin-plan.is-pro { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.admin-plan.is-max { border-color: var(--accent); background: var(--accent); color: var(--text-on-accent); font-weight: 600; }

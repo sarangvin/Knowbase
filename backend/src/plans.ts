@@ -32,8 +32,12 @@ export interface PlanLimits {
   /** Ask AI chat messages on the shared key, in any rolling 24 hours. */
   askAiPerDay: number
   /** "Find sources" runs, in any rolling 24 hours. One model call each
-   *  (notes/sources.ts). Pro only for now. */
+   *  (notes/sources.ts). */
   sourcesPerDay: number
+  /** May find sources again on a note that already has them. Max only: the
+   *  rerun is where search grounding goes once it is live, and Pro finds a
+   *  note's sources once. */
+  recheckSources: boolean
 }
 
 const PLANS: Record<string, PlanLimits> = {
@@ -56,6 +60,7 @@ const PLANS: Record<string, PlanLimits> = {
     newNotesPerDay: 6,
     askAiPerDay: 5,
     sourcesPerDay: 0,
+    recheckSources: false,
   },
   free: {
     activeCollections: 5,
@@ -72,6 +77,7 @@ const PLANS: Record<string, PlanLimits> = {
     // notes that stay. Raised from three with the same headroom.
     askAiPerDay: 10,
     sourcesPerDay: 0,
+    recheckSources: false,
   },
   pro: {
     activeCollections: UNLIMITED,
@@ -85,7 +91,26 @@ const PLANS: Record<string, PlanLimits> = {
     askAiPerDay: UNLIMITED,
     // A number: each run is a model call and a dozen page fetches.
     sourcesPerDay: 30,
+    recheckSources: false,
   },
+  // Everything Pro has, and the features that cost real money per use —
+  // checking sources again now, search grounding when it goes live. Granted
+  // by hand from the admin panel; there is nothing to buy yet.
+  max: {
+    activeCollections: UNLIMITED,
+    newCollectionsPerDay: UNLIMITED,
+    flashcardsPerDay: 20,
+    customQuestionsPerDay: UNLIMITED,
+    newNotesPerDay: UNLIMITED,
+    askAiPerDay: UNLIMITED,
+    sourcesPerDay: 100,
+    recheckSources: true,
+  },
+}
+
+/** Pro and everything above it. Where a feature is "Pro", Max has it too. */
+export function atLeastPro(tier?: string | null): boolean {
+  return tier === 'pro' || tier === 'max'
 }
 
 /** Model calls all not-yet-approved accounts may spend together in one of
@@ -100,13 +125,13 @@ const PLANS: Record<string, PlanLimits> = {
  *  day before anything is refused. */
 export const NEW_ACCOUNTS_DAILY_MODEL_CALLS = 300
 
-/** Which limits apply to this account. Pro wins outright: it is either
- *  paid for or granted by hand from the admin panel, and in both cases the
- *  point is the higher limits, approved or not. Otherwise unapproved
+/** Which limits apply to this account. Pro and Max win outright: they are
+ *  either paid for or granted by hand from the admin panel, and in both
+ *  cases the point is the higher limits, approved or not. Otherwise unapproved
  *  accounts are on the 'new' tier whatever plan their row says; owners are
  *  always approved (see resolveSession), so they never land here. */
 export function tierOf(user: { accessApproved: boolean; planTier?: string | null }): string {
-  if (user.planTier === 'pro') return 'pro'
+  if (atLeastPro(user.planTier)) return user.planTier!
   return user.accessApproved ? (user.planTier ?? 'free') : 'new'
 }
 
@@ -128,7 +153,7 @@ export function remainingOf(limit: number, used: number): number | null {
 
 // The tiers a plan can be *set* to. 'new' is deliberately not one: it is a
 // state an account is in until approved, not a plan anyone chooses.
-export const PLAN_TIERS = ['free', 'pro'] as const
+export const PLAN_TIERS = ['free', 'pro', 'max'] as const
 export type PlanTier = (typeof PLAN_TIERS)[number]
 
 export function isPlanTier(v: unknown): v is PlanTier {

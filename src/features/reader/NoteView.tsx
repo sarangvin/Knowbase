@@ -163,7 +163,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
     inserts.push({
       start: links.contentEnd,
       end: links.contentEnd,
-      node: <FindSources note={note} hasSources={note.raw.includes('<!-- rabbithole:sources')} />,
+      node: <FindSources note={note} />,
     })
   if (mine && mineStart >= 0) {
     inserts.push({

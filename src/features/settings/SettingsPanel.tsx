@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
-
-/** Off until Razorpay checkout is wired up for real. While off, nobody is
- *  offered an upgrade; Pro is granted by hand from the admin panel (the plan
- *  toggle on the Users tab), and an account that has it still sees its plan
- *  here. Flip this when payments go live — the checkout code below is kept
- *  for that. */
-const PAYMENTS_ENABLED = false
+import { PAYMENTS_ENABLED, atLeastPro, planLabel } from './plans'
 import { User, LogOut, Cloud, Pencil, Trash, Archive } from '../../ui/icons'
 import { fetchArchivedCollections, setCollectionArchived, deleteCollection } from '../automated-graph/collectionsApi'
 import { TEXT_SIZES, readTextSize, setTextSize, type TextSizeId } from './textSize'
@@ -148,8 +142,9 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   }
 
   // Pro comes from the user row as well as the subscription: the admin panel
-  // grants it by setting users.plan_tier, with no subscription behind it.
-  const isPro = user?.planTier === 'pro' || sub?.planTier === 'pro'
+  // grants it (and Max) by setting users.plan_tier, with no subscription
+  // behind it.
+  const isPro = atLeastPro(user?.planTier) || sub?.planTier === 'pro'
 
   const doReset = async () => {
     if (resetting) return
@@ -232,7 +227,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
                   <div className="settings-dim" style={{ margin: 0 }}>
                     {user.displayName ? user.email : null}
                     {user.role === 'owner' ? (user.displayName ? ' · owner' : 'owner') : null}
-                    {!user.accessApproved && user.planTier !== 'pro' && ' · new account'}
+                    {!user.accessApproved && !atLeastPro(user.planTier) && ' · new account'}
                   </div>
                 </div>
               </div>
@@ -256,7 +251,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
                   amount of new material that is smaller until the account is
                   approved or has kept a 3-day streak — see the 'new' tier in
                   backend/src/plans.ts and usage/streak.ts. */}
-              {!user.accessApproved && user.planTier !== 'pro' && (
+              {!user.accessApproved && !atLeastPro(user.planTier) && (
                 <p className="settings-dim">
                   New accounts can start 2 collections and grow 6 new notes a day. Keep a 3-day streak —
                   read a new note, finish your flashcards, or finish the quiz — and the limits go up on
@@ -286,7 +281,8 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
             ) : isPro ? (
               <div className="settings-key-row">
                 <span className="settings-key-label">
-                  Pro{sub?.planTier === 'pro' && sub.status !== 'none' ? ` — ${sub.status}` : ''}
+                  {planLabel(atLeastPro(user.planTier) ? user.planTier : 'pro')}
+                  {sub?.planTier === 'pro' && sub.status !== 'none' ? ` — ${sub.status}` : ''}
                 </span>
                 {PAYMENTS_ENABLED && sub?.planTier === 'pro' && (
                   <button className="ask-btn" disabled={subBusy} onClick={() => void cancel()}>Cancel subscription</button>

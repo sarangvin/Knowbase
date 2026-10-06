@@ -448,6 +448,17 @@ const OPEN = '<!-- rabbithole:sources v1'
 const CLOSE = '<!-- /rabbithole:sources -->'
 const BLOCK_RE = /<!-- rabbithole:sources v1[^\n]*-->\n[\s\S]*?<!-- \/rabbithole:sources -->\n?/
 
+/** Has this note had sources found for it already. */
+export function hasSourcesBlock(raw: string): boolean {
+  return raw.includes(OPEN)
+}
+
+/** The day (YYYY-MM-DD, UTC) this note's sources were last checked, from
+ *  the block's own marker. Null if it has none. */
+export function sourcesCheckedOn(raw: string): string | null {
+  return raw.match(/<!-- rabbithole:sources v1 checked (\d{4}-\d{2}-\d{2}) -->/)?.[1] ?? null
+}
+
 function cleanTitle(t: string): string {
   return t.replace(/\s+[-–—|]\s+Wikipedia$/i, ' (Wikipedia)').replace(/[[\]]/g, '').trim().slice(0, 140)
 }

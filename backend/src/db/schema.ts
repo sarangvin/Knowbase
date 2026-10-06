@@ -39,7 +39,7 @@ export const users = pgTable('users', {
   displayName: text('display_name'),
   avatarUrl: text('avatar_url'),
   role: text('role').notNull().default('user'), // 'user' | 'owner'
-  planTier: text('plan_tier').notNull().default('free'), // 'free' | 'pro', synced from subscriptions in M4
+  planTier: text('plan_tier').notNull().default('free'), // 'free' | 'pro' | 'max'; pro synced from subscriptions, max granted in admin
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
 })

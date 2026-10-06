@@ -240,7 +240,7 @@ export function setApproved(id: string, approved: boolean): Promise<{ access_app
 /** Set a user's plan by hand. The Razorpay webhook is still the source of
  *  truth for real subscribers and will overwrite this; it is for the owner
  *  account and comped ones. */
-export function setPlan(id: string, planTier: 'free' | 'pro'): Promise<{ id: string; email: string; planTier: string }> {
+export function setPlan(id: string, planTier: 'free' | 'pro' | 'max'): Promise<{ id: string; email: string; planTier: string }> {
   return api(`/api/admin/users/${id}/plan`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

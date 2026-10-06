@@ -490,7 +490,8 @@ export function AdminApp() {
   /** Optimism would be wrong here: the row is the record of what the
    *  server thinks, and the whole point of the control is to change that. */
   const togglePlan = async (row: AdminUserRow) => {
-    const next = row.plan_tier === 'pro' ? 'free' : 'pro'
+    // free -> pro -> max -> free. Max is granted by hand only.
+    const next = row.plan_tier === 'free' ? 'pro' : row.plan_tier === 'pro' ? 'max' : 'free'
     setBusy((b) => new Set(b).add(row.id))
     setError(null)
     try {
@@ -863,9 +864,9 @@ export function AdminApp() {
                   the toggle — the two are different intentions. */}
               <td onClick={(e) => e.stopPropagation()}>
                 <button
-                  className={'admin-plan' + (u.plan_tier === 'pro' ? ' is-pro' : '')}
+                  className={'admin-plan' + (u.plan_tier === 'pro' ? ' is-pro' : u.plan_tier === 'max' ? ' is-max' : '')}
                   disabled={busy.has(u.id)}
-                  title={u.plan_tier === 'pro' ? 'Switch to free' : 'Switch to pro'}
+                  title={u.plan_tier === 'free' ? 'Switch to pro' : u.plan_tier === 'pro' ? 'Switch to max' : 'Switch to free'}
                   onClick={() => void togglePlan(u)}
                 >
                   {u.plan_tier}
