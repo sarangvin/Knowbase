@@ -52,6 +52,8 @@
 // Benching is per server instance, in memory. That is deliberate: each
 // instance learns within one failed call, and a shared store would add a
 // query to every model call to save the occasional instance one fast 503.
+import { sql } from 'drizzle-orm'
+import { db } from '../db/client.js'
 import { QUOTA_TZ } from '../usage/quotaWindow.js'
 
 export const DEFAULT_MODEL_CHAIN = [
@@ -81,6 +83,36 @@ const benched = new Map<string, number>()
 
 let listing: { at: number; names: Set<string> } | null = null
 const LISTING_TTL = HOUR
+
+/** Models that timed out recently on *any* instance, from the usage log.
+ *
+ *  Benching in memory is per instance, and a retry — which is what a reader
+ *  does when a deck fails to build — often lands on a different one. That
+ *  happened: two flashcard builds 28 seconds apart both went to the slow
+ *  primary and both waited out 25 seconds. The timeouts are already logged
+ *  (meter.ts), so the log is the shared memory. Cached briefly so this is
+ *  one cheap query per ten seconds, not one per call.
+ *
+ *  Only timeouts: an HTTP refusal is not logged as a failure, and a refusal
+ *  is fast enough to cost the next call almost nothing to rediscover. */
+const SLOW_WINDOW_SECONDS = 120
+let slowCache: { at: number; models: Set<string> } = { at: 0, models: new Set() }
+async function recentlySlow(): Promise<Set<string>> {
+  if (Date.now() - slowCache.at < 10_000) return slowCache.models
+  try {
+    const r = await db.execute(sql`
+      SELECT DISTINCT model FROM usage_events
+      WHERE event_type = 'llm_call' AND metadata->>'timedOut' = 'true'
+        AND created_at > now() - ${SLOW_WINDOW_SECONDS} * interval '1 second'
+        AND model IS NOT NULL
+    `)
+    slowCache = { at: Date.now(), models: new Set((r.rows as { model: string }[]).map((x) => x.model)) }
+  } catch {
+    // The log being unreachable must not stop a model call.
+    slowCache = { at: Date.now(), models: slowCache.models }
+  }
+  return slowCache.models
+}
 
 function dedupe(xs: string[]): string[] {
   return [...new Set(xs)]
@@ -147,8 +179,12 @@ export async function modelChain(apiKey: string, preferred?: string): Promise<st
   // is, and either way trying is the only way to find out.
   const candidates = listed.length ? listed : chain
   const now = Date.now()
-  const ready = candidates.filter((m) => (benched.get(m) ?? 0) <= now)
-  return ready.length ? ready : candidates
+  const slow = await recentlySlow()
+  const ready = candidates.filter((m) => (benched.get(m) ?? 0) <= now && !slow.has(m))
+  // Models that timed out recently go last rather than away: if everything
+  // is slow, the order they were tried in is as good as any.
+  const rest = candidates.filter((m) => !ready.includes(m))
+  return ready.length ? [...ready, ...rest] : candidates
 }
 
 /** Milliseconds until the next midnight in the provider's quota zone, where

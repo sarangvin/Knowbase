@@ -58,6 +58,14 @@ export class ModelTimeoutError extends Error {
   }
 }
 
+/** One model used up its slice of the call's deadline. Internal: it is
+ *  turned into "try the next model", and never leaves meteredGeminiCall. */
+class SliceExpired extends Error {
+  constructor(readonly model: string, readonly ms: number) {
+    super(`${model} gave no answer in ${Math.round(ms / 1000)}s`)
+  }
+}
+
 /** How long each kind of call may take before it is abandoned.
  *
  *  The failure being prevented is specific: a draft call was measured at
@@ -99,6 +107,8 @@ const TIMEOUT_BY_SOURCE: Record<string, number> = {
   // Answers several of a note's questions in one call, so it is doing three
   // or four times the work of a single answer and needs the room.
   'answer-backfill': 60_000,
+  // Terms and quiz options for one note: a longer answer than a draft's tail.
+  'study-backfill': 60_000,
 
   // ── foreground: the reader is looking at a spinner ──
   'quiz-build': 25_000,
@@ -147,12 +157,44 @@ export async function meteredGeminiCall(
   // the budget being protected is wall clock.
   const abort = new AbortController()
 
-  const attempt = async (m: string): Promise<string> => {
-    let acc = ''
-    for await (const chunk of streamGeminiChat(apiKey, system, user, m, (u) => { usage = u }, abort.signal)) {
-      acc += chunk
+  // Each model gets a slice of the deadline, not all of it. Falling back on
+  // an HTTP error covers a model that is broken; this covers one that is
+  // merely slow, which is what actually happened — Google's flash-lite
+  // models went from 2-4s to a median of 16s with a long tail, nothing
+  // errored, and a 25s foreground call waited out its whole budget on the
+  // first model and then failed. The slice is 40% of the budget (at least
+  // 8s), so a slow primary costs a quarter-minute rather than the call, and
+  // the last model left gets whatever remains.
+  const sliceMs = Math.max(8_000, Math.round(timeoutMs * 0.4))
+
+  const attempt = async (m: string, budgetMs: number | null): Promise<string> => {
+    // Its own controller, so giving up on this model does not abort the
+    // call; chained to the call's, so the call's deadline still aborts it.
+    const ac = new AbortController()
+    const onCallAbort = () => ac.abort()
+    abort.signal.addEventListener('abort', onCallAbort)
+    let sliceTimer: ReturnType<typeof setTimeout> | undefined
+    let sliceExpired = false
+    if (budgetMs != null) {
+      sliceTimer = setTimeout(() => {
+        sliceExpired = true
+        ac.abort()
+      }, budgetMs)
     }
-    return acc
+    const began = Date.now()
+    try {
+      let acc = ''
+      for await (const chunk of streamGeminiChat(apiKey, system, user, m, (u) => { usage = u }, ac.signal)) {
+        acc += chunk
+      }
+      return acc
+    } catch (err) {
+      if (sliceExpired && !timedOut) throw new SliceExpired(m, Date.now() - began)
+      throw err
+    } finally {
+      clearTimeout(sliceTimer)
+      abort.signal.removeEventListener('abort', onCallAbort)
+    }
   }
 
   // Two mechanisms, because they fail differently. The abort signal is the
@@ -164,13 +206,32 @@ export async function meteredGeminiCall(
   const consume = (async () => {
     for (let i = 0; ; i++) {
       model = candidates[i]
+      const last = i === candidates.length - 1
       try {
-        const out = await attempt(model)
+        const out = await attempt(model, last ? null : sliceMs)
         reportModelSuccess(model)
         return out
       } catch (err) {
         if (timedOut) throw err
-        const last = i === candidates.length - 1
+        if (err instanceof SliceExpired) {
+          // Slow, not broken: bench it, record that it was slow so other
+          // instances see it too, and give the next model its slice.
+          reportModelFailure(model, 'timeout')
+          if (opts.userId) {
+            void logUsageEvent({
+              userId: opts.userId,
+              eventType: 'llm_call',
+              provider: 'gemini',
+              model,
+              latencyMs: err.ms,
+              metadata: { source: opts.source, timedOut: true, gaveUpAfterMs: err.ms, fellBackTo: candidates[i + 1] },
+            })
+          }
+          skipped.push(model)
+          console.warn(`[model] ${model} gave no answer in ${Math.round(err.ms / 1000)}s; trying ${candidates[i + 1]} (${opts.source})`)
+          usage = {}
+          continue
+        }
         if (err instanceof GeminiHttpError && isFallbackStatus(err.status)) {
           reportModelFailure(model, err)
           if (!last) {

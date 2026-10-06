@@ -16,6 +16,8 @@ import { notesRouter } from './routes/notes.js'
 import { cronRouter } from './routes/cron.js'
 import { demoRouter } from './routes/demo.js'
 import { accountRouter } from './routes/account.js'
+import { ModelTimeoutError } from './llm/meter.js'
+import { NewAccountBudgetError } from './usage/allowance.js'
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -90,6 +92,19 @@ export function createApp() {
   app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (res.headersSent) {
       next(err)
+      return
+    }
+    // Two failures a reader can do something about, said as such. Both used
+    // to fall through to the generic 500 below, which told them nothing —
+    // a deck that could not be built because the model was slow read as the
+    // app being broken.
+    if (err instanceof ModelTimeoutError) {
+      console.warn('Model timeout', err.message)
+      res.status(503).json({ error: 'The model is slow right now, so this could not be built in time. Try again in a minute.' })
+      return
+    }
+    if (err instanceof NewAccountBudgetError) {
+      res.status(429).json({ error: err.message })
       return
     }
     console.error('Unhandled request error', err)
