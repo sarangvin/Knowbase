@@ -6,7 +6,8 @@ import { limitsFor, tierOf, isUnlimited } from '../plans.js'
 import { askAiLast24h, newAccountBudgetSpent, NEW_ACCOUNT_BUDGET_MESSAGE } from '../usage/allowance.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { streamAnthropicChat, type Usage } from '../llm/providers/anthropic.js'
-import { streamGeminiChat, DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
+import { streamGeminiWithFallback } from '../llm/meter.js'
+import { primaryModel } from '../llm/models.js'
 import { pipeTextStream } from '../llm/proxy.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
@@ -59,10 +60,17 @@ llmRouter.post('/free/chat', askAiLimit, asyncHandler(async (req, res) => {
     res.status(500).json({ error: 'Free tier is not configured on this server (missing GEMINI_API_KEY)' })
     return
   }
-  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
   const start = Date.now()
   let usage: Usage = {}
-  await pipeTextStream(res, streamGeminiChat(apiKey, parsed.system, parsed.user, model, (u) => { usage = u }))
+  let model = primaryModel()
+  let fellBackFrom: string[] = []
+  await pipeTextStream(
+    res,
+    streamGeminiWithFallback(apiKey, parsed.system, parsed.user, (u) => { usage = u }, (m, skipped) => {
+      model = m
+      fellBackFrom = skipped
+    }),
+  )
   void logUsageEvent({
     userId: req.user!.id,
     eventType: 'llm_call',
@@ -72,7 +80,7 @@ llmRouter.post('/free/chat', askAiLimit, asyncHandler(async (req, res) => {
     outputTokens: usage.outputTokens,
     latencyMs: Date.now() - start,
     // What askAiLimit counts.
-    metadata: { source: 'ask-ai' },
+    metadata: fellBackFrom.length ? { source: 'ask-ai', fellBackFrom } : { source: 'ask-ai' },
   })
 }))
 

@@ -19,7 +19,7 @@
 import { and, eq, inArray, like, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { draftQueue, notes, onboardingJobs } from '../db/schema.js'
-import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
+import { primaryModel } from '../llm/models.js'
 import { timeoutFor } from '../llm/meter.js'
 import { draftOne } from './draftNote.js'
 import { SPACE_ROOT, contributeToLibrary } from '../vault/spaces.js'
@@ -292,7 +292,7 @@ export async function drainQueue(limit = BATCH, deadline?: number): Promise<Drai
   const out: DrainResult = { claimed: 0, drafted: 0, failed: 0, skipped: false }
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return out
-  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
+  const model = primaryModel()
 
   try {
     // claim() returns nothing while another job is in flight, so overlapping

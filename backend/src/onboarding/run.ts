@@ -16,7 +16,7 @@
 import { and, eq, like } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes, onboardingJobs } from '../db/schema.js'
-import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
+import { primaryModel } from '../llm/models.js'
 import { generateLearningPlan } from './plan.js'
 import { draftOne } from './draftNote.js'
 import { buildTopicNote, buildNextUpNote, dedupeSegments } from './notePlan.js'
@@ -188,7 +188,7 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
     //    and finding every topic still a one-line stub would make "ready" a
     //    lie.
     const apiKey = process.env.GEMINI_API_KEY
-    const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
+    const model = primaryModel()
     const placeholders = plan.subtopics.map((s) => buildTopicNote(s.title, s, null, { pending: true }))
     const firstDraft = apiKey
       ? await draftOne(

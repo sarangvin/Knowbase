@@ -17,7 +17,7 @@ import { notes, vaults } from '../db/schema.js'
 import { requireAuth, requireApproved } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { validateVaultPath, PathError } from '../vault/pathValidation.js'
-import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
+import { primaryModel } from '../llm/models.js'
 import { draftOne, type DraftRequestItem } from '../onboarding/draftNote.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 
@@ -61,7 +61,7 @@ draftNotesRouter.post('/', asyncHandler(async (req, res) => {
     res.status(202).json({ started: 0, reason: 'llm not configured' })
     return
   }
-  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
+  const model = primaryModel()
   const userId = req.user!.id
   const siblings = items.map((i) => i.title)
 

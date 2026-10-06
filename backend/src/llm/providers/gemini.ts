@@ -29,9 +29,26 @@ interface GeminiChunk {
 //                       variance tipped it over and the user watched a
 //                       spinner until the request died.
 // gemini-3.5-flash-lite answers the same prompt in ~1.7s with no thinking
-// traces and identical schema-valid JSON — measured, not assumed. Override
-// with GEMINI_MODEL; note a change there needs a redeploy to take effect.
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite'
+// traces and identical schema-valid JSON — measured, not assumed.
+//
+// Which model a call uses is no longer decided here: llm/models.ts holds the
+// ordered chain and what is currently failing, and callers ask it.
+
+/** A non-2xx from the API. Typed, so a caller can tell "this model is out
+ *  right now" (404, 429, 5xx — try another) from "this request is wrong"
+ *  (400 — another model would refuse it too) without reading the message. */
+export class GeminiHttpError extends Error {
+  readonly status: number
+  readonly body: string
+  readonly model: string
+  constructor(model: string, status: number, body: string) {
+    super(`Gemini API error ${status} (${model}): ${body.slice(0, 300)}`)
+    this.name = 'GeminiHttpError'
+    this.status = status
+    this.body = body
+    this.model = model
+  }
+}
 
 export async function* streamGeminiChat(
   apiKey: string,
@@ -57,7 +74,7 @@ export async function* streamGeminiChat(
   })
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => '')
-    throw new Error(`Gemini API error ${res.status}: ${text.slice(0, 300)}`)
+    throw new GeminiHttpError(model, res.status, text)
   }
   const usage: Usage = {}
   for await (const data of readSSE(res.body)) {

@@ -3,6 +3,7 @@
 // owner. Raw SQL for the list query — the aggregate joins (note counts,
 // storage bytes, this-month LLM call counts) are more readable hand-written
 // than fought through the query builder.
+import { currentModel, chainStatus } from '../llm/models.js'
 import { Router } from 'express'
 import { sql, eq, desc } from 'drizzle-orm'
 import { db } from '../db/client.js'
@@ -204,7 +205,13 @@ adminRouter.get('/spaces', asyncHandler(async (_req, res) => {
 // not discoverable at runtime either; they change when the tier changes, and
 // a wrong number here is a wrong number on the dashboard.
 const MODEL_LIMITS: Record<string, { rpm: number; tpm: number; rpd: number }> = {
+  // Free tier, from AI Studio's rate-limit page for this project.
   'gemini-3.5-flash-lite': { rpm: 15, tpm: 250_000, rpd: 500 },
+  'gemini-3.1-flash-lite': { rpm: 15, tpm: 250_000, rpd: 500 },
+  'gemini-3.5-flash': { rpm: 5, tpm: 250_000, rpd: 20 },
+  'gemini-3.6-flash': { rpm: 5, tpm: 250_000, rpd: 20 },
+  'gemini-3.7-flash': { rpm: 5, tpm: 250_000, rpd: 20 },
+  'gemini-3-flash-preview': { rpm: 5, tpm: 250_000, rpd: 20 },
   'gemma-4-26b-a4b-it': { rpm: 30, tpm: 16_000, rpd: 14_400 },
   'gemma-4-31b-it': { rpm: 30, tpm: 16_000, rpd: 14_400 },
 }
@@ -247,8 +254,11 @@ adminRouter.get('/usage', asyncHandler(async (_req, res) => {
   res.json({
     models: rows.map((r) => ({ ...r, limits: MODEL_LIMITS[r.model] ?? null })),
     bySource,
-    // So the UI never has to guess which row is the one currently in use.
-    activeModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+    // So the UI never has to guess which row is the one currently in use —
+    // the first in the fallback chain that this instance has not benched.
+    activeModel: currentModel(),
+    // The whole chain, with any model currently benched and until when.
+    modelChain: chainStatus(),
     // So the RPD column can say what day it is counting, and how long is
     // left of it.
     quotaResetsInSeconds: await secondsToQuotaReset(),

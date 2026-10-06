@@ -8,7 +8,8 @@
 //
 // Rate limits are per API key, not per route, so the meter has to sit under
 // everything that spends the key.
-import { streamGeminiChat, DEFAULT_GEMINI_MODEL } from './providers/gemini.js'
+import { streamGeminiChat, GeminiHttpError } from './providers/gemini.js'
+import { modelChain, isFallbackStatus, reportModelFailure, reportModelSuccess } from './models.js'
 import type { Usage } from './providers/anthropic.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 import { eq } from 'drizzle-orm'
@@ -111,6 +112,16 @@ export function timeoutFor(source: string): number {
 /**
  * Collect a full Gemini response and log one llm_call event for it.
  *
+ * Walks the model chain (llm/models.ts): if a model answers 404, 429 or 5xx
+ * the same prompt goes to the next one, and the failing model is benched so
+ * later calls skip it without asking. `preferredModel` is tried first but is
+ * not exclusive.
+ *
+ * One deadline covers every attempt. Falling back is for a model that
+ * refused quickly — an error comes back in well under a second — so it costs
+ * almost nothing; a model that is merely slow is a timeout, and that is not
+ * retried here, for the reason on ModelTimeoutError.
+ *
  * Logging is fire-and-forget and swallows its own errors: a metering failure
  * must never fail the generation it was measuring.
  */
@@ -119,20 +130,30 @@ export async function meteredGeminiCall(
   system: string,
   user: string,
   opts: MeteredCallOptions,
-  modelOverride?: string,
+  preferredModel?: string,
 ): Promise<string> {
   await assertNewAccountBudget(opts.userId)
-  const model = modelOverride ?? process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL
+  const candidates = await modelChain(apiKey, preferredModel)
   const timeoutMs = opts.timeoutMs ?? timeoutFor(opts.source)
   const start = Date.now()
   let usage: Usage = {}
-  let out = ''
+  let model = candidates[0]
+  /** Models that refused before this one answered, for the usage log. */
+  const skipped: string[] = []
   let timedOut = false
 
   // The whole stream, not just the first byte. A model that dribbles tokens
   // for a minute costs the same invocation as one that never answers, and
   // the budget being protected is wall clock.
   const abort = new AbortController()
+
+  const attempt = async (m: string): Promise<string> => {
+    let acc = ''
+    for await (const chunk of streamGeminiChat(apiKey, system, user, m, (u) => { usage = u }, abort.signal)) {
+      acc += chunk
+    }
+    return acc
+  }
 
   // Two mechanisms, because they fail differently. The abort signal is the
   // one that matters: it closes the socket, so the work actually stops. The
@@ -141,11 +162,26 @@ export async function meteredGeminiCall(
   // never settles is precisely the failure being designed out. Without the
   // race, one unresponsive stream holds the invocation exactly as before.
   const consume = (async () => {
-    let acc = ''
-    for await (const chunk of streamGeminiChat(apiKey, system, user, model, (u) => { usage = u }, abort.signal)) {
-      acc += chunk
+    for (let i = 0; ; i++) {
+      model = candidates[i]
+      try {
+        const out = await attempt(model)
+        reportModelSuccess(model)
+        return out
+      } catch (err) {
+        if (timedOut) throw err
+        const last = i === candidates.length - 1
+        if (err instanceof GeminiHttpError && isFallbackStatus(err.status)) {
+          reportModelFailure(model, err)
+          if (!last) {
+            skipped.push(model)
+            console.warn(`[model] ${model} answered ${err.status}; trying ${candidates[i + 1]} (${opts.source})`)
+            continue
+          }
+        }
+        throw err
+      }
     }
-    return acc
   })()
   // It may lose the race, and a rejection nobody is awaiting takes the
   // process down on unhandledRejection.
@@ -161,10 +197,12 @@ export async function meteredGeminiCall(
   })
 
   try {
-    out = await Promise.race([consume, deadline])
-    return out
+    return await Promise.race([consume, deadline])
   } catch (err) {
-    if (timedOut) throw new ModelTimeoutError(opts.source, timeoutMs)
+    if (timedOut) {
+      reportModelFailure(model, 'timeout')
+      throw new ModelTimeoutError(opts.source, timeoutMs)
+    }
     throw err
   } finally {
     clearTimeout(timer)
@@ -172,6 +210,13 @@ export async function meteredGeminiCall(
     // rate-limit budget, and those are exactly the ones worth seeing when
     // working out why the limit was hit.
     if (opts.userId) {
+      const metadata: Record<string, unknown> = { source: opts.source }
+      // Recorded, because a run of these is the signal that the timeouts
+      // above are set against a model that has changed under them.
+      if (timedOut) metadata.timedOut = true
+      // And these are the signal that a model is out: which ones refused
+      // before `model` (the one that answered, or failed last) was reached.
+      if (skipped.length) metadata.fellBackFrom = skipped
       void logUsageEvent({
         userId: opts.userId,
         eventType: 'llm_call',
@@ -180,10 +225,53 @@ export async function meteredGeminiCall(
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         latencyMs: Date.now() - start,
-        // Recorded, because a run of these is the signal that the timeouts
-        // above are set against a model that has changed under them.
-        metadata: timedOut ? { source: opts.source, timedOut: true } : { source: opts.source },
+        metadata,
       })
     }
+  }
+}
+
+/**
+ * The streaming form of the fallback above, for a route that pipes the reply
+ * to the reader as it arrives (Ask AI).
+ *
+ * A stream cannot be taken back once its first words have gone out, so each
+ * model is held until it produces its first chunk: an HTTP refusal surfaces
+ * there, before anything is sent, and the next model is tried. Past the
+ * first chunk the stream is committed to that model. `onModel` says which
+ * one it was, for the usage log.
+ */
+export async function* streamGeminiWithFallback(
+  apiKey: string,
+  system: string,
+  user: string,
+  onUsage: (usage: Usage) => void,
+  onModel: (model: string, fellBackFrom: string[]) => void,
+): AsyncGenerator<string> {
+  const candidates = await modelChain(apiKey)
+  const skipped: string[] = []
+  for (let i = 0; i < candidates.length; i++) {
+    const model = candidates[i]
+    const gen = streamGeminiChat(apiKey, system, user, model, onUsage)
+    let first: IteratorResult<string>
+    try {
+      first = await gen.next()
+    } catch (err) {
+      if (err instanceof GeminiHttpError && isFallbackStatus(err.status)) {
+        reportModelFailure(model, err)
+        if (i < candidates.length - 1) {
+          skipped.push(model)
+          console.warn(`[model] ${model} answered ${err.status}; trying ${candidates[i + 1]} (ask-ai)`)
+          continue
+        }
+      }
+      onModel(model, skipped)
+      throw err
+    }
+    reportModelSuccess(model)
+    onModel(model, skipped)
+    if (!first.done) yield first.value
+    yield* gen
+    return
   }
 }
