@@ -33,6 +33,15 @@ function keyOf(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
+/** "System Architecture for PMs 2" -> "System Architecture for PMs". A
+ *  trailing number is how a second build of a subject someone already has
+ *  gets named (disambiguateSpace on the server), so for "have they got this
+ *  subject?" the number is not part of the subject. */
+function baseOf(s: string): string {
+  const m = s.match(/^(.*\S) (\d+)$/)
+  return m ? m[1] : s
+}
+
 /** The last one shown, across visits to the tab in this session, so that
  *  coming back does not land on the same suggestion by chance. */
 let lastShown: string | null = null
@@ -78,8 +87,19 @@ export function CollectionSuggestion({
 
   const candidates = useMemo(() => {
     if (!library) return []
-    const have = new Set([...owned, ...building].map(keyOf))
-    return library.filter((s) => s.topicCount >= MIN_TOPICS && !have.has(s.key))
+    // Owning "X 2" is owning X — compare on the subject, number stripped.
+    const have = new Set([...owned, ...building].flatMap((s) => [keyOf(s), keyOf(baseOf(s))]))
+    const inLibrary = new Set(library.map((s) => s.key))
+    return library.filter((s) => {
+      if (s.topicCount < MIN_TOPICS) return false
+      if (have.has(s.key) || have.has(keyOf(baseOf(s.name)))) return false
+      // A numbered copy of a subject the library already holds is a
+      // duplicate that leaked in from someone's renamed folder ("System
+      // Architecture for PMs 2"). The server no longer lets new ones in;
+      // this keeps the ones already there from being suggested.
+      if (baseOf(s.name) !== s.name && inLibrary.has(keyOf(baseOf(s.name)))) return false
+      return true
+    })
   }, [library, owned, building])
 
   // Pick once the list arrives, and again only if the current pick stops

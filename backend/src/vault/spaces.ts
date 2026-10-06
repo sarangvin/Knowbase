@@ -175,6 +175,13 @@ export function asCorpusCopy(content: string): string {
  *
  *  **Everything personal is stripped on the way in** — see `asCorpusCopy`.
  *  Enforced here because this is the single door into the global vault. */
+/** "System Architecture for PMs 2" -> "System Architecture for PMs"; null
+ *  for a name that does not end in a number. */
+export function numberedBase(space: string): string | null {
+  const m = space.match(/^(.*\S) (\d+)$/)
+  return m ? m[1] : null
+}
+
 export async function contributeToLibrary(entries: { path: string; content: string }[]): Promise<number> {
   const globalVaultId = await getGlobalVaultId()
   if (!globalVaultId) return 0
@@ -182,8 +189,28 @@ export async function contributeToLibrary(entries: { path: string; content: stri
   const before = new Set(
     (await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, globalVaultId))).map((r) => r.path),
   )
+  const librarySpaces = new Set(
+    [...before].map(spaceOf).filter((sp): sp is string => !!sp).map(normalizeTopic),
+  )
   const fresh = entries
     .filter((e) => !before.has(e.path))
+    // Never a numbered copy of a subject the library already has. Onboarding
+    // used to rename a second build of a subject its owner already had to
+    // "X 2", so it would not write over the first; it now adds to the
+    // existing collection instead (joinExisting in onboarding/run.ts), and
+    // this stays as the backstop. That rename is about one person's folders. Copied into
+    // the library it became a second collection on the same subject, and
+    // the home screen offered "System Architecture for PMs 2" to someone who
+    // already had "System Architecture for PMs".
+    //
+    // A name that merely ends in a number ("Web 3") is let through unless the
+    // library holds the bare name too — then it is the same subject whichever
+    // way it got its number.
+    .filter((e) => {
+      const space = spaceOf(e.path)
+      const base = space ? numberedBase(space) : null
+      return !(base && librarySpaces.has(normalizeTopic(base)))
+    })
     .map((e) => ({ path: e.path, content: asCorpusCopy(e.content) }))
   if (fresh.length === 0) return 0
 
