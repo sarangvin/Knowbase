@@ -6,7 +6,7 @@
 // someone reads before deciding what to type: cooking, history, music and
 // botany sit next to Kubernetes, so whatever they arrived curious about
 // looks like it belongs.
-const TOPICS = [
+export const TOPICS = [
   // Sciences
   'Marine biology', 'Astrophysics', 'Genetics', 'Volcanology', 'Immunology',
   'Particle physics', 'Neuroscience', 'Mycology', 'Oceanography', 'Botany',

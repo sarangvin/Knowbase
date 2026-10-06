@@ -113,6 +113,8 @@ const TIMEOUT_BY_SOURCE: Record<string, number> = {
   'answer-backfill': 60_000,
   // Terms and quiz options for one note: a longer answer than a draft's tail.
   'study-backfill': 60_000,
+  // Building library collections ahead of demand (onboarding/seedLibrary.ts).
+  'library-seed': 60_000,
 
   // ── foreground: the reader is looking at a spinner ──
   'quiz-build': 25_000,
