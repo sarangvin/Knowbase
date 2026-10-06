@@ -39,8 +39,31 @@ export interface StudyBackfillOptions {
   models?: string[]
   /** Deadline per call; slow models need more than the default. */
   timeoutMs?: number
-  /** Model calls in flight at once. */
+  /** Model calls in flight at once. With several `models`, the workers are
+   *  spread across them — each starts on a different one — so every model's
+   *  quota is used rather than all of it landing on the first. */
   concurrency?: number
+  /** Most calls started per model per minute (AI Studio counts requests per
+   *  model per minute). Unset: no limit. */
+  perModelRpm?: number
+}
+
+/** Start times per model over the last minute, shared by the workers. */
+function rateLimiter(rpm: number | undefined) {
+  const starts = new Map<string, number[]>()
+  return async (model: string) => {
+    if (!rpm) return
+    for (;;) {
+      const now = Date.now()
+      const recent = (starts.get(model) ?? []).filter((t) => now - t < 60_000)
+      if (recent.length < rpm) {
+        recent.push(now)
+        starts.set(model, recent)
+        return
+      }
+      await new Promise((r) => setTimeout(r, 60_000 - (now - recent[0]) + 50))
+    }
+  }
 }
 
 export interface StudyBackfillResult {
@@ -156,7 +179,12 @@ export async function backfillStudy(opts: StudyBackfillOptions): Promise<StudyBa
     halted = true
   }
 
-  const worker = async () => {
+  const limit = rateLimiter(opts.perModelRpm)
+  const worker = async (n: number) => {
+    // This worker's model order: rotated so worker n starts on model n.
+    const models = opts.models?.length
+      ? [...opts.models.slice(n % opts.models.length), ...opts.models.slice(0, n % opts.models.length)]
+      : undefined
     for (;;) {
       if (halted) return
       const group = queue.shift()
@@ -165,10 +193,11 @@ export async function backfillStudy(opts: StudyBackfillOptions): Promise<StudyBa
       if (opts.budgetMs && Date.now() - started > opts.budgetMs) return halt('time')
       if ((await callsSinceQuotaReset(opts.models)) >= opts.dailyCallBudget) return halt('quota')
       calls++
+      if (models) await limit(models[0])
       const [first, ...rest] = group
       try {
         const data = await generateStudy(titleOf(first.path), first.content, first.owner ?? undefined, 'study-backfill', {
-          models: opts.models,
+          models,
           timeoutMs: opts.timeoutMs,
         })
         if (await writeInto(first, data)) {
@@ -185,7 +214,7 @@ export async function backfillStudy(opts: StudyBackfillOptions): Promise<StudyBa
       if (opts.pauseMs) await new Promise((r) => setTimeout(r, opts.pauseMs))
     }
   }
-  await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 1) }, worker))
+  await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 1) }, (_, n) => worker(n)))
   return out
 }
 

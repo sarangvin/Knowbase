@@ -3,12 +3,13 @@
 //   cd backend
 //   npx tsx --env-file=.env src/notes/runStudyBackfill.ts --dry                 (count only)
 //   npx tsx --env-file=.env src/notes/runStudyBackfill.ts --limit 40            (40 model calls, Flash chain)
-//   npx tsx --env-file=.env src/notes/runStudyBackfill.ts --model gemma --limit 400 --concurrency 4
+//   npx tsx --env-file=.env src/notes/runStudyBackfill.ts --model gemma --limit 500   (12 at once, 27/min per model)
 //
 // --model gemma runs on the Gemma models only: they are slow (~30s a call)
 // but have their own quota, so a large backfill does not eat the Flash-Lite
 // requests that onboarding and Ask AI share. Hence the longer deadline and
-// the parallel calls.
+// the parallel calls, spread over both Gemma models (30 requests a minute
+// each on AI Studio's free tier).
 //
 // Safe to run repeatedly; copies from identical notes are free and unlimited,
 // model calls are capped by --limit and by the daily budget.
@@ -35,7 +36,9 @@ const result = await backfillStudy({
   dailyCallBudget: num('budget', models ? 5000 : 700),
   pauseMs: num('pause', models ? 1000 : 4500),
   timeoutMs: models ? num('timeout', 300_000) : undefined,
-  concurrency: num('concurrency', models ? 4 : 1),
+  concurrency: num('concurrency', models ? 12 : 1),
+  // AI Studio allows Gemma 30 requests a minute per model; a little under.
+  perModelRpm: models ? num('rpm', 27) : undefined,
   models,
   dryRun: flag('dry'),
 })
