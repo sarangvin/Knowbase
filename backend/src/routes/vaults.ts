@@ -265,12 +265,33 @@ vaultsRouter.get('/library/spaces', asyncHandler(async (_req, res) => {
   }
   const rows = await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, globalVaultId))
   const counts = new Map<string, number>()
+  // Topic titles per space, for the "start an existing collection" card on
+  // the home screen: a name alone says little about what you would be
+  // signing up for, and the topics are the most honest preview there is.
+  const topics = new Map<string, string[]>()
   for (const r of rows) {
     const space = spaceOf(r.path)
-    if (space) counts.set(space, (counts.get(space) ?? 0) + 1)
+    if (!space) continue
+    counts.set(space, (counts.get(space) ?? 0) + 1)
+    if (r.path.includes('/Topics/')) {
+      const list = topics.get(space) ?? []
+      list.push((r.path.split('/').pop() ?? r.path).replace(/\.md$/i, ''))
+      topics.set(space, list)
+    }
   }
   res.json({
-    spaces: [...counts].map(([name, noteCount]) => ({ name, key: normalizeTopic(name), noteCount })),
+    spaces: [...counts].map(([name, noteCount]) => {
+      const t = (topics.get(name) ?? []).sort()
+      return {
+        name,
+        key: normalizeTopic(name),
+        noteCount,
+        /** Topic notes only — noteCount includes Next Up and _config. */
+        topicCount: t.length,
+        /** A handful, not all: it is a preview. */
+        sampleTopics: t.slice(0, 4),
+      }
+    }),
   })
 }))
 

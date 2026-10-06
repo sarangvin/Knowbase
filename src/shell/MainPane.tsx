@@ -8,6 +8,7 @@ import { QuizView } from '../features/quiz/QuizView'
 import { FlashcardsView } from '../features/flashcards/FlashcardsView'
 import { SearchPanel } from '../features/search/SearchPanel'
 import { TopicLauncher } from '../features/onboarding/TopicLauncher'
+import { CollectionSuggestion } from '../features/onboarding/CollectionSuggestion'
 import { listSpaces, isArchived, isPending, computeNextUp } from '../features/automated-graph/engine'
 import { CollectionCard, BuildingCard } from '../features/automated-graph/CollectionCard'
 import { startOnboarding } from '../features/onboarding/onboardingApi'
@@ -132,10 +133,19 @@ function HomeView() {
                 in Settings.
               </p>
             )}
+            {/* Two ways to add a collection, as two separate sections: take one
+                that already exists in the library — ready in seconds — or
+                name a subject nobody has had written yet. */}
             <div className="collection-new">
+              <CollectionSuggestion
+                // All of them, archived included: offering back something
+                // you set aside is not a suggestion.
+                owned={index ? listSpaces(index) : []}
+                building={pending.map((j) => j.space ?? j.topic)}
+              />
               <TopicLauncher
-                title="Start another collection"
-                hint="A separate subject, kept apart from the ones above."
+                title="Start a brand new collection"
+                hint="Name any subject and Rabbithole writes it for you — a separate collection, kept apart from the ones above."
               />
             </div>
           </>

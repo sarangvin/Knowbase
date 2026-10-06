@@ -220,3 +220,35 @@ export async function fetchCollectionAllowance(): Promise<CollectionAllowance | 
     return null
   }
 }
+
+/** A collection that already exists in the shared library — someone has
+ *  already had it written. Starting one costs no generation: it is copied. */
+export interface LibrarySpace {
+  name: string
+  /** Server-normalized match key (lowercased, punctuation collapsed) — the
+   *  same key the server uses to decide a topic is already in the library. */
+  key: string
+  topicCount: number
+  /** A few topic titles, as a preview of what you would be starting. */
+  sampleTopics: string[]
+}
+
+/** Every collection in the library. Empty rather than throwing: this feeds
+ *  a suggestion, and a suggestion that fails should simply not be made. */
+export async function fetchLibrarySpaces(): Promise<LibrarySpace[]> {
+  try {
+    const res = await fetch('/api/vaults/library/spaces', { credentials: 'include' })
+    if (!res.ok) return []
+    const { spaces } = (await res.json()) as { spaces: Partial<LibrarySpace>[] }
+    return spaces
+      .filter((s): s is LibrarySpace & Partial<LibrarySpace> => typeof s.name === 'string' && typeof s.key === 'string')
+      .map((s) => ({
+        name: s.name,
+        key: s.key,
+        topicCount: s.topicCount ?? 0,
+        sampleTopics: s.sampleTopics ?? [],
+      }))
+  } catch {
+    return []
+  }
+}
