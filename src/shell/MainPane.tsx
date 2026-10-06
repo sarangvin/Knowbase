@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useVault } from '../vault/vaultStore'
+import { useVault, readSpaceOpenedAt } from '../vault/vaultStore'
 import { NoteView } from '../features/reader/NoteView'
 import { GraphView } from '../features/graph/GraphView'
 import { FilesPane } from '../features/explorer/FilesPane'
@@ -56,7 +56,29 @@ function HomeView() {
   //
   // Archived ones are not here. They still exist, and Settings lists them —
   // "set aside" has to mean something on the screen it was set aside from.
-  const spaces = index ? listSpaces(index).filter((s) => !isArchived(index, s)) : []
+  // Most recently opened first: when you last opened it on this device, or
+  // — for a device that has never seen it — when you last reviewed one of
+  // its notes, which the server knows. Never touched sorts last, in the
+  // order they were made.
+  const userId = useVault((s) => s.user?.id)
+  const openedAt = readSpaceOpenedAt(userId)
+  const lastTouched = (space: string) => {
+    let t = openedAt[space] ?? 0
+    for (const n of notes) {
+      if (!n.path.startsWith(`Automated Graph/${space}/`)) continue
+      const r = n.frontmatter.last_reviewed
+      const ms = typeof r === 'string' || r instanceof Date ? new Date(r).getTime() : NaN
+      if (ms > t) t = ms
+    }
+    return t
+  }
+  const spaces = index
+    ? listSpaces(index)
+        .filter((s) => !isArchived(index, s))
+        .map((s, i) => ({ s, i, t: lastTouched(s) }))
+        .sort((a, b) => b.t - a.t || a.i - b.i)
+        .map((x) => x.s)
+    : []
   const archivedCount = index ? listSpaces(index).length - spaces.length : 0
 
   const summary = (space: string) => {

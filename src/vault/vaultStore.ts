@@ -167,29 +167,34 @@ function snippetFor(note: Note, query: string): string {
 }
 
 
-// ─── Where you were ──────────────────────────────────────────────────────────
-// The landing note used to be the first "Next Up.md" in file order, which is
-// the oldest collection — so someone with three collections was returned to
-// whichever one they made first, forever. Remember the last one they actually
-// opened instead.
+// ─── When each collection was last opened ────────────────────────────────────
+// The Learn home lists collections most recently opened first, so the one
+// you are working through is the first card rather than whichever you made
+// first.
 //
-// Per-device by design: this is "where I left off on this machine", not a
-// preference worth syncing, and localStorage needs no round-trip before the
-// first paint. Keyed by user id so signing in as someone else on a shared
-// browser does not inherit their place. Every access is wrapped — storage
-// throws outright in a locked-down browser, and losing the memory is a worse
-// landing note, not an error.
-const LAST_SPACE_KEY = 'kb:last-space'
+// Per-device by design: this is "where I left off on this machine", and
+// localStorage needs no round-trip before the first paint. The home screen
+// also falls back on each collection's latest review, which is on the server,
+// so a new device still has a sensible order. Keyed by user id so signing in
+// as someone else on a shared browser does not inherit their order. Every
+// access is wrapped — storage throws outright in a locked-down browser, and
+// losing it costs an ordering, not an error.
+const OPENED_KEY = 'kb:space-opened'
+/** The single "last collection" this used to remember, read once so the
+ *  collection someone was in before this change still sorts first. */
+const LEGACY_LAST_SPACE_KEY = 'kb:last-space'
 
-function lastSpaceKey(userId?: string | null): string {
-  return `${LAST_SPACE_KEY}:${userId ?? 'local'}`
-}
-
-function readLastSpace(userId?: string | null): string | null {
+/** Collection name → when it was last opened (ms). */
+export function readSpaceOpenedAt(userId?: string | null): Record<string, number> {
+  const who = userId ?? 'local'
   try {
-    return localStorage.getItem(lastSpaceKey(userId))
+    const raw = localStorage.getItem(`${OPENED_KEY}:${who}`)
+    const map = raw ? (JSON.parse(raw) as Record<string, number>) : {}
+    const legacy = localStorage.getItem(`${LEGACY_LAST_SPACE_KEY}:${who}`)
+    if (legacy && map[legacy] == null) map[legacy] = 1
+    return map && typeof map === 'object' ? map : {}
   } catch {
-    return null
+    return {}
   }
 }
 
@@ -197,7 +202,9 @@ function rememberSpace(userId: string | null | undefined, path: string): void {
   const space = spaceOfPath(path)
   if (!space) return
   try {
-    localStorage.setItem(lastSpaceKey(userId), space)
+    const map = readSpaceOpenedAt(userId)
+    map[space] = Date.now()
+    localStorage.setItem(`${OPENED_KEY}:${userId ?? 'local'}`, JSON.stringify(map))
   } catch {
     // Private mode, blocked storage. Nothing downstream depends on this.
   }
@@ -220,28 +227,23 @@ export const useVault = create<VaultState>((set, get) => {
       _searchIndex = buildSearch(parsed)
       const tree = buildTree(files)
 
-      // Landing note: Next Up > Welcome > Today > first note. Next Up leads
-      // because it answers the question the product exists to answer — what
-      // should I study now — whereas Welcome is boilerplate the reader has
-      // already seen once.
-      // Landing preference, most specific first: the collection you last
-      // opened, then any Next Up, then the boilerplate.
-      const remembered = readLastSpace(get().user?.id)
+      // Landing: the Learn home whenever the vault has collections — the
+      // list of them, most recently opened first, is the place to choose
+      // from. It used to drop you into the last collection you had opened,
+      // which hid the others behind a Back press. An account's own vault
+      // always opens there, empty or not (empty, it asks what to learn). A
+      // local folder with no collections still opens on a note: Welcome >
+      // Today > the first one.
+      const hasCollections = parsed.some((n) => /^Automated Graph\/[^/]+\/Next Up\.md$/.test(n.path))
       const preferred =
-        (remembered
-          ? parsed.find((n) => n.path === `Automated Graph/${remembered}/Next Up.md`)
-          : undefined) ??
-        parsed.find((n) => /\/Next Up\.md$/i.test(n.path)) ??
-        parsed.find((n) => /(^|\/)Welcome\.md$/i.test(n.path)) ??
-        parsed.find((n) => /(^|\/)Today\.md$/i.test(n.path)) ??
-        parsed[0]
-      const firstView: View =
-        preferred && !opts?.home ? { kind: 'note', path: preferred.path } : { kind: 'home' }
-      // The collections screen goes underneath the landing note in history,
-      // so Back from where the app put you leads to the list of collections.
-      // Landing straight in a collection with nothing behind it left Back
-      // greyed out, and the only way to your other collections was to know
-      // that the Learn tab is where they live.
+        hasCollections || source.kind === 'remote' || opts?.home
+          ? undefined
+          : (parsed.find((n) => /(^|\/)Welcome\.md$/i.test(n.path)) ??
+            parsed.find((n) => /(^|\/)Today\.md$/i.test(n.path)) ??
+            parsed[0])
+      const firstView: View = preferred ? { kind: 'note', path: preferred.path } : { kind: 'home' }
+      // The collections screen goes underneath a landing note in history,
+      // so Back leads to it.
       const history: View[] = firstView.kind === 'home' ? [firstView] : [{ kind: 'home' }, firstView]
       const tab: Tab = { id: newTabId(), history, pos: history.length - 1 }
 
