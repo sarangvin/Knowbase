@@ -186,6 +186,20 @@ export function OnboardingBanner() {
     }
   }, [approved, refreshVault, setBuildingJobs])
 
+  // On the Learn home the collection is already in front of them, as a card
+  // ticking off its notes — a banner saying "it is ready, open it" on top of
+  // that says the same thing twice. Being shown it there counts as being
+  // told, so it is acknowledged rather than saved for another screen.
+  const onHome = useVault((s) => {
+    const v = s.activeView()
+    return !v || v.kind === 'home'
+  })
+  const homeShowsIt = !!job && job.status === 'ready' && !job.acknowledged && onHome && source != null
+  useEffect(() => {
+    if (!homeShowsIt || !job) return
+    void ackOnboarding(job.topic).then(() => setJob((j) => (j && j.topic === job.topic ? { ...j, acknowledged: true } : j)))
+  }, [homeShowsIt, job])
+
   const dismissKey = job ? `${job.topic}|${job.status}` : ''
   const dismiss = () => {
     setDismissed(dismissKey)
@@ -197,7 +211,7 @@ export function OnboardingBanner() {
     }
   }
 
-  if (!job || dismissed === dismissKey) return null
+  if (!job || dismissed === dismissKey || homeShowsIt) return null
   // Already delivered: they've been to the space, so this is history.
   if (job.status === 'ready' && job.acknowledged) return null
 

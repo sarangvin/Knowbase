@@ -5,7 +5,7 @@
 // flashcard gave up being a button when the bookmark moved inside it.
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { MoreVertical, Archive, Trash } from '../../ui/icons'
+import { MoreVertical, Archive, Trash, Check } from '../../ui/icons'
 import { setCollectionArchived, deleteCollection } from './collectionsApi'
 
 export interface CollectionSummary {
@@ -23,7 +23,15 @@ export interface CollectionSummary {
    *  written. */
   next: { title: string; isReview: boolean; pending: boolean } | null
   openPath: string | null
+  /** Every topic, for the live list shown while notes are still being
+   *  written. Only drawn then: once the collection is complete the card
+   *  goes back to its one-line summary. */
+  topics?: { path: string; title: string; pending: boolean }[]
 }
+
+/** Past this many topics the list says "+N more" rather than growing the
+ *  card past the others in its row. */
+const LIVE_LIST_MAX = 8
 
 export function CollectionCard({
   summary,
@@ -34,7 +42,7 @@ export function CollectionCard({
    *  in memory has no idea until it is re-read. */
   onChanged: () => void
 }) {
-  const { space, total, studied, written, next, openPath } = summary
+  const { space, total, studied, written, next, openPath, topics } = summary
   const openNote = useVault((s) => s.openNote)
   const [menuOpen, setMenuOpen] = useState(false)
   const [busy, setBusy] = useState<null | 'archive' | 'delete'>(null)
@@ -133,6 +141,39 @@ export function CollectionCard({
             </>
           )}
         </div>
+        {/* The notes being written, ticking off as each one lands — the
+            build made visible, so a new collection is something to watch
+            rather than a spinner to wait out. A written note opens. */}
+        {topics && written < total && (
+          <ul className="collection-live" aria-live="polite">
+            {topics.slice(0, LIVE_LIST_MAX).map((t) => (
+              <li key={t.path} className={t.pending ? 'is-pending' : 'is-written'}>
+                {t.pending ? (
+                  <span className="spinner collection-live-spinner" aria-label="being written" />
+                ) : (
+                  <Check width={13} height={13} aria-label="written" />
+                )}
+                {t.pending ? (
+                  <span>{t.title}</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="collection-live-open"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      openNote(t.path)
+                    }}
+                  >
+                    {t.title}
+                  </button>
+                )}
+              </li>
+            ))}
+            {topics.length > LIVE_LIST_MAX && (
+              <li className="collection-live-more">+{topics.length - LIVE_LIST_MAX} more</li>
+            )}
+          </ul>
+        )}
         {total > 0 && (
           <div className="collection-bar" aria-hidden="true">
             <span style={{ width: `${pct}%` }} />

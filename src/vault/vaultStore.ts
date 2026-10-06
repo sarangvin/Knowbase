@@ -95,7 +95,9 @@ interface VaultState {
   checkAuth: () => Promise<void>
   loginWithGoogle: () => void
   logout: () => Promise<void>
-  loadRemote: () => Promise<void>
+  /** `home`: land on the collections screen rather than a note — used right
+   *  after starting a build, so the reader watches it fill in. */
+  loadRemote: (opts?: { home?: boolean }) => Promise<void>
   loadGlobalVault: () => Promise<void>
 
   // ── actions: navigation ──
@@ -206,7 +208,7 @@ function rememberSpace(userId: string | null | undefined, path: string): void {
 let _refreshing = false
 
 export const useVault = create<VaultState>((set, get) => {
-  async function loadFromSource(source: VaultSource) {
+  async function loadFromSource(source: VaultSource, opts?: { home?: boolean }) {
     set({ status: 'loading', error: null, source, sourceName: source.name, writable: source.writable })
     try {
       const files = await source.list()
@@ -233,7 +235,8 @@ export const useVault = create<VaultState>((set, get) => {
         parsed.find((n) => /(^|\/)Welcome\.md$/i.test(n.path)) ??
         parsed.find((n) => /(^|\/)Today\.md$/i.test(n.path)) ??
         parsed[0]
-      const firstView: View = preferred ? { kind: 'note', path: preferred.path } : { kind: 'home' }
+      const firstView: View =
+        preferred && !opts?.home ? { kind: 'note', path: preferred.path } : { kind: 'home' }
       // The collections screen goes underneath the landing note in history,
       // so Back from where the app put you leads to the list of collections.
       // Landing straight in a collection with nothing behind it left Back
@@ -431,7 +434,7 @@ export const useVault = create<VaultState>((set, get) => {
         set({ status: 'idle', source: null, sourceName: '', index: null, files: [], tree: null, tabs: [], activeTabId: null })
       }
     },
-    loadRemote: async () => loadFromSource(new RemoteVaultSource('personal')),
+    loadRemote: async (opts) => loadFromSource(new RemoteVaultSource('personal'), opts),
     loadGlobalVault: async () => loadFromSource(new RemoteVaultSource('global')),
 
     openNote: (path, opts) => {

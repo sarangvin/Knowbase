@@ -14,6 +14,35 @@ import { CollectionCard, BuildingCard } from '../features/automated-graph/Collec
 import { startOnboarding } from '../features/onboarding/onboardingApi'
 import { RabbitSolid } from '../ui/icons'
 
+/** How many prerequisites deep each topic sits (0 = none), keyed by title.
+ *  Prerequisites are `[[wikilinks]]` by title; one pointing outside the
+ *  collection, or a cycle, counts as no further depth. */
+function studyDepths(topics: { title: string; frontmatter: Record<string, unknown> }[]): Map<string, number> {
+  const prereqs = new Map<string, string[]>()
+  for (const n of topics) {
+    const raw = n.frontmatter.prerequisites
+    const list = Array.isArray(raw) ? raw : []
+    prereqs.set(
+      n.title,
+      list.filter((x): x is string => typeof x === 'string').map((x) => x.replace(/^\[\[|\]\]$/g, '').split('|')[0].trim()),
+    )
+  }
+  const depth = new Map<string, number>()
+  const visiting = new Set<string>()
+  const of = (t: string): number => {
+    const known = depth.get(t)
+    if (known != null) return known
+    if (visiting.has(t) || !prereqs.has(t)) return -1
+    visiting.add(t)
+    const d = 1 + Math.max(-1, ...(prereqs.get(t) ?? []).map(of))
+    visiting.delete(t)
+    depth.set(t, d)
+    return d
+  }
+  for (const t of prereqs.keys()) of(t)
+  return depth
+}
+
 function HomeView() {
   const index = useVault((s) => s.index)
   const reload = useVault((s) => s.reload)
@@ -44,7 +73,15 @@ function HomeView() {
     // waiting on a prerequisite).
     const pick = index ? computeNextUp(index, space).pick : null
     const next = pick ? { title: pick.title, isReview: !!pick.isReview, pending: pick.pending } : null
-    return { total: topics.length, studied, written, next }
+    // For the live list on a card that is still filling in: study order —
+    // a topic after everything it lists as a prerequisite — so the list
+    // reads as the path through the subject. Stable, so lines tick over in
+    // place rather than jumping about as notes land.
+    const depth = studyDepths(topics)
+    const live = [...topics]
+      .sort((a, b) => (depth.get(a.title) ?? 0) - (depth.get(b.title) ?? 0) || a.title.localeCompare(b.title))
+      .map((n) => ({ path: n.path, title: n.title, pending: isPending(n.frontmatter) }))
+    return { total: topics.length, studied, written, next, topics: live }
   }
 
   const nextUpOf = (space: string) =>
@@ -135,11 +172,11 @@ function HomeView() {
             <div className="collection-grid">
               {buildingCards}
               {spaces.map((space) => {
-                const { total, studied, written, next } = summary(space)
+                const { total, studied, written, next, topics } = summary(space)
                 return (
                   <CollectionCard
                     key={space}
-                    summary={{ space, total, studied, written, next, openPath: nextUpOf(space) }}
+                    summary={{ space, total, studied, written, next, topics, openPath: nextUpOf(space) }}
                     onChanged={() => void reload()}
                   />
                 )

@@ -52,17 +52,18 @@ export function Onboarding() {
       loginWithGoogle() // full-page redirect; the topic is waiting when we return
       return
     }
-    // Signed in: hand the topic to the server and go straight into the demo
-    // space while it builds. Nothing below this line waits on a model — the
-    // notification is what brings them back (see OnboardingBanner), which is
-    // the whole reason the wait could be removed rather than shortened.
+    // Signed in: hand the topic to the server and go to their own Learn home,
+    // where the collection appears as a card and its notes tick off as they
+    // are written. This used to open the demo (Economics) to fill the wait,
+    // but a build now takes seconds, and the demo read as being sent to the
+    // wrong subject.
     setBusy(true)
     try {
       await startOnboarding(t)
       // Consumed: it lives in the job row now, and leaving it here would let
       // a later boot start the same generation a second time.
       clearPendingTopic()
-      await loadSeed()
+      await loadRemote({ home: true })
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : String(e))
       setBusy(false)
@@ -159,7 +160,7 @@ export function Onboarding() {
             )}
             {user != null && (
               <p className="ob-hint">
-                <Sparkles /> We'll build it in the background while you look around a finished one.
+                <Sparkles /> Your notes appear on your Learn page as they're written.
               </p>
             )}
           </div>

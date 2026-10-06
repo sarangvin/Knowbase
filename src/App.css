@@ -258,6 +258,46 @@
 }
 .collection-bar span { display: block; height: 100%; background: var(--accent); }
 
+/* The notes of a collection still being written, one per line, each ticking
+   from a spinner to a check as it lands. */
+.collection-live {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.collection-live li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.collection-live li > span,
+.collection-live-open {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.collection-live li.is-pending { color: var(--text-faint); }
+.collection-live li.is-written svg { color: var(--accent); flex: none; animation: live-pop 0.3s ease-out; }
+.collection-live-spinner { width: 11px; height: 11px; flex: none; }
+.collection-live-open {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--text-normal);
+  cursor: pointer;
+  text-align: left;
+}
+.collection-live-open:hover { color: var(--accent); text-decoration: underline; }
+.collection-live-more { color: var(--text-faint); padding-left: 20px; }
+@keyframes live-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
 /* A collection that has been asked for and does not exist yet. Same card,
    held back: dashed border so it reads as an outline of a thing rather than
    the thing, and no hover, because there is nothing to open. */
