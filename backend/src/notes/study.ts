@@ -175,9 +175,14 @@ export function cleanQuiz(items: unknown): StudyQuiz[] {
   for (const item of items as Partial<StudyQuiz>[]) {
     const question = typeof item?.question === 'string' ? item.question.trim() : ''
     const stem = typeof item?.stem === 'string' && item.stem.trim() ? item.stem.trim() : question
-    const correct = typeof item?.correct === 'string' ? item.correct.trim() : ''
+    // Options lose a trailing full stop. Models tend to finish the right
+    // answer as a sentence and the wrong ones as fragments, which makes the
+    // right one the option with the dot. Done here, at read time as well as
+    // write, so material already stored is fixed without regenerating it.
+    const option = (o: string) => o.trim().replace(/\.+$/, '').trim()
+    const correct = typeof item?.correct === 'string' ? option(item.correct) : ''
     const wrong = Array.isArray(item?.wrong)
-      ? item.wrong.filter((w): w is string => typeof w === 'string').map((w) => w.trim())
+      ? item.wrong.filter((w): w is string => typeof w === 'string').map(option)
       : []
     if (!question || !correct || wrong.length !== OPTION_COUNT - 1) continue
     const all = [correct, ...wrong]

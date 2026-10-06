@@ -77,6 +77,10 @@ check('cleanTerms: drops the note title as a term', cleanTerms([{ term: 'Photosy
 check('cleanTerms: caps at 4', cleanTerms(Array.from({ length: 9 }, (_, i) => ({ term: `Zyx${i}q`, definition: `A sufficiently long explanation number ${i} of something in biology.` })), '').length === 4)
 check('cleanQuiz: needs 3 distinct wrong answers', cleanQuiz([{ question: 'q?', stem: 's', correct: 'a', wrong: ['b', 'b', 'c'] }]).length === 0)
 check('cleanQuiz: correct answer repeated among wrong ones is rejected', cleanQuiz([{ question: 'q?', stem: 's', correct: 'a', wrong: ['A', 'c', 'd'] }]).length === 0)
+{
+  const [q] = cleanQuiz([{ question: 'q?', stem: 's', correct: 'The right one.', wrong: ['Wrong one', 'Another wrong.', 'Third'] }])
+  check('cleanQuiz: no option keeps a trailing full stop (the right one must not stand out)', !!q && ![q.correct, ...q.wrong].some((o) => o.endsWith('.')))
+}
 check('quizFromModel: maps n to the question text', quizFromModel([{ n: 2, stem: 's', correct: 'a', wrong: ['b', 'c', 'd'] }], ['first?', 'second?'])[0]?.question === 'second?')
 check('quizFromModel: an out-of-range n is dropped', quizFromModel([{ n: 9, stem: 's', correct: 'a', wrong: ['b', 'c', 'd'] }], ['first?']).length === 0)
 
