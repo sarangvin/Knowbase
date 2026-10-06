@@ -28,6 +28,9 @@ npm run build >/dev/null 2>&1 && pass "production build" || bad "production buil
 DATABASE_URL=postgres://x@localhost/none npx tsx scripts/streak-rules.mts > /tmp/rules.$$ 2>&1 \
   && pass "streak/limits/model-chain rules ($(grep -c '^PASS' /tmp/rules.$$) checks)" \
   || { bad "rule checks"; grep '^FAIL' /tmp/rules.$$; }
+DATABASE_URL=postgres://x@localhost/none npx tsx scripts/study-rules.mts > /tmp/rules.$$ 2>&1 \
+  && pass "study-data rules ($(grep -c '^PASS' /tmp/rules.$$) checks)" \
+  || { bad "study rule checks"; grep '^FAIL' /tmp/rules.$$; }
 rm -f /tmp/rules.$$
 
 echo "== 2. Deploy status for $SHA =="
@@ -67,7 +70,7 @@ if [ -f .env.vercel ] && command -v psql >/dev/null; then
   ok "no account is marked revoked unless the owner revoked it (expect 0 right after deploy)" "$([ "$revoked" = 0 ] && echo 1 || echo 0)" "revoked=$revoked"
   bad_approvals=$(q "SELECT count(*) FROM users WHERE access_approved AND access_approved_by IS NULL AND access_approved_at > now() - interval '1 hour' AND role <> 'owner'")
   ok "no account approved in the last hour without a recorded approver" "$([ "$bad_approvals" = 0 ] && echo 1 || echo 0)" "n=$bad_approvals"
-  echo "INFO  accounts: $(q "SELECT count(*) FILTER (WHERE access_approved) || ' approved, ' || count(*) FILTER (WHERE NOT access_approved) || ' new, ' || count(*) FILTER (WHERE access_approved_by='streak') || ' graduated by streak' FROM users")"
+  echo "INFO  accounts: $(q "SELECT count(*) FILTER (WHERE access_approved) || ' approved, ' || count(*) FILTER (WHERE NOT access_approved) || ' new, ' || count(*) FILTER (WHERE access_approved_by='streak') || ' graduated by streak' FROM users WHERE role = 'user'")"
   echo "INFO  llm calls since last midnight Pacific that fell back: $(q "SELECT count(*) FROM usage_events WHERE event_type='llm_call' AND created_at > now() - interval '24 hours' AND jsonb_typeof(metadata->'fellBackFrom')='array'")"
 else
   skp "database checks" ".env.vercel or psql missing"

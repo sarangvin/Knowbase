@@ -110,9 +110,21 @@ function deriveTitle(frontmatter: Record<string, unknown>, body: string, name: s
   return name
 }
 
+/** The `## Study data` section: flashcard terms and quiz options the server
+ *  writes into each note (backend/src/notes/study.ts). Machine data in an HTML
+ *  comment, so it is cut from `body` — what the reader renders, searches and
+ *  counts — while `raw`, which every save is built from, keeps it. */
+const STUDY_SECTION_RE = /(^|\n)##[ \t]+Study data[ \t]*\n[\s\S]*?(?=\n##[ \t]+|$)/
+
+export function stripStudy(text: string): string {
+  return text.replace(STUDY_SECTION_RE, '').replace(/\s+$/, '') + '\n'
+}
+
 /** Full parse of one note's raw text into a Note (links unresolved). */
 export function parseNote(path: string, raw: string, mtime: number): Note {
-  const { frontmatter, body } = splitFrontmatter(raw)
+  const split = splitFrontmatter(raw)
+  const frontmatter = split.frontmatter
+  const body = split.body.includes('## Study data') ? stripStudy(split.body) : split.body
   const name = basename(path)
   // Links can appear in frontmatter values too (e.g. prerequisites: ["[[X]]"]).
   const fmText = JSON.stringify(frontmatter)

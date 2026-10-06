@@ -4,6 +4,8 @@
 // and how many there are. Same reasoning as the quiz — a deck that reshuffles
 // on reload is not the deck you were given, and a daily limit the client
 // enforces is not a limit.
+import { fillStudyInBackground } from '../notes/studyBackfill.js'
+import { seededRng } from '../util/seeded.js'
 import { waitUntil } from '@vercel/functions'
 import { maybeGraduate } from '../usage/streak.js'
 import { Router } from 'express'
@@ -14,7 +16,7 @@ import type { FlashcardRow } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
-import { collectSources, pickSources, extractTerms, dealDeck, cardsPerDay } from '../flashcards/build.js'
+import { collectSources, pickSources, termPool, dealDeck, cardsPerDay, NOTES_PER_DECK } from '../flashcards/build.js'
 import { tierOf } from '../plans.js'
 import { schedulesFor, recordTurn, setBookmark, scheduleKey } from '../flashcards/schedule.js'
 import { adjustConfidence, type ConfidenceChange } from '../vault/confidence.js'
@@ -101,21 +103,25 @@ flashcardsRouter.post('/today', asyncHandler(async (req, res) => {
   const vaultId = await getOrCreatePersonalVaultId(userId)
   const sources = await collectSources(vaultId)
   if (sources.length === 0) {
+    // Notes written before cards were stored carry none; fill them in behind
+    // this request so the next try finds them.
+    if (await fillStudyInBackground(vaultId)) {
+      res.status(409).json({ error: 'Getting your notes ready for flashcards — try again in a minute.' })
+      return
+    }
     res.status(409).json({ error: 'No cards yet — review a note or two first.' })
     return
   }
 
-  const pool = await extractTerms(pickSources(sources), userId, limit)
-  if (pool.length === 0) {
-    res.status(502).json({ error: 'Could not put a deck together just now. Try again in a moment.' })
-    return
-  }
+  // Seeded by who and which day: the same reviews give the same deck.
+  const rng = seededRng(`${userId}|${day}|flashcards`)
+  const pool = termPool(pickSources(sources, Math.max(NOTES_PER_DECK, limit), rng))
   // What they have already turned over, so today's deck can hold those back.
   const seen = await schedulesFor(
     userId,
     pool.map((e) => ({ notePath: e.source.notePath, term: e.term })),
   )
-  const cards = dealDeck(pool, limit, seen, day)
+  const cards = dealDeck(pool, limit, seen, day, rng)
 
   // onConflictDoNothing then re-read: two tabs pressing Start at the same
   // moment must end up looking at the same deck, not one each.

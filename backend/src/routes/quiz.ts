@@ -5,6 +5,8 @@
 // defensiveness about cheating (you can only cheat yourself here); it is
 // that a quiz which regenerates when you reload is not the same quiz, and a
 // daily cap the client enforces is not a cap.
+import { fillStudyInBackground } from '../notes/studyBackfill.js'
+import { seededRng } from '../util/seeded.js'
 import { maybeGraduate } from '../usage/streak.js'
 import { waitUntil } from '@vercel/functions'
 import { Router } from 'express'
@@ -111,15 +113,19 @@ quizRouter.post('/today', asyncHandler(async (req, res) => {
   const vaultId = await getOrCreatePersonalVaultId(userId)
   const candidates = await collectCandidates(vaultId)
   if (candidates.length === 0) {
+    // Notes written before quiz options were stored carry none; fill them in
+    // behind this request so the next try finds them.
+    if (await fillStudyInBackground(vaultId)) {
+      res.status(409).json({ error: 'Getting your notes ready for the quiz — try again in a minute.' })
+      return
+    }
     res.status(409).json({ error: 'No questions yet — review a note or two first.' })
     return
   }
 
-  const questions = await buildQuestions(pickQuestions(candidates), userId)
-  if (questions.length === 0) {
-    res.status(502).json({ error: 'Could not put a quiz together just now. Try again in a moment.' })
-    return
-  }
+  // Seeded by who and which day: the same reviews give the same quiz.
+  const rng = seededRng(`${userId}|${day}|quiz`)
+  const questions = buildQuestions(pickQuestions(candidates, rng), rng)
 
   // onConflictDoNothing, then re-read: two tabs pressing Start at the same
   // moment must end up looking at the same quiz, not one each.

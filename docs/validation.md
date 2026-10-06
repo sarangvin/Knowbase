@@ -31,6 +31,7 @@ here when a change adds a rule that a later change could quietly break.
 | `oxlint` has no errors | Warnings are tolerated (there are old ones); errors are not. |
 | `npm run build` | The Vercel build runs the migration first, then this. A build that fails locally fails there. |
 | `scripts/streak-rules.mts` | The rules most likely to regress, as plain assertions (below). |
+| `scripts/study-rules.mts` | Stored flashcard/quiz material (below). |
 
 ### Rules asserted in `streak-rules.mts`
 
@@ -58,6 +59,31 @@ says; an approved one is its plan.
 **Model chain**: starts at `gemini-3.5-flash-lite`; no duplicates; an empty
 `GEMINI_MODEL=` is ignored (it used to be sent as a model named `""`, which is
 what 404'd locally); a set `GEMINI_MODEL` goes first.
+
+### Study data (`scripts/study-rules.mts`)
+
+Flashcard terms and quiz options are stored in each note, in a last section
+`## Study data` holding `<!-- rabbithole:study v1 {json} -->`
+(`backend/src/notes/study.ts`). Dealing a deck or a quiz reads it and makes
+**no model call**; the deal is seeded by user and day, so it is the same all
+day. The checks assert: write/read round-trips and replaces rather than
+appends; answering a question (which rewrites `## Questions`) leaves the
+section intact; a quiz item is dropped once its question leaves the note, a
+term once it leaves the note's text; self-revealing, oversized or duplicate
+terms and options are rejected; the same seed deals the same deck.
+
+Notes written before this have no section. `src/notes/runStudyBackfill.ts`
+fills them (`--dry` counts first; identical library copies are copied, not
+regenerated). Until then a deal on such notes fills up to 6 in the background
+and asks the reader to try again in a minute.
+
+### Slow-model fallback (`scripts/slow-model.mts`, needs the Gemini key and a local DB)
+
+Fakes a primary that hangs instead of erroring, which is how the model was
+actually failing on 2026-10-06 (median 16s, calls timing out, no HTTP errors).
+Expect the call to answer from the next model after about 8s of a 20s budget,
+the following call to skip the benched primary, and an all-models-hang call to
+end in `ModelTimeoutError` at its deadline rather than hanging.
 
 ## 2. Deploy status
 
@@ -99,7 +125,7 @@ for checks that need `SET`.)
 | `users.access_approved_by` and `access_revoked_at` exist | migration 0018 ran |
 | no account has `access_revoked_at` set | right after deploy nobody has been revoked since the column existed; a non-zero here means something wrote it that should not have |
 | no non-owner approved in the last hour without a recorded approver | every approval path (admin button, streak) must say who approved; a gap means a path was missed |
-| `INFO` line: approved / new / graduated-by-streak counts | eyeball only. The approved count must not drop after a deploy |
+| `INFO` line: approved / new / graduated-by-streak counts | eyeball only; counts `role = 'user'` only, because the owner is approved by role and the demo account never is. The approved count must not drop after a deploy (24 on 2026-10-06) |
 | `INFO` line: fallback calls in the last 24h | eyeball only. Non-zero means a model refused and the chain worked |
 
 ## 6. Gemini model chain, live

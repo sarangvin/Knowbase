@@ -7,6 +7,7 @@
 // drift — the same reason fillPlaceholder below patches the placeholder in
 // place rather than rebuilding the note from scratch.
 import { meteredGeminiCall } from '../llm/meter.js'
+import { STUDY_SCHEMA_PROMPT, cleanTerms, quizFromModel, writeStudy } from '../notes/study.js'
 
 export interface DraftRequestItem {
   path: string
@@ -33,7 +34,11 @@ Rules:
       "q": string,        // a question the learner should be able to answer once they know this
       "a": string         // the answer, 2-4 sentences, answered from what you wrote above
     }
-  ]
+  ],
+  // The study material for this note, written from the note you just wrote. Flashcards and the quiz are
+  // built from it later without asking anyone again, so it has to be right. "n" is the question's
+  // position in "questions" above, starting at 1.
+  ${STUDY_SCHEMA_PROMPT}
 }
 - Every question comes with its answer. The reader sees the question first and
   reveals the answer when they want it, so the answer must stand on its own and
@@ -135,6 +140,8 @@ Write the first-draft study note for "${item.title}" as specified.`
         overview?: unknown
         key_points?: unknown
         questions?: unknown
+        terms?: unknown
+        quiz?: unknown
       }
       const overview = typeof parsed.overview === 'string' ? parsed.overview.trim() : ''
       if (!overview) continue
@@ -155,7 +162,15 @@ Write the first-draft study note for "${item.title}" as specified.`
             })
             .filter((x) => x.q)
         : []
-      return fillPlaceholder(item.placeholder, overview, strings(parsed.key_points), questions)
+      const filled = fillPlaceholder(item.placeholder, overview, strings(parsed.key_points), questions)
+      // Study material for flashcards and the quiz, from the same call. The
+      // question texts are what fillPlaceholder wrote, so the quiz items key
+      // to them exactly. A draft with none still stands: the backfill picks
+      // it up later (notes/studyBackfill.ts).
+      const written = questions.map((q) => sanitizeInline(q.q))
+      const terms = cleanTerms(parsed.terms, item.title)
+      const quiz = quizFromModel(parsed.quiz, written)
+      return terms.length || quiz.length ? writeStudy(filled, { terms, quiz }) : filled
     } catch (err) {
       console.warn(`[draft-notes] "${item.title}" attempt ${attempt + 1} failed:`, err)
     }
