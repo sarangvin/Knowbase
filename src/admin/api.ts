@@ -90,12 +90,24 @@ export interface ModelUsageRow {
   limits: { rpm: number; tpm: number; rpd: number } | null
 }
 
+export interface ModelChainRow {
+  model: string
+  /** Set while the instance that answered has this model benched after a
+   *  failure. Per instance: another instance may not have it benched. */
+  benchedUntil: string | null
+  limits: { rpm: number; tpm: number; rpd: number } | null
+  /** Calls today that tried this model, were refused, and moved on. */
+  skippedToday: number
+}
+
 export interface AdminUsageResponse {
   /** Seconds until Gemini's RPD quota resets (midnight Pacific). */
   quotaResetsInSeconds?: number
   models: ModelUsageRow[]
   bySource: { source: string; calls: number }[]
   activeModel: string
+  /** The fallback chain in the order calls try it (backend/src/llm/models.ts). */
+  modelChain?: ModelChainRow[]
   /** Outstanding note-drafting work (backend/src/onboarding/queue.ts). */
   queue?: { pending: number; running: number; failed: number }
 }

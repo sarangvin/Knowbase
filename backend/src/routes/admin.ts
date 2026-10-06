@@ -251,14 +251,31 @@ adminRouter.get('/usage', asyncHandler(async (_req, res) => {
     GROUP BY 1 ORDER BY calls DESC
   `)).rows as { source: string; calls: number }[]
 
+  // How often each model refused and was skipped today. Benching is per
+  // instance and forgotten on a cold start; this is the record of it across
+  // all of them, from the fellBackFrom the meter logs on each call.
+  const skips = (await db.execute(sql`
+    SELECT skipped AS model, count(*)::int AS n
+    FROM usage_events, jsonb_array_elements_text(metadata->'fellBackFrom') AS skipped
+    WHERE event_type = 'llm_call' AND created_at >= ${SINCE_QUOTA_RESET}
+      AND jsonb_typeof(metadata->'fellBackFrom') = 'array'
+    GROUP BY 1
+  `)).rows as { model: string; n: number }[]
+  const skippedToday = new Map(skips.map((r) => [r.model, r.n]))
+
   res.json({
     models: rows.map((r) => ({ ...r, limits: MODEL_LIMITS[r.model] ?? null })),
     bySource,
     // So the UI never has to guess which row is the one currently in use —
     // the first in the fallback chain that this instance has not benched.
     activeModel: currentModel(),
-    // The whole chain, with any model currently benched and until when.
-    modelChain: chainStatus(),
+    // The whole chain in order: whether this instance has a model benched
+    // and until when, its daily limit, and how often it was skipped today.
+    modelChain: chainStatus().map((c) => ({
+      ...c,
+      limits: MODEL_LIMITS[c.model] ?? null,
+      skippedToday: skippedToday.get(c.model) ?? 0,
+    })),
     // So the RPD column can say what day it is counting, and how long is
     // left of it.
     quotaResetsInSeconds: await secondsToQuotaReset(),

@@ -35,6 +35,15 @@ function formatDate(s: string | null): string {
   return s ? new Date(s).toLocaleString() : '—'
 }
 
+/** "in 2h 10m" — how long until a benched model is tried again. */
+function until(s: string): string {
+  const secs = Math.max(0, (new Date(s).getTime() - Date.now()) / 1000)
+  if (secs < 60) return 'in <1m'
+  const h = Math.floor(secs / 3600)
+  const m = Math.round((secs % 3600) / 60)
+  return h ? `in ${h}h ${m}m` : `in ${m}m`
+}
+
 /** "4m ago" rather than a timestamp. The queue is read to answer how long
  *  something has been stuck, and an absolute time makes the reader do the
  *  subtraction. */
@@ -642,6 +651,46 @@ export function AdminApp() {
           </div>
           {!loading && (usage?.models.length ?? 0) === 0 && (
             <p className="admin-dim">No model calls logged yet.</p>
+          )}
+          {(usage?.modelChain?.length ?? 0) > 0 && (
+            <>
+              <div className="admin-label" style={{ marginTop: 22 }}>Fallback chain</div>
+              <p className="admin-dim">
+                Every call tries these in order and moves on when one refuses — not found,
+                out of quota, or overloaded. A refused model is benched for as long as that
+                failure tends to last. Benching is per server instance, so this shows the
+                instance that answered; "skipped today" counts across all of them.
+              </p>
+              <div className="admin-scroll">
+              <table className="admin-table admin-table-compact">
+                <thead>
+                  <tr><th>#</th><th>Model</th><th>Status</th><th>Requests / day</th><th>Skipped today</th></tr>
+                </thead>
+                <tbody>
+                  {usage!.modelChain!.map((c, i) => {
+                    const today = usage!.models.find((m) => m.model === c.model)?.rpd ?? 0
+                    return (
+                      <tr key={c.model}>
+                        <td>{i + 1}</td>
+                        <td>{c.model}</td>
+                        <td>
+                          {c.benchedUntil ? (
+                            <span className="admin-pending-count">benched · back {until(c.benchedUntil)}</span>
+                          ) : c.model === usage!.activeModel ? (
+                            <span className="admin-badge">active</span>
+                          ) : (
+                            <span className="admin-subtle">standby</span>
+                          )}
+                        </td>
+                        <td><Meter used={today} limit={c.limits?.rpd} /></td>
+                        <td>{c.skippedToday || '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              </div>
+            </>
           )}
           {usage?.queue && (
             <p className="admin-dim" style={{ marginTop: 14 }}>
