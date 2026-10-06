@@ -116,6 +116,8 @@ const TIMEOUT_BY_SOURCE: Record<string, number> = {
 
   // ── foreground: the reader is looking at a spinner ──
   'quiz-build': 25_000,
+  // One call judging every claim-page pair of a note at once.
+  'find-sources': 40_000,
 }
 const DEFAULT_TIMEOUT_MS = 25_000
 

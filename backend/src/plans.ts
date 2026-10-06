@@ -31,6 +31,9 @@ export interface PlanLimits {
   newNotesPerDay: number
   /** Ask AI chat messages on the shared key, in any rolling 24 hours. */
   askAiPerDay: number
+  /** "Find sources" runs, in any rolling 24 hours. One model call each
+   *  (notes/sources.ts). Pro only for now. */
+  sourcesPerDay: number
 }
 
 const PLANS: Record<string, PlanLimits> = {
@@ -52,6 +55,7 @@ const PLANS: Record<string, PlanLimits> = {
     customQuestionsPerDay: 1,
     newNotesPerDay: 6,
     askAiPerDay: 5,
+    sourcesPerDay: 0,
   },
   free: {
     activeCollections: 5,
@@ -67,6 +71,7 @@ const PLANS: Record<string, PlanLimits> = {
     // asked for again and again — where every other limit here is spent on
     // notes that stay. Raised from three with the same headroom.
     askAiPerDay: 10,
+    sourcesPerDay: 0,
   },
   pro: {
     activeCollections: UNLIMITED,
@@ -78,6 +83,8 @@ const PLANS: Record<string, PlanLimits> = {
     newNotesPerDay: UNLIMITED,
     // Pro chat goes through its own route on its own key.
     askAiPerDay: UNLIMITED,
+    // A number: each run is a model call and a dozen page fetches.
+    sourcesPerDay: 30,
   },
 }
 

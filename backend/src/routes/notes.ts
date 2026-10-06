@@ -12,6 +12,8 @@ import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId, spaceOf } from '../vault/spaces.js'
 import { limitsFor, isUnlimited, remainingOf, tierOf } from '../plans.js'
+import { usageEvents } from '../db/schema.js'
+import { findSources, writeSources } from '../notes/sources.js'
 import {
   parseQuestions,
   setAnswer,
@@ -242,4 +244,58 @@ notesRouter.delete('/question', asyncHandler(async (req, res) => {
   }
   await writeOwnNote(vaultId, path, next)
   res.json({ ok: true })
+}))
+
+/** How many "Find sources" runs this account made in the last 24 hours —
+ *  read off the model calls the meter already logs, tagged by source. */
+async function sourcesUsed(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(usageEvents)
+    .where(
+      and(
+        eq(usageEvents.userId, userId),
+        eq(usageEvents.eventType, 'llm_call'),
+        sql`${usageEvents.metadata}->>'source' = 'find-sources'`,
+        sql`${usageEvents.createdAt} > now() - interval '24 hours'`,
+      ),
+    )
+  return row?.n ?? 0
+}
+
+/**
+ * Find sources for one of the reader's notes and write them into its
+ * "Useful Links" section (see notes/sources.ts for how, and why it is one
+ * model call). Pro, and the owner; everyone else gets a 403 that says so.
+ */
+notesRouter.post('/sources', asyncHandler(async (req, res) => {
+  const user = req.user!
+  const path = noteParam(req.body?.path)
+  if (!path) {
+    res.status(400).json({ error: 'path required' })
+    return
+  }
+  const limit = user.role === 'owner' ? limitsFor('pro').sourcesPerDay : limitsFor(tierOf(user)).sourcesPerDay
+  if (limit <= 0) {
+    res.status(403).json({ error: 'Finding sources is part of Pro.' })
+    return
+  }
+  if ((await sourcesUsed(user.id)) >= limit) {
+    res.status(429).json({ error: `That is today's ${limit} — try again tomorrow.` })
+    return
+  }
+  const vaultId = await getOrCreatePersonalVaultId(user.id)
+  const note = await loadOwnNote(vaultId, path)
+  if (!note) {
+    res.status(404).json({ error: 'Note not found' })
+    return
+  }
+  const title = (path.split('/').pop() ?? path).replace(/\.md$/i, '')
+  const result = await findSources(title, note.content, { space: spaceOf(path) ?? undefined, userId: user.id })
+  const day = new Date().toISOString().slice(0, 10)
+  // Re-read before writing: a page fetch takes seconds, and the reader may
+  // have typed into My Notes meanwhile.
+  const fresh = await loadOwnNote(vaultId, path)
+  if (fresh && result.sources.length) await writeOwnNote(vaultId, path, writeSources(fresh.content, result.sources, day))
+  res.json({ sources: result.sources, claims: result.claims.length, pagesRead: result.pagesRead })
 }))

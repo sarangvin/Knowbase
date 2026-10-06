@@ -343,3 +343,15 @@
   .note-stamps,
   .note-under-page { transition: none; }
 }
+
+/* "Find sources", at the foot of Useful Links. */
+.find-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+.find-sources .ask-btn { display: inline-flex; align-items: center; gap: 7px; }
+.find-sources .spinner { width: 12px; height: 12px; }
+.find-sources-hint { color: var(--text-faint); font-size: 13px; }

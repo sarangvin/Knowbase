@@ -124,7 +124,12 @@ export function stripStudy(text: string): string {
 export function parseNote(path: string, raw: string, mtime: number): Note {
   const split = splitFrontmatter(raw)
   const frontmatter = split.frontmatter
-  const body = split.body.includes('## Study data') ? stripStudy(split.body) : split.body
+  // Whole-line HTML comments are markers for the server (the sources block
+  // in Useful Links, see backend/src/notes/sources.ts), not prose: the
+  // markdown renderer prints them as text. `raw` keeps them, and every save
+  // writes `raw`, so they survive.
+  const unstudied = split.body.includes('## Study data') ? stripStudy(split.body) : split.body
+  const body = unstudied.includes('<!--') ? unstudied.replace(/^[ \t]*<!--[^\n]*-->[ \t]*\n?/gm, '') : unstudied
   const name = basename(path)
   // Links can appear in frontmatter values too (e.g. prerequisites: ["[[X]]"]).
   const fmText = JSON.stringify(frontmatter)

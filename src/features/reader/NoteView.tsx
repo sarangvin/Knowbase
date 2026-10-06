@@ -12,6 +12,7 @@ import { MyNotes } from './MyNotes'
 import { Questions } from './Questions'
 import { parseQuestions, questionsSection } from './questionsFormat'
 import { extractSection } from '../../vault/sections'
+import { FindSources } from './FindSources'
 import './noteview.css'
 
 /** Keep clear of the screen edges: a swipe that starts there is the
@@ -145,6 +146,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
   // the same paragraph twice.
   const ai = extractSection(body, 'AI Notes')
   const mine = extractSection(body, 'My Notes')
+  const links = extractSection(body, 'Useful Links')
   const mineStart = mine ? body.lastIndexOf('##', mine.contentStart) : -1
   const qs = questionsSection(body)
   const qsStart = qs ? body.lastIndexOf('##', qs.start) : -1
@@ -155,6 +157,13 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
       start: ai.contentEnd,
       end: ai.contentEnd,
       node: <ReviewBar note={note} scrollRef={scrollRef} finisher={finisher} touch={touch} />,
+    })
+  // "Find sources" at the foot of Useful Links, below whatever is there.
+  if (links)
+    inserts.push({
+      start: links.contentEnd,
+      end: links.contentEnd,
+      node: <FindSources note={note} hasSources={note.raw.includes('<!-- rabbithole:sources')} />,
     })
   if (mine && mineStart >= 0) {
     inserts.push({
