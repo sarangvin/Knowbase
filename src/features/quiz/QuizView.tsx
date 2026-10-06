@@ -107,13 +107,13 @@ export function QuizView() {
     }
   }
 
-  if (!user?.accessApproved) {
+  if (!user) {
     return (
       <Shell>
         <div className="quiz-empty">
           <span className="quiz-empty-icon"><Carrot width={28} height={28} /></span>
           <h1>Quiz</h1>
-          <p>Quizzes are built from your own notes, so this opens up once your account does.</p>
+          <p>Quizzes are built from your own notes, so sign in to get one.</p>
         </div>
       </Shell>
     )

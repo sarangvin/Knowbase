@@ -217,16 +217,14 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
                   <div className="settings-dim" style={{ margin: 0 }}>
                     {user.displayName ? user.email : null}
                     {user.role === 'owner' ? (user.displayName ? ' · owner' : 'owner') : null}
-                    {!user.accessApproved && ' · early access pending'}
+                    {!user.accessApproved && ' · new account'}
                   </div>
                 </div>
               </div>
               <div className="settings-account-actions">
-                {user.accessApproved && (
-                  <button className="ask-btn" onClick={() => void loadRemote()}>
-                    <Cloud width={13} height={13} /> Open my cloud vault
-                  </button>
-                )}
+                <button className="ask-btn" onClick={() => void loadRemote()}>
+                  <Cloud width={13} height={13} /> Open my cloud vault
+                </button>
                 {user.role === 'owner' && (
                   <>
                     <button className="ask-btn" onClick={() => void loadGlobalVault()}>
@@ -239,9 +237,13 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
                   <LogOut width={13} height={13} /> Sign out
                 </button>
               </div>
+              {/* What "new account" means. Everything works; it is the daily
+                  amount of new material that is smaller until the account is
+                  approved — see the 'new' tier in backend/src/plans.ts. */}
               {!user.accessApproved && (
                 <p className="settings-dim">
-                  Your cloud vault unlocks once your early access request is approved.
+                  New accounts can start 1 collection and grow 3 new notes a day. These limits go up once
+                  your account is approved.
                 </p>
               )}
             </>

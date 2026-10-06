@@ -98,7 +98,7 @@ export default function App() {
         // above are async and the values captured at mount are stale by now.
         const { user, source: current } = useVault.getState()
         if (restored || current) return
-        if (!user?.accessApproved) return
+        if (!user) return
 
         // The job comes first, because the server may already have started
         // one. Approving a waitlisted account now kicks off the topic they

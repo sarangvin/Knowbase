@@ -1,7 +1,9 @@
 import { Router, type Request } from 'express'
-import { requireAuth, requireApproved } from '../auth/session.js'
+import type { Response, NextFunction } from 'express'
+import { requireAuth } from '../auth/session.js'
 import { requirePlan } from '../middleware/requirePlan.js'
-import { freeTierRateLimit } from '../middleware/rateLimit.js'
+import { limitsFor, tierOf, isUnlimited } from '../plans.js'
+import { askAiLast24h, newAccountBudgetSpent, NEW_ACCOUNT_BUDGET_MESSAGE } from '../usage/allowance.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { streamAnthropicChat, type Usage } from '../llm/providers/anthropic.js'
 import { streamGeminiChat, DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
@@ -10,10 +12,35 @@ import { logUsageEvent } from '../usage/logEvent.js'
 
 export const llmRouter = Router()
 llmRouter.use(requireAuth)
-// Every tier here spends the owner's own API key (free tier included), so an
-// unapproved account must not be able to reach it — otherwise "demo only"
-// would still let a stranger run up the owner's LLM bill.
-llmRouter.use(requireApproved)
+// Every tier here spends the owner's own API key. It used to be closed to
+// unapproved accounts outright; it is now open to every signed-in account and
+// bounded instead — per account by askAiPerDay, and for new accounts as a
+// group by the shared allowance in plans.ts.
+
+/** The per-tier Ask AI limit, counted from the usage log over a rolling 24
+ *  hours. It replaced an in-memory counter, which on serverless reset with
+ *  every cold instance and so limited very little. */
+async function askAiLimit(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const tier = tierOf(req.user!)
+    const limit = limitsFor(tier).askAiPerDay
+    if (!isUnlimited(limit) && (await askAiLast24h(req.user!.id)) >= limit) {
+      res.status(429).json({
+        error: `That's ${limit} Ask AI messages in the last day, the most ${tier === 'new' ? 'for new accounts' : 'on the free plan'}. Try again tomorrow, or add your own API key in Settings.`,
+      })
+      return
+    }
+    // This route streams straight from the provider rather than through the
+    // meter, so the shared new-account allowance is checked here instead.
+    if (tier === 'new' && (await newAccountBudgetSpent())) {
+      res.status(429).json({ error: NEW_ACCOUNT_BUDGET_MESSAGE })
+      return
+    }
+    next()
+  } catch (err) {
+    next(err)
+  }
+}
 
 function parseChatBody(req: Request): { system: string; user: string } | { error: string } {
   const { system, user } = req.body ?? {}
@@ -21,7 +48,7 @@ function parseChatBody(req: Request): { system: string; user: string } | { error
   return { system, user }
 }
 
-llmRouter.post('/free/chat', freeTierRateLimit, asyncHandler(async (req, res) => {
+llmRouter.post('/free/chat', askAiLimit, asyncHandler(async (req, res) => {
   const parsed = parseChatBody(req)
   if ('error' in parsed) {
     res.status(400).json(parsed)
@@ -44,6 +71,8 @@ llmRouter.post('/free/chat', freeTierRateLimit, asyncHandler(async (req, res) =>
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     latencyMs: Date.now() - start,
+    // What askAiLimit counts.
+    metadata: { source: 'ask-ai' },
   })
 }))
 

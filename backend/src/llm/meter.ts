@@ -11,6 +11,27 @@
 import { streamGeminiChat, DEFAULT_GEMINI_MODEL } from './providers/gemini.js'
 import type { Usage } from './providers/anthropic.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { eq } from 'drizzle-orm'
+import { db } from '../db/client.js'
+import { users } from '../db/schema.js'
+import { NewAccountBudgetError, newAccountBudgetSpent } from '../usage/allowance.js'
+
+/** Refuse a call for a not-yet-approved account once all such accounts have
+ *  spent the shared allowance (NEW_ACCOUNTS_DAILY_MODEL_CALLS in plans.ts).
+ *
+ *  Here, under every model call, rather than in each route: per-route limits
+ *  bound what one account does in one place, and this is the one limit that
+ *  has to hold across every place at once — including any added later. */
+async function assertNewAccountBudget(userId: string | undefined): Promise<void> {
+  if (!userId) return
+  const [u] = await db
+    .select({ approved: users.accessApproved, role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  if (!u || u.approved || u.role === 'owner') return
+  if (await newAccountBudgetSpent()) throw new NewAccountBudgetError()
+}
 
 export interface MeteredCallOptions {
   /** Whose quota this is spent on. Omitted for work with no user behind it. */
@@ -100,6 +121,7 @@ export async function meteredGeminiCall(
   opts: MeteredCallOptions,
   modelOverride?: string,
 ): Promise<string> {
+  await assertNewAccountBudget(opts.userId)
   const model = modelOverride ?? process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL
   const timeoutMs = opts.timeoutMs ?? timeoutFor(opts.source)
   const start = Date.now()

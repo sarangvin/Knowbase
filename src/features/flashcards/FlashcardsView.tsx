@@ -177,13 +177,13 @@ export function FlashcardsView() {
     }
   }
 
-  if (!user?.accessApproved) {
+  if (!user) {
     return (
       <Shell>
         <div className="fc-empty">
           <span className="fc-empty-icon"><Layers width={28} height={28} /></span>
           <h1>Flashcards</h1>
-          <p>Cards are made from your own notes, so this opens up once your account does.</p>
+          <p>Cards are made from your own notes, so sign in to get them.</p>
         </div>
       </Shell>
     )

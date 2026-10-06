@@ -83,7 +83,8 @@ export function OnboardingBanner() {
   // Survives re-renders so the interval below is never stacked twice.
   const timer = useRef<number | null>(null)
 
-  const approved = user != null && user.accessApproved
+  // Every signed-in account can build now; see the 'new' tier in plans.ts.
+  const approved = user != null
 
   useEffect(() => {
     if (!approved) {

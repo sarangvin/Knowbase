@@ -8,10 +8,10 @@ import { Router } from 'express'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { customQuestions } from '../db/schema.js'
-import { requireAuth, requireApproved } from '../auth/session.js'
+import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId, spaceOf } from '../vault/spaces.js'
-import { limitsFor, isUnlimited, remainingOf } from '../plans.js'
+import { limitsFor, isUnlimited, remainingOf, tierOf } from '../plans.js'
 import {
   parseQuestions,
   setAnswer,
@@ -25,7 +25,8 @@ import {
 
 export const notesRouter = Router()
 notesRouter.use(requireAuth)
-notesRouter.use(requireApproved)
+// Open to every signed-in account. This used to be behind owner approval;
+// that gate became the 'new' tier in plans.ts — limits instead of a lock.
 
 /** How many questions of their own a reader may ask per day, per
  *  collection. Per collection rather than per note: a collection is the
@@ -95,7 +96,7 @@ notesRouter.get('/question-allowance', asyncHandler(async (req, res) => {
     res.status(400).json({ error: 'day and space required' })
     return
   }
-  const limit = customPerDay(req.user!.planTier)
+  const limit = customPerDay(tierOf(req.user!))
   const used = await usedToday(req.user!.id, space, day)
   // remaining is null for a plan with no cap, so the copy can say "ask
   // away" rather than counting down from infinity.
@@ -150,7 +151,7 @@ notesRouter.post('/answer', asyncHandler(async (req, res) => {
       res.status(400).json({ error: 'Custom questions are for notes inside a collection.' })
       return
     }
-    const limit = customPerDay(req.user!.planTier)
+    const limit = customPerDay(tierOf(req.user!))
     const used = await usedToday(userId, space, day!)
     if (used >= limit) {
       res.status(429).json({
@@ -190,7 +191,7 @@ notesRouter.post('/answer', asyncHandler(async (req, res) => {
     await db.insert(customQuestions).values({ userId, space, day: day!, notePath: path, question })
   }
 
-  const limit = customPerDay(req.user!.planTier)
+  const limit = customPerDay(tierOf(req.user!))
   const used = space && day ? await usedToday(userId, space, day) : 0
   res.json({ answer, remaining: remainingOf(limit, used) })
 }))

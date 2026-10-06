@@ -22,6 +22,26 @@ import { buildTopicNote, dedupeSegments, sanitizeSegment } from './notePlan.js'
 import { SPACE_ROOT, getOrCreatePersonalVaultId, archivedSpaces } from '../vault/spaces.js'
 import { HIDDEN_BUFFER, VISIBLE_AHEAD, isHidden, isReviewed, revealUpTo } from '../vault/hidden.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { users } from '../db/schema.js'
+import { limitsFor, tierOf, isUnlimited } from '../plans.js'
+import { notesGrownLast24h } from '../usage/allowance.js'
+
+/** How many more notes this account may have grown for it right now.
+ *
+ *  In here rather than in the route, because three things grow a collection
+ *  — finishing a note, the nightly top-up, and asking for a subject you
+ *  already have — and a limit enforced at one door is not a limit. */
+async function growAllowance(userId: string): Promise<number> {
+  const [u] = await db
+    .select({ approved: users.accessApproved, planTier: users.planTier, role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  if (!u) return 0
+  const limit = limitsFor(tierOf({ accessApproved: u.approved || u.role === 'owner', planTier: u.planTier })).newNotesPerDay
+  if (isUnlimited(limit)) return Number.POSITIVE_INFINITY
+  return Math.max(0, limit - (await notesGrownLast24h(userId)))
+}
 
 /** How many unstudied topics a space should keep available.
  *
@@ -77,7 +97,7 @@ function titleFromPath(path: string): string {
 
 export interface GrowResult {
   added: number
-  reason?: 'enough-unreviewed' | 'archived' | 'no-space' | 'no-key' | 'generation-failed'
+  reason?: 'enough-unreviewed' | 'archived' | 'no-space' | 'no-key' | 'generation-failed' | 'daily-limit'
 }
 
 /** What the buffer needs, given what is there.
@@ -130,8 +150,13 @@ export async function growSpace(userId: string, space: string): Promise<GrowResu
     const hiddenCount = rows.filter((r) => isHidden(r.content)).length
     const visible = rows.filter((r) => !isHidden(r.content) && !isReviewed(r.content)).length
 
-    const want = Math.min(wanted(visible, hiddenCount), MAX_PER_RUN)
-    if (want === 0) return { added: 0, reason: 'enough-unreviewed' }
+    const needed = Math.min(wanted(visible, hiddenCount), MAX_PER_RUN)
+    if (needed === 0) return { added: 0, reason: 'enough-unreviewed' }
+    // Never more than the account may still have today. A collection that
+    // runs dry for the rest of the day still has the notes already in it;
+    // the next ones arrive tomorrow.
+    const want = Math.min(needed, await growAllowance(userId))
+    if (want === 0) return { added: 0, reason: 'daily-limit' }
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) return { added: 0, reason: 'no-key' }

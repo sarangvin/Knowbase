@@ -15,7 +15,7 @@ import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
-import { requireAuth, requireApproved, requireOwner } from '../auth/session.js'
+import { requireAuth, requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
@@ -25,10 +25,10 @@ import { SPACE_ROOT, spaceOf, normalizeTopic, getOrCreatePersonalVaultId, getGlo
 
 export const vaultsRouter = Router()
 vaultsRouter.use(requireAuth)
-// Cloud vaults are the owner's storage, so they're behind owner approval.
-// The demo vault and "open my own folder" are pure client-side and never
-// reach this router, which is what an unapproved user is left with.
-vaultsRouter.use(requireApproved)
+// Cloud vaults used to be behind owner approval, leaving an unapproved
+// account with only the demo vault. Every signed-in account gets its own now;
+// what bounds the cost is the limits on *generating* notes (plans.ts), not
+// access to the ones already written.
 
 function parsePathParam(raw: unknown): string | { error: string } {
   if (typeof raw !== 'string') return { error: 'path query param required' }

@@ -10,11 +10,10 @@
 // about what they actually wanted.
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { requestAccess } from '../../vault/remoteSource'
 import { setPendingTopic, clearPendingTopic, peekPendingTopic } from './pendingTopic'
 import { startOnboarding } from './onboardingApi'
 import { randomTopicPlaceholder } from './examples'
-import { RabbitSolid, Eye, Cloud, Pencil, Envelope, Check, ArrowRight, Sparkles, User } from '../../ui/icons'
+import { RabbitSolid, Eye, Cloud, Pencil, ArrowRight, Sparkles, User } from '../../ui/icons'
 import './onboarding.css'
 
 export function Onboarding() {
@@ -34,13 +33,14 @@ export function Onboarding() {
   const [topic, setTopic] = useState(() => peekPendingTopic() ?? '')
   const [examples] = useState(randomTopicPlaceholder)
   const [busy, setBusy] = useState(false)
-  const [requestedAt, setRequestedAt] = useState<string | null>(user?.accessRequestedAt ?? null)
   const [localError, setLocalError] = useState<string | null>(null)
 
-  const awaitingApproval = user != null && !user.accessApproved
-
-  // One button, three meanings — the difference is the user's state, not
-  // something they should have to reason about before typing.
+  // One button, two meanings — signed out or signed in — and the difference
+  // is the user's state, not something they should have to reason about
+  // before typing. There used to be a third, "request early access", for
+  // accounts awaiting approval; approval became higher limits rather than a
+  // way in (the 'new' tier in backend/src/plans.ts), so every signed-in
+  // account starts its collection the same way.
   const start = async (override?: string) => {
     const t = (override ?? topic).trim()
     if (!t || busy) return
@@ -51,23 +51,7 @@ export function Onboarding() {
       loginWithGoogle() // full-page redirect; the topic is waiting when we return
       return
     }
-    if (awaitingApproval) {
-      setBusy(true)
-      try {
-        // The topic goes with the request. "Tell us your topic and we'll add
-        // you to the list" was not true before — the topic stayed in this
-        // browser, so approving someone produced an account with nothing in
-        // it and no memory of what they had asked for.
-        setRequestedAt(await requestAccess(t))
-        clearPendingTopic()
-      } catch (e) {
-        setLocalError(e instanceof Error ? e.message : String(e))
-      } finally {
-        setBusy(false)
-      }
-      return
-    }
-    // Approved: hand the topic to the server and go straight into the demo
+    // Signed in: hand the topic to the server and go straight into the demo
     // space while it builds. Nothing below this line waits on a model — the
     // notification is what brings them back (see OnboardingBanner), which is
     // the whole reason the wait could be removed rather than shortened.
@@ -94,13 +78,13 @@ export function Onboarding() {
   // spend six model calls twice.
   const autoStarted = useRef(false)
   useEffect(() => {
-    if (autoStarted.current || busy || user == null || awaitingApproval) return
+    if (autoStarted.current || busy || user == null) return
     const pending = peekPendingTopic()
     if (!pending) return
     autoStarted.current = true
     void start(pending)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, awaitingApproval])
+  }, [user])
 
   // Every hook is above this line, deliberately. An early return placed
   // before a useRef/useEffect is a hook-order violation that only shows up
@@ -121,7 +105,7 @@ export function Onboarding() {
   // never been here: it takes a topic and makes an account to hang it on.
   // Signing in to an account you already have is the link below, which
   // carries no topic.
-  const startLabel = user == null ? 'Sign up and start digging' : awaitingApproval ? 'Request early access' : 'Start digging'
+  const startLabel = user == null ? 'Sign up and start digging' : 'Start digging'
 
   // Google either way — there is one identity provider and it decides for
   // itself whether this is a new account. The difference that matters to
@@ -156,12 +140,7 @@ export function Onboarding() {
         {error && <div className="ob-error">{error}</div>}
         {localError && <div className="ob-error">{localError}</div>}
 
-        {requestedAt ? (
-          <div className="ob-pending">
-            <Check /> Request received — we'll let you know when your access is ready.
-          </div>
-        ) : (
-          <div className="ob-primary">
+        <div className="ob-primary">
             <input
               className="ob-topic-input"
               autoFocus
@@ -177,18 +156,12 @@ export function Onboarding() {
             {user == null && (
               <p className="ob-hint">You'll sign up with Google so your space is saved to your account.</p>
             )}
-            {user != null && !awaitingApproval && (
+            {user != null && (
               <p className="ob-hint">
                 <Sparkles /> We'll build it in the background while you look around a finished one.
               </p>
             )}
-            {awaitingApproval && (
-              <p className="ob-hint">
-                <Envelope /> Rabbithole is in early access. Tell us your topic and we'll add you to the list.
-              </p>
-            )}
           </div>
-        )}
 
         {/* Everything below is deliberately secondary: these are the escape
             hatches and the returning-user paths, not the main road. */}
@@ -201,7 +174,7 @@ export function Onboarding() {
           <button className="ob-linklike" onClick={() => void loadSeed()}>
             <Eye /> Explore a finished warren
           </button>
-          {user != null && !awaitingApproval && (
+          {user != null && (
             <button className="ob-linklike" onClick={() => void loadRemote()}>
               <Cloud /> Open my cloud vault
             </button>

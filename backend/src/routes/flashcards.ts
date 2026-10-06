@@ -9,16 +9,18 @@ import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { flashcardDecks } from '../db/schema.js'
 import type { FlashcardRow } from '../db/schema.js'
-import { requireAuth, requireApproved } from '../auth/session.js'
+import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectSources, pickSources, extractTerms, dealDeck, cardsPerDay } from '../flashcards/build.js'
+import { tierOf } from '../plans.js'
 import { schedulesFor, recordTurn, setBookmark, scheduleKey } from '../flashcards/schedule.js'
 import { adjustConfidence, type ConfidenceChange } from '../vault/confidence.js'
 
 export const flashcardsRouter = Router()
 flashcardsRouter.use(requireAuth)
-flashcardsRouter.use(requireApproved)
+// Open to every signed-in account. This used to be behind owner approval;
+// that gate became the 'new' tier in plans.ts — limits instead of a lock.
 
 /** Local date as the client keeps it, like the quiz and the review cap. */
 function dayOf(v: unknown): string | null {
@@ -62,7 +64,7 @@ flashcardsRouter.get('/today', asyncHandler(async (req, res) => {
     return
   }
   const userId = req.user!.id
-  const limit = cardsPerDay(req.user!.planTier)
+  const limit = cardsPerDay(tierOf(req.user!))
 
   const row = await todaysRow(userId, day)
   if (row) {
@@ -86,7 +88,7 @@ flashcardsRouter.post('/today', asyncHandler(async (req, res) => {
     return
   }
   const userId = req.user!.id
-  const limit = cardsPerDay(req.user!.planTier)
+  const limit = cardsPerDay(tierOf(req.user!))
 
   const existing = await todaysRow(userId, day)
   if (existing) {

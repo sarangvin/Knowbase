@@ -1,18 +1,17 @@
 // The three calls the client needs now that it no longer generates anything:
 // start a space, ask whether it is ready, and say it has been seen.
 //
-// Behind requireApproved like the rest of the cloud routes — generation spends
-// the owner's own model key, so an unapproved account must not be able to
-// reach it. That is also why the landing screen's unapproved path files an
-// access request instead of calling start: they get the demo space and no
-// notification, because nothing is being built for them, and implying
-// otherwise would be worse than the honest wall.
+// Open to every signed-in account. It used to sit behind owner approval,
+// because generation spends the owner's own model key; that gate became the
+// 'new' tier in plans.ts. A new account starts collections at once, bounded
+// per account (one a day) and, with every other new account, by a shared
+// daily allowance — limits instead of a lock.
 import { Router } from 'express'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { waitUntil } from '@vercel/functions'
 import { db } from '../db/client.js'
 import { onboardingJobs } from '../db/schema.js'
-import { requireAuth, requireApproved } from '../auth/session.js'
+import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { runOnboarding } from '../onboarding/run.js'
 import { growSpace, MAX_UNREVIEWED } from '../onboarding/grow.js'
@@ -21,11 +20,12 @@ import { drainQueue, queueDepth, reconcileQueue } from '../onboarding/queue.js'
 import { ensureStocked } from '../onboarding/ensure.js'
 import { collectionAllowance, recordCollectionStart } from '../onboarding/limits.js'
 import { getOrCreatePersonalVaultId, archivedSpaces } from '../vault/spaces.js'
+import { tierOf } from '../plans.js'
+import { newAccountBudgetSpent, NEW_ACCOUNT_BUDGET_MESSAGE } from '../usage/allowance.js'
 import { revealUpTo } from '../vault/hidden.js'
 
 export const onboardingRouter = Router()
 onboardingRouter.use(requireAuth)
-onboardingRouter.use(requireApproved)
 
 const MAX_TOPIC_LEN = 200
 
@@ -267,7 +267,7 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
   // a day is.
   const day = dayOf(req.body?.day)
   const vaultId = await getOrCreatePersonalVaultId(userId)
-  const allowance = await collectionAllowance(userId, vaultId, day ?? '', req.user!.planTier)
+  const allowance = await collectionAllowance(userId, vaultId, day ?? '', tierOf(req.user!))
   if (allowance.blocked) {
     res.status(429).json({
       error: allowance.blocked,
@@ -275,6 +275,13 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
       startedToday: allowance.startedToday,
       limits: allowance.limits,
     })
+    return
+  }
+  // A new account, with the shared allowance for new accounts spent: say so
+  // now, rather than accept the topic and fail the build at its first model
+  // call. Approved accounts never reach this.
+  if (tierOf(req.user!) === 'new' && (await newAccountBudgetSpent())) {
+    res.status(429).json({ error: NEW_ACCOUNT_BUDGET_MESSAGE })
     return
   }
 
@@ -311,7 +318,10 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
     }
   }
 
-  if (day) await recordCollectionStart(userId, raw, day)
+  // Always recorded. It used to be skipped when the request carried no day,
+  // and a start that is never recorded is a start the cap never sees. The
+  // server's own date stands in for a missing one.
+  await recordCollectionStart(userId, raw, day ?? new Date().toISOString().slice(0, 10))
 
   res.status(202).json({ job: await currentJob(userId) })
 
@@ -325,7 +335,7 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
 onboardingRouter.get('/allowance', asyncHandler(async (req, res) => {
   const day = dayOf(req.query.day) ?? ''
   const vaultId = await getOrCreatePersonalVaultId(req.user!.id)
-  const a = await collectionAllowance(req.user!.id, vaultId, day, req.user!.planTier)
+  const a = await collectionAllowance(req.user!.id, vaultId, day, tierOf(req.user!))
   // An unlimited limit is Infinity, and JSON.stringify turns that into null
   // silently — so the client would read "no limit" as the number zero and
   // count down from it. Say null on purpose, and document that it means

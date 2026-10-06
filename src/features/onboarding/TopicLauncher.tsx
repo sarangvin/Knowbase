@@ -37,7 +37,7 @@ export function TopicLauncher({
   // must not be what stops somebody starting a collection.
   const [allowance, setAllowance] = useState<CollectionAllowance | null>(null)
 
-  const approved = !!user?.accessApproved
+  const approved = !!user
 
   // Re-read after every start, because starting one is exactly what uses
   // the allowance up.

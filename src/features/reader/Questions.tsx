@@ -42,7 +42,7 @@ export function Questions({ note, items }: { note: Note; items: ReaderQuestion[]
   // not just a writable source. The demo vault is writable through a local
   // overlay and has no account at all, and an Answer button that 401s is
   // worse than one that is not there.
-  const canAnswer = writable && !!user?.accessApproved
+  const canAnswer = writable && !!user
   // Asking your own also needs a collection, because the allowance is
   // counted per collection.
   const canAsk = canAnswer && !!space

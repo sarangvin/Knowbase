@@ -10,7 +10,7 @@ import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { quizzes } from '../db/schema.js'
 import type { QuizQuestionRow } from '../db/schema.js'
-import { requireAuth, requireApproved } from '../auth/session.js'
+import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectCandidates, pickQuestions, buildQuestions, QUIZ_LENGTH } from '../quiz/build.js'
@@ -18,7 +18,8 @@ import { adjustConfidence } from '../vault/confidence.js'
 
 export const quizRouter = Router()
 quizRouter.use(requireAuth)
-quizRouter.use(requireApproved)
+// Open to every signed-in account. This used to be behind owner approval;
+// that gate became the 'new' tier in plans.ts — limits instead of a lock.
 
 /** Local date as the client keeps it. The review cap already works this way,
  *  so "one a day" means one calendar day where the user is rather than

@@ -16,6 +16,7 @@ import { db } from '../db/client.js'
 import { collectionStarts } from '../db/schema.js'
 import { listUserSpaces, archivedSpaces } from '../vault/spaces.js'
 import { limitsFor } from '../plans.js'
+import { collectionsStartedLast24h } from '../usage/allowance.js'
 
 interface PlanLimits {
   /** Collections that are not archived. */
@@ -47,7 +48,7 @@ export async function collectionAllowance(
 ): Promise<CollectionAllowance> {
   const limits = collectionLimits(planTier)
 
-  const [spaces, archived, startedRow] = await Promise.all([
+  const [spaces, archived, startedRow, last24h] = await Promise.all([
     listUserSpaces(vaultId),
     archivedSpaces(vaultId),
     db
@@ -55,10 +56,16 @@ export async function collectionAllowance(
       .from(collectionStarts)
       .where(and(eq(collectionStarts.userId, userId), eq(collectionStarts.day, day)))
       .then((r) => r[0]),
+    collectionsStartedLast24h(userId),
   ])
 
   const activeCount = spaces.filter((s) => !archived.has(s)).length
-  const startedToday = startedRow?.n ?? 0
+  // The larger of the two. The local day is what the reader means by "today"
+  // and keeps the count resetting at their midnight; the rolling 24 hours is
+  // what the client cannot move — `day` arrives in the request, and a client
+  // naming a new date each time would otherwise never run out.
+  const startedToday = Math.max(startedRow?.n ?? 0, last24h)
+  const plan = planTier === 'new' ? 'for new accounts' : 'on the free plan'
 
   // Active first: it is the one they can do something about right now, and
   // telling someone to come back tomorrow when the real problem is a full
@@ -69,9 +76,12 @@ export async function collectionAllowance(
   // plan without checking which plan the reader is on.
   let blocked: string | null = null
   if (activeCount >= limits.active) {
-    blocked = `You have ${activeCount} collections on the go, which is the most on the free plan. Archive or delete one to start another.`
+    blocked = `You have ${activeCount} collections on the go, which is the most ${plan}. Archive or delete one to start another.`
   } else if (startedToday >= limits.perDay) {
-    blocked = `That's ${startedToday} new collections today, which is the daily limit on the free plan. You can start another tomorrow.`
+    blocked =
+      startedToday === 1
+        ? `You've started a new collection today, which is the daily limit ${plan}. You can start another tomorrow.`
+        : `That's ${startedToday} new collections today, which is the daily limit ${plan}. You can start another tomorrow.`
   }
 
   return { limits, activeCount, startedToday, blocked }
