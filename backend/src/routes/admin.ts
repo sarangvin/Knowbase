@@ -465,7 +465,14 @@ adminRouter.post('/users/:id/approve', asyncHandler(async (req, res) => {
     // Clearing the timestamp on revoke keeps "approved_at" meaning "when the
     // access they currently hold was granted", not "when they were last
     // approved at some point in the past".
-    .set({ accessApproved: approved, accessApprovedAt: approved ? new Date() : null })
+    //
+    // Revoking also records that it happened, so the streak does not quietly
+    // approve them again (usage/streak.ts); approving clears it.
+    .set(
+      approved
+        ? { accessApproved: true, accessApprovedAt: new Date(), accessApprovedBy: 'owner', accessRevokedAt: null }
+        : { accessApproved: false, accessApprovedAt: null, accessApprovedBy: null, accessRevokedAt: new Date() },
+    )
     .where(eq(users.id, req.params.id))
     .returning({ accessApproved: users.accessApproved, accessApprovedAt: users.accessApprovedAt })
 

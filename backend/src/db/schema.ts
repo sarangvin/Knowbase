@@ -19,6 +19,14 @@ export const users = pgTable('users', {
   // assumed. Owners bypass it entirely (see requireApproved).
   accessApproved: boolean('access_approved').notNull().default(false),
   accessApprovedAt: timestamp('access_approved_at', { withTimezone: true }),
+  // Who let them in: 'owner' from the admin panel, or 'streak' when a new
+  // account graduated itself by keeping a three-day streak (usage/streak.ts).
+  // Null on rows approved before this was recorded.
+  accessApprovedBy: text('access_approved_by'),
+  // Set when the owner revokes access, cleared when they grant it again. A
+  // revoked account never graduates itself back by streak — revoking means
+  // the owner decided, and a habit is not an appeal.
+  accessRevokedAt: timestamp('access_revoked_at', { withTimezone: true }),
   // Set when the user asks for access from the landing screen. Kept separate
   // from approval so the admin list can distinguish "waiting on you" from
   // "signed in once and never asked".

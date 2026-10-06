@@ -239,12 +239,13 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
               </div>
               {/* What "new account" means. Everything works; it is the daily
                   amount of new material that is smaller until the account is
-                  approved — see the 'new' tier in backend/src/plans.ts. */}
+                  approved or has kept a 3-day streak — see the 'new' tier in
+                  backend/src/plans.ts and usage/streak.ts. */}
               {!user.accessApproved && (
                 <p className="settings-dim">
-                  New accounts can start 1 collection and grow 3 new notes a day. These limits go up once
-                  your account is approved.
-                </p>
+                  New accounts can start 2 collections and grow 6 new notes a day. Keep a 3-day streak —
+                  read a new note, finish your flashcards, or finish the quiz — and the limits go up on
+                  their own.</p>
               )}
             </>
           ) : (

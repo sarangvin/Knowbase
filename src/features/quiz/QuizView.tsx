@@ -9,6 +9,7 @@
 // Answering is a single tap and cannot be taken back. That is the point of
 // the exercise — a retry until right measures persistence, not recall — and
 // it is enforced on the server, so reloading does not reset it.
+import { useStreak } from '../streak/streakStore'
 import { useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { Carrot, Check, X, RotateCw } from '../../ui/icons'
@@ -91,6 +92,8 @@ export function QuizView() {
     setError(null)
     try {
       const r = await answerQuestion(at, choice)
+      // The last answer completes the quiz, which is a streak day.
+      if (r.completed) useStreak.getState().goalAction()
       setMoved((m) => ({ ...m, [at]: r.confidence }))
       // Patch in place so the answered state, the revealed key and the score
       // all come from the server's reply rather than from a local guess.

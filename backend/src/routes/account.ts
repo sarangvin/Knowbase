@@ -7,6 +7,7 @@ import { notes, assets, vaults, onboardingJobs } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { goalDays, computeStreak, shift, maybeGraduate, GRADUATION_STREAK, MAX_FREEZES } from '../usage/streak.js'
 
 export const accountRouter = Router()
 // Auth, but deliberately NOT requireApproved: someone whose access was
@@ -60,4 +61,29 @@ accountRouter.post('/reset', asyncHandler(async (req, res) => {
 
   void logUsageEvent({ userId, eventType: 'vault_sync', metadata: { reset: true, deletedNotes } })
   res.json({ ok: true, deletedNotes })
+}))
+
+/**
+ * The daily streak (usage/streak.ts), as of the client's local day.
+ *
+ * Also runs the graduation check, so an account that met the streak before
+ * graduation existed — or whose check after the action was lost — is
+ * caught up on its next visit rather than waiting for its next streak day.
+ */
+accountRouter.get('/streak', asyncHandler(async (req, res) => {
+  const day = typeof req.query.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.day) ? req.query.day : null
+  if (!day) {
+    res.status(400).json({ error: 'day (YYYY-MM-DD) required' })
+    return
+  }
+  const userId = req.user!.id
+  const justGraduated = await maybeGraduate(userId, day)
+  const done = await goalDays(userId)
+  const streak = computeStreak(done, day)
+  // The last seven days, oldest first, for the row of days under the count.
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = shift(day, i - 6)
+    return { day: d, state: done.has(d) ? 'done' : streak.frozen.includes(d) ? 'frozen' : 'none' }
+  })
+  res.json({ ...streak, week, justGraduated, maxFreezes: MAX_FREEZES, graduationStreak: GRADUATION_STREAK })
 }))

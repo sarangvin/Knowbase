@@ -5,6 +5,8 @@
 // defensiveness about cheating (you can only cheat yourself here); it is
 // that a quiz which regenerates when you reload is not the same quiz, and a
 // daily cap the client enforces is not a cap.
+import { maybeGraduate } from '../usage/streak.js'
+import { waitUntil } from '@vercel/functions'
 import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
@@ -183,4 +185,6 @@ quizRouter.post('/answer', asyncHandler(async (req, res) => {
   const confidence = await adjustConfidence(vaultId, q.notePath, correct ? 1 : -1)
 
   res.json({ correct, answer: q.answer, score, completed, confidence })
+  // A finished quiz is a streak day.
+  if (completed) waitUntil(maybeGraduate(userId, row.day))
 }))

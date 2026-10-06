@@ -13,6 +13,8 @@
 //
 // What is left is what has no other way in: search, Ask AI, and the
 // read/edit toggle.
+import { StreakBadge } from '../features/streak/Streak'
+import { useStreakBoot } from '../features/streak/streakStore'
 import { useVault } from '../vault/vaultStore'
 import { ArrowLeft, ArrowRight, Search } from '../ui/icons'
 import { folderLabel } from '../ui/folderLabels'
@@ -22,6 +24,7 @@ export function TopBar() {
   const view = s.activeView()
   const note = view?.kind === 'note' ? s.getNote(view.path) : null
   const crumbs = note ? note.path.replace(/\.md$/i, '').split('/') : []
+  useStreakBoot()
 
   return (
     <div className="topbar">
@@ -52,6 +55,7 @@ export function TopBar() {
       </div>
 
       <div className="topbar-right">
+        <StreakBadge />
         <button className="icon-btn" title="Search (⌘⇧F)" onClick={() => s.openView({ kind: 'search' })}>
           <Search />
         </button>

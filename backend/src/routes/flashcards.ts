@@ -4,6 +4,8 @@
 // and how many there are. Same reasoning as the quiz — a deck that reshuffles
 // on reload is not the deck you were given, and a daily limit the client
 // enforces is not a limit.
+import { waitUntil } from '@vercel/functions'
+import { maybeGraduate } from '../usage/streak.js'
 import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
@@ -186,6 +188,9 @@ flashcardsRouter.post('/turn', asyncHandler(async (req, res) => {
      *  quiz's, so the two screens report it the same way. */
     confidence,
   })
+  // The last card turned completes the deck, and a completed deck is a
+  // streak day.
+  if (!already && cards.every((c) => c.turnedAt != null)) waitUntil(maybeGraduate(userId, day))
 }))
 
 /** Bookmark a card, or take the bookmark off.

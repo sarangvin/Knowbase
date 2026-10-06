@@ -11,6 +11,8 @@
 //     /mine/adopt copies a space into a user's own vault, and /library/
 //     contribute adds newly generated drafts. Users never see it directly;
 //     they get their own copy or nothing.
+import { maybeGraduate } from '../usage/streak.js'
+import { waitUntil } from '@vercel/functions'
 import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
@@ -158,7 +160,7 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
   const was = before ? frontmatterValue(before.content, 'last_reviewed') : null
   const now = frontmatterValue(content, 'last_reviewed')
   if (now && /^\d/.test(now) && now !== was) {
-    void logUsageEvent({
+    const graduation = logUsageEvent({
       userId: req.user!.id,
       eventType: 'note_review',
       metadata: {
@@ -169,7 +171,9 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
         interest: frontmatterValue(content, 'interest'),
         day: now,
       },
-    })
+    }).then(() => maybeGraduate(req.user!.id, now))
+    // Once the event is in: it is one of the days the streak counts.
+    waitUntil(graduation)
   }
 }))
 

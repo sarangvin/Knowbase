@@ -42,26 +42,31 @@ const PLANS: Record<string, PlanLimits> = {
   // below caps all of them together, which is what stops a pile of throwaway
   // accounts doing it instead. Approving someone in the admin panel moves
   // them to their plan's limits.
+  //
+  // Approval is no longer only by hand: a three-day streak graduates an
+  // account to free by itself (usage/streak.ts).
   new: {
     activeCollections: 5,
-    newCollectionsPerDay: 1,
+    newCollectionsPerDay: 2,
     flashcardsPerDay: 10,
     customQuestionsPerDay: 1,
-    newNotesPerDay: 3,
-    askAiPerDay: 3,
+    newNotesPerDay: 6,
+    askAiPerDay: 5,
   },
   free: {
     activeCollections: 5,
-    newCollectionsPerDay: 3,
+    newCollectionsPerDay: 5,
     flashcardsPerDay: 10,
     customQuestionsPerDay: 1,
     // Measured: a reader's grown notes per day were p50 2, p90 7, max 23.
-    // Ten clears ordinary use and stops the outlier.
-    newNotesPerDay: 10,
-    // Three, the same as a new account. Ask AI is the open-ended way to spend
-    // the shared key — a reply can be asked for again and again — where every
-    // other limit here is spent on notes that stay.
-    askAiPerDay: 3,
+    // Doubled from ten once the model fallback chain (llm/models.ts) roughly
+    // doubled the day's fast quota, to ~1,000 requests: the busiest day on
+    // record was 358 calls.
+    newNotesPerDay: 20,
+    // Ask AI is the open-ended way to spend the shared key — a reply can be
+    // asked for again and again — where every other limit here is spent on
+    // notes that stay. Raised from three with the same headroom.
+    askAiPerDay: 10,
   },
   pro: {
     activeCollections: UNLIMITED,
@@ -78,14 +83,15 @@ const PLANS: Record<string, PlanLimits> = {
 
 /** Model calls all not-yet-approved accounts may spend together in one of
  *  the provider's quota days (midnight to midnight Pacific — the window
- *  Gemini's ~500 requests a day is counted in; see usage/quotaWindow.ts).
+ *  Gemini's daily quota is counted in; see usage/quotaWindow.ts).
  *  Per-account limits do nothing against someone opening ten accounts; this
- *  does, and it keeps at least ~350 of the day's quota for approved users
- *  whatever new accounts do. Sized against real traffic of 3-25 calls a day
+ *  does. 300 of the ~1,000 fast requests a day the fallback chain gives
+ *  (llm/models.ts), leaving most of it for approved users whatever new
+ *  accounts do. Sized against real traffic of 3-25 calls a day
  *  in total, so it is not something genuine new users meet — a collection
- *  is about 6-8 calls, so this is room for roughly twenty new collections a
+ *  is about 6-8 calls, so this is room for roughly forty new collections a
  *  day before anything is refused. */
-export const NEW_ACCOUNTS_DAILY_MODEL_CALLS = 150
+export const NEW_ACCOUNTS_DAILY_MODEL_CALLS = 300
 
 /** Which limits apply to this account. Unapproved accounts are on the 'new'
  *  tier whatever plan their row says; owners are always approved (see

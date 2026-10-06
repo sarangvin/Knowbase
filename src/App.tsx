@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { StreakCelebration } from './features/streak/Streak'
 import { useVault } from './vault/vaultStore'
 import { useKeybindings } from './ui/useKeybindings'
 import { registerAutomatedGraph } from './features/automated-graph/register'
@@ -176,6 +177,7 @@ export default function App() {
       <OnboardingBanner />
       <CommandPalette />
       <QuickSwitcher />
+      <StreakCelebration />
     </div>
   )
 }

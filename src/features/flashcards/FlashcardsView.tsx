@@ -10,6 +10,7 @@
 // they are separate controls on purpose: a tap that both reveals and
 // advances makes it impossible to look at an answer twice, and going back
 // to one you half-knew is most of how this gets used.
+import { useStreak } from '../streak/streakStore'
 import { useCallback, useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { Layers, RotateCw, ArrowRight, ArrowLeft, Check, Bookmark, BookmarkFilled } from '../../ui/icons'
@@ -130,8 +131,13 @@ export function FlashcardsView() {
         ? { ...d, cards: d.cards.map((c, i) => (i === at ? { ...c, turnedAt: new Date().toISOString() } : c)) }
         : d,
     )
+    // The last card of the deck completes it, which is a streak day.
+    const lastOne = deck.cards.every((c, i) => i === at || c.turnedAt != null)
     void turnCard(at)
-      .then((r) => setScheduled((m) => ({ ...m, [at]: r })))
+      .then((r) => {
+        setScheduled((m) => ({ ...m, [at]: r }))
+        if (lastOne) useStreak.getState().goalAction()
+      })
       .catch(() => {
       // Put it back: a card the server does not know was turned will be
       // dealt again, and the count should say so rather than quietly

@@ -16,6 +16,7 @@
 //   - interest — 5 or 1 from a swipe, 1-5 from the desktop form — which is
 //     what steers the topics written next;
 //   - status, following confidence across the space's threshold.
+import { useStreak } from '../streak/streakStore'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { setFrontmatterValue } from '../../vault/parse'
@@ -156,6 +157,9 @@ export function useFinishNote(note: Note | undefined, touch: boolean): NoteFinis
         raw = setFrontmatterValue(raw, 'status', 'frontier')
       }
       if (raw !== current.raw) await saveNote(path, raw)
+      // A note finished for the first time is a streak day. Whether it was
+      // the first time is the server's call; it is asked either way.
+      useStreak.getState().goalAction()
       // Finishing a topic is exactly when the tree should grow: the server
       // tops it back up, using what they now know as the prerequisites and
       // what they just said about interest as the steer. Not awaited, and
