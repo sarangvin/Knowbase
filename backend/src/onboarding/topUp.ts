@@ -124,9 +124,10 @@ export async function retryFailedOnboarding(): Promise<{ email: string; topic: s
         -- The space column is set the moment the plan comes back and the
         -- folder is written, so a job that has one got past the expensive
         -- part. There is no resume: runOnboarding plans from scratch and
-        -- disambiguateSpace writes the whole thing again beside the
-        -- existing one under a numbered name, so re-running it can only
-        -- ever duplicate.
+        -- it used to write the whole thing again beside the existing one
+        -- under a numbered name. (It now adds to the existing collection
+        -- instead — see joinExisting in run.ts — but a re-run still spends
+        -- a plan call to get there, so it is still not worth retrying.)
         --
         -- Testing "and the space still has notes" is not enough, because a
         -- collection the owner *deleted* also has none: that job would

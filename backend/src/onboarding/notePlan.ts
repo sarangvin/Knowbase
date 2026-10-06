@@ -55,17 +55,6 @@ export function dedupeSegments(rawTitles: string[]): string[] {
   })
 }
 
-/** Case-insensitive collision check against every space the user already has.
- *  Takes the names directly: the caller reads them out of the user's own note
- *  paths, where the client used to read them out of its in-memory index. */
-export function disambiguateSpace(name: string, existingSpaces: string[]): string {
-  const existing = new Set(existingSpaces.map((s) => s.toLowerCase()))
-  if (!existing.has(name.toLowerCase())) return name
-  let n = 2
-  while (existing.has(`${name} ${n}`.toLowerCase())) n++
-  return `${name} ${n}`
-}
-
 /** DFS cycle detection over the small (<=5 node) title graph. On a cycle,
  * clears prerequisites on the lowest-interest node in it and re-checks —
  * bounded by subtopics.length iterations, can't loop forever. */

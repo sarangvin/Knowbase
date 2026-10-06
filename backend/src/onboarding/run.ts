@@ -13,13 +13,13 @@
 // Progress is written to onboarding_jobs as it goes, because once nobody is
 // watching a spinner the only way to tell someone their space is ready is to
 // have recorded that it is.
-import { and, eq } from 'drizzle-orm'
+import { and, eq, like } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes, onboardingJobs } from '../db/schema.js'
 import { DEFAULT_GEMINI_MODEL } from '../llm/providers/gemini.js'
 import { generateLearningPlan } from './plan.js'
 import { draftOne } from './draftNote.js'
-import { buildTopicNote, buildNextUpNote, disambiguateSpace, dedupeSegments } from './notePlan.js'
+import { buildTopicNote, buildNextUpNote, dedupeSegments } from './notePlan.js'
 import {
   SPACE_ROOT,
   getOrCreatePersonalVaultId,
@@ -27,9 +27,14 @@ import {
   findLibrarySpaceFor,
   adoptSpaceInto,
   contributeToLibrary,
+  normalizeTopic,
+  numberedBase,
+  archivedSpaces,
+  setSpaceArchived,
 } from '../vault/spaces.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 import { enqueueDrafts } from './queue.js'
+import { growSpace } from './grow.js'
 
 type JobPatch = Partial<{
   status: string
@@ -59,6 +64,59 @@ function isPlaceholder(content: string): boolean {
   return /_A fuller draft of this note is being written/.test(content)
 }
 
+/** The collection of theirs this name means, if they already have one.
+ *
+ *  Compared on the subject, not the string: case and punctuation are noise,
+ *  and a trailing number is how this file used to name a second copy of a
+ *  subject ("X 2") — anyone still holding one of those has the subject. */
+function ownedMatch(name: string, owned: string[]): string | null {
+  const key = normalizeTopic(name)
+  return owned.find((sp) => normalizeTopic(sp) === key || normalizeTopic(numberedBase(sp) ?? sp) === key) ?? null
+}
+
+/** Where opening an existing collection should land: its Next Up, or its
+ *  first topic for a collection that has lost its Next Up. */
+async function landingFor(vaultId: string, space: string): Promise<string> {
+  const prefix = `${SPACE_ROOT}${space}/`
+  const rows = await db
+    .select({ path: notes.path })
+    .from(notes)
+    .where(and(eq(notes.vaultId, vaultId), like(notes.path, `${prefix}%`)))
+  // LIKE narrows the read; the exact check is what decides, since `_` and
+  // `%` in a collection name are wildcards to LIKE.
+  const paths = rows.map((r) => r.path).filter((p) => p.startsWith(prefix))
+  const nextUp = `${prefix}Next Up.md`
+  return paths.includes(nextUp) ? nextUp : (paths.filter((p) => p.includes('/Topics/')).sort()[0] ?? nextUp)
+}
+
+/**
+ * Asked to build a subject they already have: add to that collection rather
+ * than make a second one.
+ *
+ * This used to write a fresh starter set beside the original under a
+ * numbered name ("System Architecture for PMs 2"), because a build is a
+ * self-contained five-topic plan and dropping it into an existing collection
+ * would have put rewordings next to the topics already there — four of the
+ * five in that copy were exactly that, and matching on titles cannot catch
+ * "APIs and Integration" against "API Design And Integration". Numbered
+ * copies then leaked into the shared library as subjects of their own.
+ *
+ * Growing is the way to add to a collection without repeats: growSpace is
+ * given every title already in it and told not to repeat or rephrase any of
+ * them, and builds on what has been studied. So the answer to "build this
+ * again" is your collection, opened, with new topics on their way — or, if
+ * its shelf is already full, just your collection.
+ */
+async function joinExisting(userId: string, topic: string, vaultId: string, space: string): Promise<void> {
+  // Set aside earlier and asked for again: that is wanting it back.
+  if ((await archivedSpaces(vaultId)).has(space)) await setSpaceArchived(vaultId, space, false)
+  await patchJob(userId, topic, { status: 'ready', space, openPath: await landingFor(vaultId, space), error: null })
+  void logUsageEvent({ userId, eventType: 'vault_sync', metadata: { space, topic, source: 'onboarding', outcome: 'joined-existing' } })
+  // After the job says ready, so they are not kept waiting on a plan call to
+  // be shown a collection they already have.
+  await growSpace(userId, space)
+}
+
 /**
  * Runs to completion or records why it couldn't. Never throws: the only caller
  * is a fire-and-forget waitUntil, so an escaping error would be a job stuck on
@@ -67,6 +125,15 @@ function isPlaceholder(content: string): boolean {
 export async function runOnboarding(userId: string, topic: string): Promise<void> {
   try {
     const vaultId = await getOrCreatePersonalVaultId(userId)
+
+    // 0. Their own collections before anything else. Asking for a subject
+    //    you already have should open it, not spend a plan call — and not
+    //    adopt the library's copy beside yours either.
+    const alreadyHave = ownedMatch(topic, await listUserSpaces(vaultId))
+    if (alreadyHave) {
+      await joinExisting(userId, topic, vaultId, alreadyHave)
+      return
+    }
 
     // 1. The corpus first. Someone may already have written this topic, and
     //    copying it is instant and free where generating is ~6 model calls.
@@ -96,7 +163,16 @@ export async function runOnboarding(userId: string, topic: string): Promise<void
     //    is what puts that message in front of the user.
     const plan = await generateLearningPlan(topic, userId)
 
-    const space = disambiguateSpace(plan.space, await listUserSpaces(vaultId))
+    // The model names the collection, so the typed topic not matching one
+    // of theirs (step 0) does not mean the subject is new: "system design
+    // for product managers" can come back named "System Architecture for
+    // PMs". Same answer as step 0 — add to the one they have.
+    const namedLikeTheirs = ownedMatch(plan.space, await listUserSpaces(vaultId))
+    if (namedLikeTheirs) {
+      await joinExisting(userId, topic, vaultId, namedLikeTheirs)
+      return
+    }
+    const space = plan.space
     const titles = plan.subtopics.map((s) => s.title)
     const segments = dedupeSegments(titles)
     const pathOf = (i: number) => `${SPACE_ROOT}${space}/Topics/${segments[i]}.md`
