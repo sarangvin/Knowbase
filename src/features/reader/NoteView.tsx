@@ -11,7 +11,7 @@ import { Editor } from '../editor/Editor'
 import { MyNotes } from './MyNotes'
 import { Questions } from './Questions'
 import { parseQuestions, questionsSection } from './questionsFormat'
-import { extractSection } from '../sync/sync'
+import { extractSection } from '../../vault/sections'
 import './noteview.css'
 
 /** Keep clear of the screen edges: a swipe that starts there is the

@@ -92,6 +92,9 @@ html, body, #root {
 }
 
 body {
+  /* Text size (features/settings/textSize.ts). On body, not #root, so the
+     dialogs portalled to body scale with everything else. */
+  zoom: var(--ui-zoom, 1);
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--text-normal);

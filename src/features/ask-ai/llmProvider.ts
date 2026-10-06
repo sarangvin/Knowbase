@@ -1,6 +1,6 @@
 // Shared shape for every "Ask AI" backend: local Ollama, your own Anthropic
-// key (proxied), or the free hosted Gemma tier (proxied). AskPanel/SyncModal
-// only ever talk to this interface, never to a specific provider's module.
+// key (proxied), or the free hosted Gemma tier (proxied). AskPanel and the
+// reader only ever talk to this interface, never to a specific provider's module.
 import type { Note } from '../../vault/types'
 
 export interface LlmProvider {

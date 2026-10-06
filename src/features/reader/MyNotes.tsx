@@ -9,7 +9,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { Save } from '../../ui/icons'
 import { slugify } from '../../vault/parse'
-import { replaceSection } from '../sync/sync'
+import { replaceSection } from '../../vault/sections'
 import type { Note } from '../../vault/types'
 
 /** Long enough that a pause between words never costs a save, short enough

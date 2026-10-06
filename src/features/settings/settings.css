@@ -144,3 +144,26 @@
   color: var(--text-normal);
 }
 .archive-actions { display: inline-flex; gap: 8px; flex: 0 0 auto; }
+
+/* Text size: five "A"s, each a step larger, as one segmented control. */
+.text-size {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.text-size-opt {
+  width: 44px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-weight: 600;
+  line-height: 1;
+}
+.text-size-opt + .text-size-opt { border-left: 1px solid var(--border-strong); }
+.text-size-opt:hover { background: var(--bg-hover); color: var(--text-normal); }
+.text-size-opt.is-on { background: var(--accent); color: var(--text-on-accent, #fff); }

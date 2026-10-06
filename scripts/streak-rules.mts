@@ -50,6 +50,7 @@ check('limits: pro is unlimited', !Number.isFinite(limitsFor('pro').newNotesPerD
 check('limits: shared new-account pool = 300', NEW_ACCOUNTS_DAILY_MODEL_CALLS === 300)
 check('tier: unapproved is new', tierOf({ accessApproved: false, planTier: 'free' }) === 'new')
 check('tier: approved is its plan', tierOf({ accessApproved: true, planTier: 'pro' }) === 'pro')
+check('tier: pro wins even unapproved (admin grant)', tierOf({ accessApproved: false, planTier: 'pro' }) === 'pro')
 
 // Model fallback chain.
 delete process.env.GEMINI_MODEL

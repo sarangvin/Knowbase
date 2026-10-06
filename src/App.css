@@ -18,6 +18,11 @@
      stays first as the fallback for anything that lacks dvh. */
   height: 100vh;
   height: 100dvh;
+  /* Viewport units are scaled by the text-size zoom on body like any other
+     length, so a zoomed shell would be taller than the screen and push the
+     bottom tabs off it. Divided back out here. */
+  height: calc(100vh / var(--ui-zoom, 1));
+  height: calc(100dvh / var(--ui-zoom, 1));
   background: var(--bg-primary);
 }
 
@@ -112,6 +117,10 @@
 
 /* ── Bottom navigation ───────────────────────────────────────────────────── */
 .bottomnav {
+  /* Held at its own size whatever the text size: five tabs only just fit a
+     phone at the default, and at the larger sizes their labels were cut off
+     ("Flashca…"). The reading is what the setting is for. */
+  zoom: calc(1 / var(--ui-zoom, 1));
   display: grid;
   /* Three tracks so the tab group is centred on the viewport regardless of
      how wide the account label or the counts happen to be. */

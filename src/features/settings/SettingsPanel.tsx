@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { getSubscriptionStatus, startSubscribe, cancelSubscription, openCheckout, type SubscriptionStatus } from './billing'
-import { User, LogOut, Cloud, Pencil, Trash, RotateCw, Archive } from '../../ui/icons'
+
+/** Off until Razorpay checkout is wired up for real. While off, nobody is
+ *  offered an upgrade; Pro is granted by hand from the admin panel (the plan
+ *  toggle on the Users tab), and an account that has it still sees its plan
+ *  here. Flip this when payments go live — the checkout code below is kept
+ *  for that. */
+const PAYMENTS_ENABLED = false
+import { User, LogOut, Cloud, Pencil, Trash, Archive } from '../../ui/icons'
 import { fetchArchivedCollections, setCollectionArchived, deleteCollection } from '../automated-graph/collectionsApi'
-import { SyncModal } from '../sync/SyncModal'
+import { TEXT_SIZES, readTextSize, setTextSize, type TextSizeId } from './textSize'
 import './settings.css'
 
 /** `onClose` omitted renders the panel inline as a full pane (the Settings
@@ -17,7 +24,11 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const reloadVault = useVault((s) => s.reload)
 
 
-  const [syncOpen, setSyncOpen] = useState(false)
+  const [textSize, setTextSizeState] = useState<TextSizeId>(readTextSize)
+  const chooseTextSize = (id: TextSizeId) => {
+    setTextSize(id)
+    setTextSizeState(id)
+  }
   const [sub, setSub] = useState<SubscriptionStatus | null>(null)
   const [subBusy, setSubBusy] = useState(false)
   const [subError, setSubError] = useState<string | null>(null)
@@ -136,6 +147,10 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
     }
   }
 
+  // Pro comes from the user row as well as the subscription: the admin panel
+  // grants it by setting users.plan_tier, with no subscription behind it.
+  const isPro = user?.planTier === 'pro' || sub?.planTier === 'pro'
+
   const doReset = async () => {
     if (resetting) return
     setResetting(true)
@@ -217,7 +232,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
                   <div className="settings-dim" style={{ margin: 0 }}>
                     {user.displayName ? user.email : null}
                     {user.role === 'owner' ? (user.displayName ? ' · owner' : 'owner') : null}
-                    {!user.accessApproved && ' · new account'}
+                    {!user.accessApproved && user.planTier !== 'pro' && ' · new account'}
                   </div>
                 </div>
               </div>
@@ -241,7 +256,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
                   amount of new material that is smaller until the account is
                   approved or has kept a 3-day streak — see the 'new' tier in
                   backend/src/plans.ts and usage/streak.ts. */}
-              {!user.accessApproved && (
+              {!user.accessApproved && user.planTier !== 'pro' && (
                 <p className="settings-dim">
                   New accounts can start 2 collections and grow 6 new notes a day. Keep a 3-day streak —
                   read a new note, finish your flashcards, or finish the quiz — and the limits go up on
@@ -260,15 +275,22 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
           )}
         </div>
 
-        {user && (
+        {/* While payments are off, the plan is only worth showing to an
+            account that has been given Pro — a "Free plan" line with nothing
+            to do about it is noise. */}
+        {user && (PAYMENTS_ENABLED || isPro || activating) && (
           <div className="settings-section">
             <div className="settings-label">Plan</div>
             {activating ? (
               <p className="settings-dim">Payment received — activating your Pro plan…</p>
-            ) : sub?.planTier === 'pro' ? (
+            ) : isPro ? (
               <div className="settings-key-row">
-                <span className="settings-key-label">Pro — {sub.status}</span>
-                <button className="ask-btn" disabled={subBusy} onClick={() => void cancel()}>Cancel subscription</button>
+                <span className="settings-key-label">
+                  Pro{sub?.planTier === 'pro' && sub.status !== 'none' ? ` — ${sub.status}` : ''}
+                </span>
+                {PAYMENTS_ENABLED && sub?.planTier === 'pro' && (
+                  <button className="ask-btn" disabled={subBusy} onClick={() => void cancel()}>Cancel subscription</button>
+                )}
               </div>
             ) : (
               <div className="settings-key-row">
@@ -297,19 +319,26 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
         )}
 
         <div className="settings-section">
-          <div className="settings-label">AI</div>
+          <div className="settings-label">Text size</div>
+          <div className="text-size" role="radiogroup" aria-label="Text size">
+            {TEXT_SIZES.map((t, i) => (
+              <button
+                key={t.id}
+                role="radio"
+                aria-checked={textSize === t.id}
+                aria-label={t.label}
+                title={t.label}
+                className={'text-size-opt' + (textSize === t.id ? ' is-on' : '')}
+                // The letter grows with the step, so the row reads as a scale.
+                style={{ fontSize: `${12 + i * 2.5}px` }}
+                onClick={() => chooseTextSize(t.id)}
+              >
+                A
+              </button>
+            ))}
+          </div>
           <p className="settings-dim">
-            Answers and note drafts use a hosted model. Nothing to configure.
-          </p>
-          {/* Moved off the top bar: a tool you reach for occasionally, on a
-              vault you have written in, does not earn a permanent icon on
-              every screen. */}
-          <button className="ask-btn settings-sync-btn" onClick={() => setSyncOpen(true)}>
-            <RotateCw width={14} height={14} /> Sync notes with AI
-          </button>
-          <p className="settings-dim">
-            Answers any unanswered <code>Q:</code> in a note's Questions section and folds
-            anything under My Notes into the AI Notes above it.
+            {TEXT_SIZES.find((t) => t.id === textSize)?.label}. Applies to this device only.
           </p>
         </div>
 
@@ -399,9 +428,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
     </div>
   ) : null
 
-  const sync = syncOpen ? <SyncModal onClose={() => setSyncOpen(false)} /> : null
-
-  if (!onClose) return <div className="settings-pane">{body}{confirmDialog}{archiveDialog}{sync}</div>
+  if (!onClose) return <div className="settings-pane">{body}{confirmDialog}{archiveDialog}</div>
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
@@ -409,7 +436,6 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
       </div>
       {confirmDialog}
       {archiveDialog}
-      {sync}
     </div>
   )
 }

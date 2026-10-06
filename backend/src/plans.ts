@@ -93,10 +93,13 @@ const PLANS: Record<string, PlanLimits> = {
  *  day before anything is refused. */
 export const NEW_ACCOUNTS_DAILY_MODEL_CALLS = 300
 
-/** Which limits apply to this account. Unapproved accounts are on the 'new'
- *  tier whatever plan their row says; owners are always approved (see
- *  resolveSession), so they never land here. */
+/** Which limits apply to this account. Pro wins outright: it is either
+ *  paid for or granted by hand from the admin panel, and in both cases the
+ *  point is the higher limits, approved or not. Otherwise unapproved
+ *  accounts are on the 'new' tier whatever plan their row says; owners are
+ *  always approved (see resolveSession), so they never land here. */
 export function tierOf(user: { accessApproved: boolean; planTier?: string | null }): string {
+  if (user.planTier === 'pro') return 'pro'
   return user.accessApproved ? (user.planTier ?? 'free') : 'new'
 }
 

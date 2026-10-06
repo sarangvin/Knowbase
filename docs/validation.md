@@ -53,8 +53,9 @@ note, finished the day's flashcards, or finished the quiz):
 
 **Limits** (collections / grown notes / Ask AI, per day): `new` 2/6/5, `free`
 5/20/10, `pro` unlimited. Shared pool across all `new` accounts: 300 model
-calls per quota day. An unapproved account is tier `new` whatever its plan row
-says; an approved one is its plan.
+calls per quota day. `pro` wins outright, approved or not (it is paid for, or
+granted by hand in admin while payments are off). Otherwise an unapproved
+account is tier `new` whatever its plan row says; an approved one is its plan.
 
 **Model chain**: starts at `gemini-3.5-flash-lite`; no duplicates; an empty
 `GEMINI_MODEL=` is ignored (it used to be sent as a model named `""`, which is

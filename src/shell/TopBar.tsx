@@ -8,8 +8,8 @@
 //   redundant now that the Learn tab and inline links do the navigating.
 //   Command palette — a keyboard affordance with a keyboard shortcut. On a
 //   phone, where there is no ⌘P, the Files tab does the same job better.
-//   AI Sync — a power tool for hand-written vaults, and its label still
-//   advertised Ollama, which no longer exists here. It lives in Settings now.
+//   AI Sync — a power tool for hand-written vaults. It moved to Settings,
+//   and has since been removed altogether.
 //
 // What is left is what has no other way in: search, Ask AI, and the
 // read/edit toggle.
