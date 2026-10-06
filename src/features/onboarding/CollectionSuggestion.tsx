@@ -56,6 +56,7 @@ export function CollectionSuggestion({
   owned,
   building,
   title = 'Start an existing collection',
+  onStart,
 }: {
   /** Every collection the reader already has, archived ones included —
    *  suggesting something you set aside is not a suggestion. */
@@ -66,6 +67,10 @@ export function CollectionSuggestion({
   /** The Learn page says "Start an existing collection"; the first-run
    *  screen, where it sits under "What do you want to learn?", says "Or…". */
   title?: string
+  /** The landing page hands the pick to its own start, which signs a
+   *  newcomer up first and carries the name across the OAuth round-trip like
+   *  a typed topic. Given this, the card is shown to signed-out visitors too. */
+  onStart?: (name: string) => void
 }) {
   const user = useVault((s) => s.user)
   const approved = !!user
@@ -80,13 +85,14 @@ export function CollectionSuggestion({
   // Fetched on mount — that is, each time the Learn tab is opened, which is
   // what makes the pick a fresh one per visit.
   useEffect(() => {
-    if (!approved) return
+    if (!approved && !onStart) return
     let cancelled = false
     void fetchLibrarySpaces().then((l) => !cancelled && setLibrary(l))
-    void fetchCollectionAllowance().then((a) => !cancelled && setAllowance(a))
+    if (approved) void fetchCollectionAllowance().then((a) => !cancelled && setAllowance(a))
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approved, started])
 
   const candidates = useMemo(() => {
@@ -116,7 +122,7 @@ export function CollectionSuggestion({
     if (next) lastShown = next.key
   }, [candidates, current])
 
-  if (!approved) return null
+  if (!approved && !onStart) return null
 
   const another = () => {
     const next = pickRandom(candidates, current?.key ?? null)
@@ -126,6 +132,10 @@ export function CollectionSuggestion({
 
   const start = async () => {
     if (!current || busy) return
+    if (onStart) {
+      onStart(current.name)
+      return
+    }
     setBusy(true)
     setError(null)
     try {

@@ -13,6 +13,7 @@ import { useVault } from '../../vault/vaultStore'
 import { setPendingTopic, clearPendingTopic, peekPendingTopic } from './pendingTopic'
 import { startOnboarding } from './onboardingApi'
 import { randomTopicPlaceholder } from './examples'
+import { CollectionSuggestion } from './CollectionSuggestion'
 import { RabbitSolid, Eye, Cloud, Pencil, ArrowRight, Sparkles, User } from '../../ui/icons'
 import './onboarding.css'
 
@@ -162,6 +163,19 @@ export function Onboarding() {
               </p>
             )}
           </div>
+
+        {/* The alternative to naming a subject: one somebody already had
+            written, picked at random, with "Show another" to re-roll. It
+            starts through the same path as a typed topic, so a newcomer
+            signs up first and the library copy is waiting when they land. */}
+        <div className="home-suggestion">
+          <CollectionSuggestion
+            owned={[]}
+            building={[]}
+            title="Or start an existing collection"
+            onStart={(name) => void start(name)}
+          />
+        </div>
 
         {/* Everything below is deliberately secondary: these are the escape
             hatches and the returning-user paths, not the main road. */}

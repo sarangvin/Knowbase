@@ -26,6 +26,11 @@ import { frontmatterValue } from '../vault/frontmatter.js'
 import { SPACE_ROOT, spaceOf, normalizeTopic, getOrCreatePersonalVaultId, getGlobalVaultId, adoptSpaceInto, contributeToLibrary, archivedSpaces, setSpaceArchived, deleteSpace } from '../vault/spaces.js'
 
 export const vaultsRouter = Router()
+// The library listing is public, registered ahead of requireAuth: the landing
+// page offers a random existing collection to people who have not signed up
+// yet. It is names and topic titles only, never note bodies — starting one
+// still goes through sign-in and the same start call as a typed topic.
+vaultsRouter.get('/library/spaces', (req, res, next) => listLibrarySpaces(req, res, next))
 vaultsRouter.use(requireAuth)
 // Cloud vaults used to be behind owner approval, leaving an unapproved
 // account with only the demo vault. Every signed-in account gets its own now;
@@ -261,7 +266,7 @@ vaultsRouter.get('/mine/assets', asyncHandler(async (_req, res) => {
 // never read through to it: they get their own copy in their own vault, which
 // they can then edit without affecting anyone else.
 
-vaultsRouter.get('/library/spaces', asyncHandler(async (_req, res) => {
+const listLibrarySpaces = asyncHandler(async (_req, res) => {
   const globalVaultId = await getGlobalVaultId()
   if (!globalVaultId) {
     res.json({ spaces: [] })
@@ -297,7 +302,7 @@ vaultsRouter.get('/library/spaces', asyncHandler(async (_req, res) => {
       }
     }),
   })
-}))
+})
 
 /** Copy one corpus space into the caller's own vault. Paths the user already
  * has are skipped, never overwritten — adopting must not clobber work. */
