@@ -34,10 +34,20 @@ export interface StudyBackfillOptions {
   budgetMs?: number
   /** Report what is left without doing any of it. */
   dryRun?: boolean
+  /** Confine model calls to these (see MeteredCallOptions.models). The daily
+   *  budget then counts only their calls, since quotas are per model. */
+  models?: string[]
+  /** Deadline per call; slow models need more than the default. */
+  timeoutMs?: number
+  /** Model calls in flight at once. */
+  concurrency?: number
 }
 
 export interface StudyBackfillResult {
   needing: number
+  /** Distinct notes among those, after identical copies are grouped: the
+   *  model calls a full pass would make. */
+  unique: number
   generated: number
   copied: number
   empty: number
@@ -106,60 +116,76 @@ function twinIndex(all: Row[]): Map<string, { context: string; data: StudyData }
 
 export async function backfillStudy(opts: StudyBackfillOptions): Promise<StudyBackfillResult> {
   const started = Date.now()
-  const out: StudyBackfillResult = { needing: 0, generated: 0, copied: 0, empty: 0, failed: 0, stoppedBecause: 'done' }
+  const out: StudyBackfillResult = { needing: 0, unique: 0, generated: 0, copied: 0, empty: 0, failed: 0, stoppedBecause: 'done' }
   const all = await topicRows()
-  // The shared library first: its notes are the ones other notes copy from.
-  const todo = all.filter((r) => needsStudy(r.content)).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'global' ? -1 : 1))
+  const todo = all.filter((r) => needsStudy(r.content))
   out.needing = todo.length
-  if (opts.dryRun) return { ...out, stoppedBecause: 'dry-run' }
-  if (todo.length && !process.env.GEMINI_API_KEY) return { ...out, stoppedBecause: 'no-key' }
 
+  // Notes with an identical twin that already has data are copies. The rest
+  // are grouped by path and text, so each distinct note is asked about once
+  // and its answer written into every copy — the shared library's copy
+  // first, as the one that is generated, since it is what others copy from.
   const twins = twinIndex(all)
-  let calls = 0
-  // Once a limit is hit no more model calls are made, but the pass carries
-  // on to the end: a copy from an identical note costs nothing and there is
-  // no reason to leave those undone.
-  let halted = false
+  const copies: { row: Row; data: StudyData }[] = []
+  const groups = new Map<string, Row[]>()
   for (const row of todo) {
     const context = contextOfNote(row.content)
     const twin = (twins.get(row.path) ?? []).find((t) => t.context === context)
     if (twin) {
-      if (await writeInto(row, twin.data)) out.copied++
+      copies.push({ row, data: twin.data })
       continue
     }
-    if (halted) continue
-    if (calls >= opts.limit) {
-      out.stoppedBecause = 'limit'
-      halted = true
-      continue
-    }
-    if (opts.budgetMs && Date.now() - started > opts.budgetMs) {
-      out.stoppedBecause = 'time'
-      halted = true
-      continue
-    }
-    if ((await callsSinceQuotaReset()) >= opts.dailyCallBudget) {
-      out.stoppedBecause = 'quota'
-      halted = true
-      continue
-    }
-    if (opts.pauseMs && calls > 0) await new Promise((r) => setTimeout(r, opts.pauseMs))
-    calls++
-    try {
-      const data = await generateStudy(titleOf(row.path), row.content, row.owner ?? undefined)
-      if (await writeInto(row, data)) {
-        out.generated++
-        if (data.terms.length === 0 && data.quiz.length === 0) out.empty++
-        // Later notes with the same text copy this one.
-        const list = twins.get(row.path) ?? []
-        list.push({ context, data })
-        twins.set(row.path, list)
+    const key = `${row.path}\u0000${context}`
+    const g = groups.get(key) ?? []
+    g.push(row)
+    groups.set(key, g)
+  }
+  for (const g of groups.values()) g.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'global' ? -1 : 1))
+  out.unique = groups.size
+  if (opts.dryRun) return { ...out, stoppedBecause: 'dry-run' }
+
+  for (const { row, data } of copies) if (await writeInto(row, data)) out.copied++
+
+  if (groups.size && !process.env.GEMINI_API_KEY) return { ...out, stoppedBecause: 'no-key' }
+
+  const queue = [...groups.values()]
+  let calls = 0
+  let halted = false
+  const halt = (why: StudyBackfillResult['stoppedBecause']) => {
+    if (!halted) out.stoppedBecause = why
+    halted = true
+  }
+
+  const worker = async () => {
+    for (;;) {
+      if (halted) return
+      const group = queue.shift()
+      if (!group) return
+      if (calls >= opts.limit) return halt('limit')
+      if (opts.budgetMs && Date.now() - started > opts.budgetMs) return halt('time')
+      if ((await callsSinceQuotaReset(opts.models)) >= opts.dailyCallBudget) return halt('quota')
+      calls++
+      const [first, ...rest] = group
+      try {
+        const data = await generateStudy(titleOf(first.path), first.content, first.owner ?? undefined, 'study-backfill', {
+          models: opts.models,
+          timeoutMs: opts.timeoutMs,
+        })
+        if (await writeInto(first, data)) {
+          out.generated++
+          if (data.terms.length === 0 && data.quiz.length === 0) out.empty++
+        }
+        for (const r of rest) if (await writeInto(r, data)) out.copied++
+        const done = out.generated + out.failed
+        if (done % 10 === 0) console.log(`[study-backfill] ${done}/${groups.size} generated, ${out.copied} copied, ${out.failed} failed`)
+      } catch (err) {
+        out.failed++
+        console.warn(`[study-backfill] ${first.path} failed:`, err instanceof Error ? err.message : err)
       }
-    } catch (err) {
-      out.failed++
-      console.warn(`[study-backfill] ${row.path} failed:`, err)
+      if (opts.pauseMs) await new Promise((r) => setTimeout(r, opts.pauseMs))
     }
   }
+  await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 1) }, worker))
   return out
 }
 

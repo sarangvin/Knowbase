@@ -16,7 +16,7 @@
 // frontmatter.ts exist: this was written out three times — in the cron, in
 // the ensure loop and in the backfill — and three copies of a window is
 // three chances to fix it once.
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { usageEvents } from '../db/schema.js'
@@ -35,11 +35,19 @@ export const SINCE_QUOTA_RESET: SQL = sql`(date_trunc('day', now() AT TIME ZONE 
 
 /** Model calls made since the quota last reset — the number the provider is
  *  holding against us right now. */
-export async function callsSinceQuotaReset(): Promise<number> {
+export async function callsSinceQuotaReset(models?: string[]): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(usageEvents)
-    .where(and(eq(usageEvents.eventType, 'llm_call'), sql`${usageEvents.createdAt} >= ${SINCE_QUOTA_RESET}`))
+    .where(
+      and(
+        eq(usageEvents.eventType, 'llm_call'),
+        sql`${usageEvents.createdAt} >= ${SINCE_QUOTA_RESET}`,
+        // Quotas are per model, so a run confined to some models is only
+        // spending theirs.
+        models?.length ? inArray(usageEvents.model, models) : undefined,
+      ),
+    )
   return row?.n ?? 0
 }
 

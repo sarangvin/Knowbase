@@ -70,6 +70,12 @@ export async function* streamGeminiChat(
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: user }] }],
+      // Gemma 4 thinks at length before answering unless told not to: a
+      // study-material prompt took 75-115s with it on. "minimal" is the
+      // lowest level these models accept (a thinking budget of 0 is
+      // refused with a 400), and on a small prompt cut 12s to 4s. Gemini
+      // models are left at their defaults.
+      ...(model.startsWith('gemma-') ? { generationConfig: { thinkingConfig: { thinkingLevel: 'minimal' } } } : {}),
     }),
   })
   if (!res.ok || !res.body) {
@@ -92,8 +98,12 @@ export async function* streamGeminiChat(
     // thought: true before the real answer (verified live — its content is
     // scratch reasoning like "* User input: ...", not meant to be shown as
     // the response) — only yield genuine answer parts.
-    const part = obj.candidates?.[0]?.content?.parts?.[0]
-    if (part?.text && !part.thought) yield part.text
+    // Every part, not the first: a chunk can carry the end of the thinking
+    // and the start of the answer together, and reading only parts[0] threw
+    // the answer away — the reply came back empty and failed to parse.
+    for (const part of obj.candidates?.[0]?.content?.parts ?? []) {
+      if (part.text && !part.thought) yield part.text
+    }
   }
   onUsage?.(usage)
 }

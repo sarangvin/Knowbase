@@ -251,6 +251,9 @@ export async function generateStudy(
   raw: string,
   userId: string | undefined,
   source = 'study-backfill',
+  /** Confine the call to these models (see MeteredCallOptions.models), with
+   *  a deadline to suit them. */
+  call?: { models?: string[]; timeoutMs?: number },
 ): Promise<StudyData> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('No model key configured.')
@@ -263,7 +266,7 @@ ${contextOfNote(raw)}
 Questions (use the number as "n"):
 ${questions.length ? questions.map((q, i) => `${i + 1}. ${q}`).join('\n') : '(none)'}`
 
-  const out = await meteredGeminiCall(apiKey, SYSTEM, user, { userId, source })
+  const out = await meteredGeminiCall(apiKey, SYSTEM, user, { userId, source, ...call })
   const parsed = JSON.parse(stripFence(out)) as { terms?: unknown; quiz?: unknown }
   return {
     terms: cleanTerms(parsed.terms, noteTitle),

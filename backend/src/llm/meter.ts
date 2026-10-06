@@ -41,6 +41,10 @@ export interface MeteredCallOptions {
   source: string
   /** Overrides the per-source default below. */
   timeoutMs?: number
+  /** Call only these models, in this order, instead of the chain. For bulk
+   *  work that should run on its own quota — the study backfill on Gemma —
+   *  and must not spend the Flash-Lite requests interactive use depends on. */
+  models?: string[]
 }
 
 /** Thrown when a call is cut off for taking too long. Its own type because
@@ -143,7 +147,7 @@ export async function meteredGeminiCall(
   preferredModel?: string,
 ): Promise<string> {
   await assertNewAccountBudget(opts.userId)
-  const candidates = await modelChain(apiKey, preferredModel)
+  const candidates = opts.models?.length ? opts.models : await modelChain(apiKey, preferredModel)
   const timeoutMs = opts.timeoutMs ?? timeoutFor(opts.source)
   const start = Date.now()
   let usage: Usage = {}
