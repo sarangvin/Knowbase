@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import { useVault } from '../../vault/vaultStore'
 import { buildGraphData } from '../../vault/graph'
+import { spaceOfPath } from '../../vault/collections'
+import { listSpaces } from '../automated-graph/engine'
+import { collectionColors } from './collectionColors'
 import './graph.css'
 
 interface GNode {
@@ -53,6 +56,25 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
       links: g.links.map((l) => ({ source: l.source, target: l.target })),
     }
   }, [index, focusPath, compact])
+
+  // A pastel per collection. Worked out over all of the reader's collections,
+  // not just the ones on screen, so a note's colour is the same in its own
+  // small graph as in the full one.
+  const colors = useMemo(() => collectionColors(index ? listSpaces(index) : []), [index])
+  const colorOf = (id: string) => {
+    const space = spaceOfPath(id)
+    return (space && colors.get(space)) || null
+  }
+  // The key: the collections actually on this graph, in the order of the
+  // home screen's names.
+  const legend = useMemo(() => {
+    const seen = new Set<string>()
+    for (const n of data.nodes) {
+      const space = spaceOfPath(n.id)
+      if (space && colors.has(space)) seen.add(space)
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b)).map((space) => ({ space, color: colors.get(space)! }))
+  }, [data, colors])
 
   // Adjacency for hover highlighting.
   const neighbors = useMemo(() => {
@@ -140,7 +162,7 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
           linkColor={(l) => {
             const s = typeof l.source === 'string' ? l.source : (l.source as GNode).id
             const t = typeof l.target === 'string' ? l.target : (l.target as GNode).id
-            if (hover && (s === hover || t === hover)) return accent
+            if (hover && (s === hover || t === hover)) return colorOf(hover) ?? accent
             return 'hsl(26 20% 70% / 0.1)'
           }}
           linkWidth={(l) => {
@@ -158,11 +180,12 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
             ctx.globalAlpha = dim ? 0.18 : 1
             ctx.beginPath()
             ctx.arc(n.x!, n.y!, r, 0, 2 * Math.PI)
-            ctx.fillStyle = !n.resolved ? faint : isFocus ? '#fff5ec' : accent
+            const own = colorOf(n.id) ?? accent
+            ctx.fillStyle = !n.resolved ? faint : isFocus ? '#fff5ec' : own
             ctx.fill()
             if (isFocus) {
               ctx.lineWidth = 1.5
-              ctx.strokeStyle = accent
+              ctx.strokeStyle = own
               ctx.stroke()
             }
             // Labels come in as you zoom, the way Obsidian's graph does.
@@ -194,6 +217,17 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
             ctx.fill()
           }}
         />
+      )}
+      {/* Only worth a key when there is more than one colour to tell apart. */}
+      {!compact && legend.length > 1 && (
+        <ul className="graph-legend" aria-label="Collections">
+          {legend.map(({ space, color }) => (
+            <li key={space}>
+              <span className="graph-legend-dot" style={{ background: color }} />
+              {space}
+            </li>
+          ))}
+        </ul>
       )}
       {data.nodes.length === 0 && <div className="empty-state">No linked notes here.</div>}
     </div>

@@ -19,3 +19,35 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Which colour is which collection. Top left, out of the way of the
+   nodes zoomToFit centres, and never taking pointer events from the graph. */
+.graph-legend {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(240px, 60%);
+  max-height: 45%;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  pointer-events: none;
+}
+.graph-legend li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.graph-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
