@@ -514,8 +514,22 @@ adminRouter.get('/users/:id', asyncHandler(async (req, res) => {
     .from(subscriptions)
     .where(eq(subscriptions.userId, req.params.id))
     .limit(1)
+  // Named as the admin client reads them (UsageEventRow, snake_case like the
+  // other admin endpoints' raw SQL). A bare select() returns drizzle's
+  // camelCase keys, and the activity table showed only the two columns
+  // whose names are one word either way: provider and model.
   const recentEvents = await db
-    .select()
+    .select({
+      id: usageEvents.id,
+      event_type: usageEvents.eventType,
+      provider: usageEvents.provider,
+      model: usageEvents.model,
+      input_tokens: usageEvents.inputTokens,
+      output_tokens: usageEvents.outputTokens,
+      latency_ms: usageEvents.latencyMs,
+      metadata: usageEvents.metadata,
+      created_at: usageEvents.createdAt,
+    })
     .from(usageEvents)
     .where(eq(usageEvents.userId, req.params.id))
     .orderBy(desc(usageEvents.createdAt))
