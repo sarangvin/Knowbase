@@ -30,6 +30,12 @@ export const Hash = (p: P) => (
 export const Search = (p: P) => (
   <svg {...base(p)}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
 )
+export const Highlighter = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m9 11-6 6v3h9l3-3" />
+    <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" />
+  </svg>
+)
 export const Menu = (p: P) => (
   <svg {...base(p)}><path d="M4 6h16M4 12h16M4 18h16" /></svg>
 )

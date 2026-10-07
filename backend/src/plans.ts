@@ -38,6 +38,9 @@ export interface PlanLimits {
    *  rerun is where search grounding goes once it is live, and Pro finds a
    *  note's sources once. */
   recheckSources: boolean
+  /** Highlight-to-new-note links, in any rolling 24 hours (notes/highlight.ts).
+   *  Each one is a model call to name the topic and a drafted note. */
+  highlightsPerDay: number
 }
 
 const PLANS: Record<string, PlanLimits> = {
@@ -61,6 +64,7 @@ const PLANS: Record<string, PlanLimits> = {
     askAiPerDay: 5,
     sourcesPerDay: 0,
     recheckSources: false,
+    highlightsPerDay: 1,
   },
   free: {
     activeCollections: 5,
@@ -78,6 +82,7 @@ const PLANS: Record<string, PlanLimits> = {
     askAiPerDay: 10,
     sourcesPerDay: 0,
     recheckSources: false,
+    highlightsPerDay: 1,
   },
   pro: {
     activeCollections: UNLIMITED,
@@ -92,6 +97,7 @@ const PLANS: Record<string, PlanLimits> = {
     // A number: each run is a model call and a dozen page fetches.
     sourcesPerDay: 30,
     recheckSources: false,
+    highlightsPerDay: 10,
   },
   // Everything Pro has, and the features that cost real money per use —
   // checking sources again now, search grounding when it goes live. Granted
@@ -105,6 +111,7 @@ const PLANS: Record<string, PlanLimits> = {
     askAiPerDay: UNLIMITED,
     sourcesPerDay: 100,
     recheckSources: true,
+    highlightsPerDay: 20,
   },
 }
 

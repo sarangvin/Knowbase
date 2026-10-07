@@ -16,7 +16,9 @@
 import { StreakBadge } from '../features/streak/Streak'
 import { useStreakBoot } from '../features/streak/streakStore'
 import { useVault } from '../vault/vaultStore'
-import { ArrowLeft, ArrowRight, Search } from '../ui/icons'
+import { ArrowLeft, ArrowRight, Search, Highlighter } from '../ui/icons'
+import { useHighlight } from '../features/highlight/highlightStore'
+import { RemoteVaultSource } from '../vault/remoteSource'
 import { folderLabel } from '../ui/folderLabels'
 
 export function TopBar() {
@@ -25,6 +27,14 @@ export function TopBar() {
   const note = view?.kind === 'note' ? s.getNote(view.path) : null
   const crumbs = note ? note.path.replace(/\.md$/i, '').split('/') : []
   useStreakBoot()
+  const highlight = useHighlight()
+  // Highlighting writes into the note, so only on the reader's own topic
+  // notes — not the demo, the library, or a Next Up page.
+  const canHighlight =
+    !!note &&
+    s.source instanceof RemoteVaultSource &&
+    s.source.mode === 'personal' &&
+    /^Automated Graph\/[^/]+\/Topics\//.test(note.path)
 
   return (
     <div className="topbar">
@@ -56,6 +66,20 @@ export function TopBar() {
 
       <div className="topbar-right">
         <StreakBadge />
+        {canHighlight && (
+          <button
+            className={'icon-btn' + (highlight.active ? ' is-on' : '')}
+            title={highlight.active ? 'Make a note from the selected words' : 'Highlight words to make a new note'}
+            aria-pressed={highlight.active}
+            disabled={highlight.busy}
+            // Keeps a text selection alive through the tap on desktop; the
+            // store also captures it as it is made, for phones.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => note && highlight.toggle(note.path)}
+          >
+            <Highlighter />
+          </button>
+        )}
         <button className="icon-btn" title="Search (⌘⇧F)" onClick={() => s.openView({ kind: 'search' })}>
           <Search />
         </button>

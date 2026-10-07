@@ -1,0 +1,35 @@
+/* The strip under the top bar while highlighting. Sticky, so it stays in
+   view while the reader scrolls to the words they want. */
+.highlight-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m);
+  background: var(--bg-elevated);
+  font-size: 14px;
+}
+.highlight-bar.is-active { border-color: var(--accent); }
+.highlight-bar-text { flex: 1; min-width: 200px; color: var(--text-muted); display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.highlight-bar-text .spinner { width: 12px; height: 12px; }
+.highlight-bar-actions { display: flex; gap: 8px; }
+.highlight-bar-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.highlight-bar-error { color: var(--text-error); }
+/* While highlighting, the selection shows in the accent colour so it reads
+   as a highlighter rather than an ordinary text selection. */
+.highlighting .note-container ::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.icon-btn.is-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }

@@ -11,9 +11,11 @@ import { customQuestions } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { getOrCreatePersonalVaultId, spaceOf } from '../vault/spaces.js'
-import { limitsFor, isUnlimited, remainingOf, tierOf } from '../plans.js'
+import { limitsFor, isUnlimited, remainingOf, tierOf, atLeastPro } from '../plans.js'
 import { usageEvents } from '../db/schema.js'
 import { findSources, writeSources, hasSourcesBlock, sourcesCheckedOn } from '../notes/sources.js'
+import { findPhrase, linkPhrase, nameTopic, existingTopic, createTopic, MAX_HIGHLIGHT_WORDS } from '../notes/highlight.js'
+import { logUsageEvent } from '../usage/logEvent.js'
 import {
   parseQuestions,
   setAnswer,
@@ -311,4 +313,94 @@ notesRouter.post('/sources', asyncHandler(async (req, res) => {
   const fresh = await loadOwnNote(vaultId, path)
   if (fresh && result.sources.length) await writeOwnNote(vaultId, path, writeSources(fresh.content, result.sources, day))
   res.json({ sources: result.sources, claims: result.claims.length, pagesRead: result.pagesRead })
+}))
+
+/** Highlight links made in the last 24 hours, read off the note_write events
+ *  each one logs. Only links that created a note count: linking to a note
+ *  the collection already has costs nothing to make. */
+async function highlightsUsed(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(usageEvents)
+    .where(
+      and(
+        eq(usageEvents.userId, userId),
+        eq(usageEvents.eventType, 'note_write'),
+        sql`${usageEvents.metadata}->>'source' = 'highlight'`,
+        sql`${usageEvents.createdAt} > now() - interval '24 hours'`,
+      ),
+    )
+  return row?.n ?? 0
+}
+
+/**
+ * Turn a highlighted phrase in a note into a link to a new note on it
+ * (notes/highlight.ts). Free and new accounts: one a day. Pro: ten.
+ */
+notesRouter.post('/highlight', asyncHandler(async (req, res) => {
+  const user = req.user!
+  const path = noteParam(req.body?.path)
+  const phrase = typeof req.body?.text === 'string' ? req.body.text.replace(/\s+/g, ' ').trim() : ''
+  if (!path) {
+    res.status(400).json({ error: 'path required' })
+    return
+  }
+  if (phrase.length < 2 || phrase.length > 120 || phrase.split(' ').length > MAX_HIGHLIGHT_WORDS) {
+    res.status(400).json({ error: `Highlight a word or a short phrase — up to ${MAX_HIGHLIGHT_WORDS} words.` })
+    return
+  }
+  const space = spaceOf(path)
+  if (!space || !path.includes('/Topics/')) {
+    res.status(400).json({ error: 'Highlights work on topic notes in a collection.' })
+    return
+  }
+  const vaultId = await getOrCreatePersonalVaultId(user.id)
+  const note = await loadOwnNote(vaultId, path)
+  if (!note) {
+    res.status(404).json({ error: 'Note not found' })
+    return
+  }
+  const span = findPhrase(note.content, phrase)
+  if (!span) {
+    res.status(400).json({
+      error: "Couldn't find that in the note's text. Highlight words in the main notes, not in a link or heading.",
+    })
+    return
+  }
+
+  const limit = limitsFor(user.role === 'owner' ? 'max' : tierOf(user)).highlightsPerDay
+  const used = await highlightsUsed(user.id)
+  const fromTitle = (path.split('/').pop() ?? path).replace(/\.md$/i, '')
+
+  // Checked before the model call, so a spent allowance costs nothing. A
+  // link to a note the collection already has is not counted against it.
+  if (used >= limit) {
+    res.status(429).json({
+      error: atLeastPro(tierOf(user))
+        ? `That's today's ${limit} highlight links. More tomorrow.`
+        : `Free accounts can make ${limit} highlight link a day. Pro makes 10.`,
+      upgrade: atLeastPro(tierOf(user)) ? undefined : 'pro',
+    })
+    return
+  }
+  const { title, summary } = await nameTopic(phrase, fromTitle, space, note.content, user.id)
+  let target = await existingTopic(vaultId, space, title)
+  const created = !target
+  if (!target) target = await createTopic({ userId: user.id, vaultId, space, title, summary, fromTitle })
+  const linkTitle = (target.split('/').pop() ?? title).replace(/\.md$/i, '')
+
+  // Re-read before writing: naming the topic took a model call, and the
+  // reader may have saved My Notes meanwhile.
+  const fresh = await loadOwnNote(vaultId, path)
+  const freshSpan = fresh ? findPhrase(fresh.content, phrase) : null
+  if (fresh && freshSpan) await writeOwnNote(vaultId, path, linkPhrase(fresh.content, freshSpan, linkTitle))
+
+  if (created) {
+    void logUsageEvent({
+      userId: user.id,
+      eventType: 'note_write',
+      metadata: { vault: 'personal', space, source: 'highlight', from: path, to: target },
+    })
+  }
+  res.json({ title: linkTitle, path: target, created, remaining: Math.max(0, limit - used - (created ? 1 : 0)) })
 }))
