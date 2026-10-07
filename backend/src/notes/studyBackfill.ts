@@ -191,7 +191,20 @@ export async function backfillStudy(opts: StudyBackfillOptions): Promise<StudyBa
       if (!group) return
       if (calls >= opts.limit) return halt('limit')
       if (opts.budgetMs && Date.now() - started > opts.budgetMs) return halt('time')
-      if ((await callsSinceQuotaReset(opts.models)) >= opts.dailyCallBudget) return halt('quota')
+      // A dropped connection on this read used to end the whole pass: it sat
+      // outside the try below, so the rejection went straight up through
+      // Promise.all. The pool reconnects on the next query, so the note goes
+      // back on the queue and the worker waits a moment instead.
+      let used: number
+      try {
+        used = await callsSinceQuotaReset(opts.models)
+      } catch (err) {
+        console.warn('[study-backfill] budget check failed, retrying:', err instanceof Error ? err.message : err)
+        queue.unshift(group)
+        await new Promise((r) => setTimeout(r, 3_000))
+        continue
+      }
+      if (used >= opts.dailyCallBudget) return halt('quota')
       calls++
       if (models) await limit(models[0])
       const [first, ...rest] = group

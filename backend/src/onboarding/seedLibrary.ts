@@ -60,6 +60,21 @@ async function pace(): Promise<void> {
   lastCall = Date.now()
 }
 
+/** A database call, retried once. Drafting a collection keeps the script
+ *  waiting on the model for minutes, long enough for Neon to close the idle
+ *  connection; the next query then fails on the dead socket. The pool hands
+ *  out a fresh connection on the retry. "Sleep science" failed twice this way
+ *  with all five notes drafted. */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    console.warn('[seed] database call failed, retrying once:', err instanceof Error ? err.message : err)
+    await new Promise((r) => setTimeout(r, 2_000))
+    return fn()
+  }
+}
+
 /** "Roman history" -> "Roman History", leaving short joining words alone
  *  unless they come first: "The Silk Road", "Philosophy of Mind". */
 function titleCase(s: string): string {
@@ -90,7 +105,7 @@ const userId = owner?.id
 
 let written = 0
 for (const topic of missing.slice(0, limit)) {
-  const used = await callsSinceQuotaReset()
+  const used = await withRetry(() => callsSinceQuotaReset())
   if (used >= budget) {
     console.log(`stopping: ${used} model calls since the quota reset (budget ${budget}). Rerun after midnight Pacific.`)
     break
@@ -100,7 +115,7 @@ for (const topic of missing.slice(0, limit)) {
     const plan = await generateLearningPlan(topic, userId)
     // The plan names the collection, and its name can be one the library has
     // even when the typed topic was not.
-    const existing = await findLibrarySpaceFor(plan.space)
+    const existing = await withRetry(() => findLibrarySpaceFor(plan.space))
     if (existing) {
       console.log(`${topic}: the plan named it "${plan.space}", already in the library — skipped`)
       continue
@@ -136,7 +151,7 @@ for (const topic of missing.slice(0, limit)) {
       continue
     }
     entries.push({ path: `${SPACE_ROOT}${space}/Next Up.md`, content: buildNextUpNote(space) })
-    const added = await contributeToLibrary(entries)
+    const added = await withRetry(() => contributeToLibrary(entries))
     written++
     console.log(`${topic} -> "${space}": ${entries.length - 1} of ${plan.subtopics.length} notes, ${added} added to the library`)
   } catch (err) {
