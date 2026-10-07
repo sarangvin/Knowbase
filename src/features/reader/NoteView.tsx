@@ -14,6 +14,7 @@ import { parseQuestions, questionsSection } from './questionsFormat'
 import { extractSection } from '../../vault/sections'
 import { FindSources } from './FindSources'
 import { HighlightBar } from '../highlight/HighlightBar'
+import { useHighlight } from '../highlight/highlightStore'
 import './noteview.css'
 
 /** Keep clear of the screen edges: a swipe that starts there is the
@@ -66,7 +67,10 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
   // underneath and opened. Same physics as the finish card, but locked to
   // sideways drags so reading and scrolling are untouched, and a far smaller
   // tilt — a whole page swinging 14 degrees looks like it is falling over.
-  const swipeable = touch && finisher.canFinish && mode !== 'edit'
+  // Off while highlighting: selecting words is a sideways drag too, and a
+  // reader picking a phrase must not throw the note away by accident.
+  const highlighting = useHighlight((s) => s.active)
+  const swipeable = touch && finisher.canFinish && mode !== 'edit' && !highlighting
   const deck = useCardThrow({
     enabled: swipeable,
     widthOf: () => deckRef.current?.offsetWidth ?? window.innerWidth,
