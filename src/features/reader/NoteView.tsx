@@ -14,6 +14,7 @@ import { parseQuestions, questionsSection } from './questionsFormat'
 import { extractSection } from '../../vault/sections'
 import { FindSources } from './FindSources'
 import { HighlightBar } from '../highlight/HighlightBar'
+import { HighlightLayer } from '../highlight/HighlightLayer'
 import { useHighlight } from '../highlight/highlightStore'
 import './noteview.css'
 
@@ -232,6 +233,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
     <div className="note-scroll" ref={scrollRef} {...deck.handlers}>
       <div className="note-container">
         <HighlightBar notePath={note.path} />
+        <HighlightLayer />
         <h1 className="note-title">{note.title}</h1>
         {note.tags.length > 0 && (
           <div className="note-tags">

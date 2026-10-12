@@ -2,9 +2,8 @@
 // and those words become a link to a new note on them (the server half is
 // backend/src/notes/highlight.ts).
 //
-// The selection is captured as it is made rather than read when the button
-// is tapped the second time: on a phone, tapping a button can clear the
-// selection before the tap handler runs.
+// The words are picked with the app's own highlighter (HighlightLayer.tsx),
+// not the system selection, and handed here as they change.
 import { create } from 'zustand'
 import { useVault } from '../../vault/vaultStore'
 import { announceServerWork } from '../onboarding/onboardingApi'
