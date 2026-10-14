@@ -76,7 +76,12 @@ accountRouter.get('/streak', asyncHandler(async (req, res) => {
     res.status(400).json({ error: 'day (YYYY-MM-DD) required' })
     return
   }
-  const userId = req.user!.id
+  res.json(await streakFor(req.user!.id, day))
+}))
+
+/** The streak card's data for `day` (the reader's local date). Also served
+ *  by /api/bootstrap, so it is a function rather than only a route. */
+export async function streakFor(userId: string, day: string) {
   const [justGraduated] = await Promise.all([
     maybeGraduate(userId, day),
     maybeGrantFirstLessonBonus(userId),
@@ -91,5 +96,5 @@ accountRouter.get('/streak', asyncHandler(async (req, res) => {
     const d = shift(day, i - 6)
     return { day: d, state: done.has(d) ? 'done' : streak.frozen.includes(d) ? 'frozen' : 'none' }
   })
-  res.json({ ...streak, week, justGraduated, graduationStreak: GRADUATION_STREAK })
-}))
+  return { ...streak, week, justGraduated, graduationStreak: GRADUATION_STREAK }
+}

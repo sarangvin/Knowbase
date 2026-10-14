@@ -324,11 +324,13 @@ vaultsRouter.get('/mine/assets', asyncHandler(async (_req, res) => {
 // they can then edit without affecting anyone else.
 
 const listLibrarySpaces = asyncHandler(async (_req, res) => {
+  res.json(await librarySpaces())
+})
+
+/** Public, like the route. Also served by /api/bootstrap. */
+export async function librarySpaces() {
   const globalVaultId = await getGlobalVaultId()
-  if (!globalVaultId) {
-    res.json({ spaces: [] })
-    return
-  }
+  if (!globalVaultId) return { spaces: [] }
   const rows = await db.select({ path: notes.path }).from(notes).where(eq(notes.vaultId, globalVaultId))
   const counts = new Map<string, number>()
   // Topic titles per space, for the "start an existing collection" card on
@@ -345,7 +347,7 @@ const listLibrarySpaces = asyncHandler(async (_req, res) => {
       topics.set(space, list)
     }
   }
-  res.json({
+  return {
     spaces: [...counts].map(([name, noteCount]) => {
       const t = (topics.get(name) ?? []).sort()
       return {
@@ -358,8 +360,8 @@ const listLibrarySpaces = asyncHandler(async (_req, res) => {
         sampleTopics: t.slice(0, 4),
       }
     }),
-  })
-})
+  }
+}
 
 /** Copy one corpus space into the caller's own vault. Paths the user already
  * has are skipped, never overwritten — adopting must not clobber work. */

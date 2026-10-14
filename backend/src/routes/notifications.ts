@@ -26,19 +26,24 @@ function validZone(tz: unknown): string | null {
 }
 
 notificationsRouter.get('/', asyncHandler(async (req, res) => {
+  res.json(await notificationStatusFor(req.user!.id))
+}))
+
+/** Also served by /api/bootstrap. */
+export async function notificationStatusFor(userId: string) {
   const [u] = await db
     .select({ enabled: users.notificationsEnabled, promptedAt: users.notifyPromptedAt })
     .from(users)
-    .where(eq(users.id, req.user!.id))
+    .where(eq(users.id, userId))
     .limit(1)
-  res.json({
+  return {
     enabled: u?.enabled ?? false,
     // Whether the one-time "want daily reminders?" prompt has been answered.
     prompted: u?.promptedAt != null,
     // The browser needs this to subscribe; null means the server cannot send.
     publicKey: pushConfigured() ? process.env.VAPID_PUBLIC_KEY : null,
-  })
-}))
+  }
+}
 
 /** Body: { subscription: PushSubscriptionJSON, timezone: string } */
 notificationsRouter.post('/subscribe', asyncHandler(async (req, res) => {

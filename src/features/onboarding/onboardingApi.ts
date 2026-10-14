@@ -6,6 +6,7 @@
 // because work that only happens while a tab is open is work that silently
 // doesn't happen when someone locks their phone.
 import { localDay } from '../automated-graph/engine'
+import { fromBootstrap } from '../../bootstrap'
 
 export interface OnboardingJob {
   topic: string
@@ -148,6 +149,8 @@ export interface OnboardingStatus {
 }
 
 export async function fetchOnboardingStatus(): Promise<OnboardingStatus> {
+  const boot = await fromBootstrap<OnboardingStatus>('onboarding')
+  if (boot) return boot
   try {
     const res = await fetch('/api/onboarding/status', { credentials: 'include' })
     if (!res.ok) return { job: null }
@@ -210,6 +213,8 @@ export interface CollectionAllowance {
  *  offline. The launcher treats that as "let them try": being refused by the
  *  server is a better outcome than being blocked by a failed lookup. */
 export async function fetchCollectionAllowance(): Promise<CollectionAllowance | null> {
+  const boot = await fromBootstrap<CollectionAllowance>('allowance')
+  if (boot) return boot
   try {
     const res = await fetch(`/api/onboarding/allowance?day=${encodeURIComponent(localDay())}`, {
       credentials: 'include',
@@ -237,10 +242,13 @@ export interface LibrarySpace {
  *  a suggestion, and a suggestion that fails should simply not be made. */
 export async function fetchLibrarySpaces(): Promise<LibrarySpace[]> {
   try {
-    const res = await fetch('/api/vaults/library/spaces', { credentials: 'include' })
-    if (!res.ok) return []
-    const { spaces } = (await res.json()) as { spaces: Partial<LibrarySpace>[] }
-    return spaces
+    let boot = await fromBootstrap<{ spaces: Partial<LibrarySpace>[] }>('library')
+    if (!boot) {
+      const res = await fetch('/api/vaults/library/spaces', { credentials: 'include' })
+      if (!res.ok) return []
+      boot = (await res.json()) as { spaces: Partial<LibrarySpace>[] }
+    }
+    return boot.spaces
       .filter((s): s is LibrarySpace & Partial<LibrarySpace> => typeof s.name === 'string' && typeof s.key === 'string')
       .map((s) => ({
         name: s.name,

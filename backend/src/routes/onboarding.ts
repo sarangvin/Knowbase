@@ -333,21 +333,25 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
  *  and a launcher that accepts a topic and then refuses it is worse than one
  *  that says so up front. */
 onboardingRouter.get('/allowance', asyncHandler(async (req, res) => {
-  const day = dayOf(req.query.day) ?? ''
-  const vaultId = await getOrCreatePersonalVaultId(req.user!.id)
-  const a = await collectionAllowance(req.user!.id, vaultId, day, tierOf(req.user!))
+  res.json(await allowanceFor(req.user!, dayOf(req.query.day) ?? ''))
+}))
+
+/** Also served by /api/bootstrap. */
+export async function allowanceFor(user: NonNullable<Express.Request['user']>, day: string) {
+  const vaultId = await getOrCreatePersonalVaultId(user.id)
+  const a = await collectionAllowance(user.id, vaultId, day, tierOf(user))
   // An unlimited limit is Infinity, and JSON.stringify turns that into null
   // silently — so the client would read "no limit" as the number zero and
   // count down from it. Say null on purpose, and document that it means
   // unlimited, rather than relying on an accident of serialisation.
-  res.json({
+  return {
     ...a,
     limits: {
       active: Number.isFinite(a.limits.active) ? a.limits.active : null,
       perDay: Number.isFinite(a.limits.perDay) ? a.limits.perDay : null,
     },
-  })
-}))
+  }
+}
 
 /** Top a space back up after a note is marked reviewed.
  *
@@ -400,16 +404,22 @@ onboardingRouter.post('/grow', asyncHandler(async (req, res) => {
  *
  *  Deliberately after the response: the poll must stay instant. */
 onboardingRouter.get('/status', asyncHandler(async (req, res) => {
-  const jobs = await jobsFor(req.user!.id)
+  res.json(await statusFor(req.user!.id))
+}))
+
+/** The banner's poll. Also served by /api/bootstrap. The housekeeping it
+ *  kicks off runs under waitUntil, after the answer is on its way. */
+export async function statusFor(userId: string) {
+  const jobs = await jobsFor(userId)
   // `job` stays for the banner, which shows one thing; `jobs` is what the
   // collections screen draws a card from, one per collection being built.
   const job = jobs.find((j) => j.status === 'running') ?? jobs.find((j) => !j.acknowledged) ?? null
   const depth = await queueDepth()
-  res.json({ job, jobs, queue: depth })
+  const status = { job, jobs, queue: depth }
 
   if (depth.pending > 0 || depth.running > 0) {
     waitUntil(drainQueue())
-    return
+    return status
   }
 
   // Nothing queued. This is the moment to check whether anything of theirs
@@ -418,7 +428,7 @@ onboardingRouter.get('/status', asyncHandler(async (req, res) => {
   // have. Behind a fifteen-minute per-collection cooldown and the shared
   // daily budget, so a collection that keeps failing cannot turn a
   // five-second poll into a quota fire. See onboarding/ensure.ts.
-  waitUntil(ensureStocked(req.user!.id).then((r) => {
+  waitUntil(ensureStocked(userId).then((r) => {
     if (r.grown || r.revealed) console.log('[ensure]', JSON.stringify(r))
   }))
 
@@ -429,7 +439,8 @@ onboardingRouter.get('/status', asyncHandler(async (req, res) => {
   if (job && job.notesTotal > 0 && job.notesDrafted < job.notesTotal) {
     waitUntil(reconcileQueue().then(() => drainQueue()))
   }
-}))
+  return status
+}
 
 /** Sweep for work the queue has lost track of, then drain.
  *

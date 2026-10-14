@@ -1,6 +1,7 @@
 // Daily reminders, client side: the browser's push subscription plus the
 // account switch on the server (backend/src/routes/notifications.ts).
 // Nothing is subscribed until the reader turns it on in Settings.
+import { fromBootstrap } from '../../bootstrap'
 
 export interface NotificationStatus {
   enabled: boolean
@@ -15,6 +16,8 @@ export function pushSupported(): boolean {
 }
 
 export async function getNotificationStatus(): Promise<NotificationStatus> {
+  const boot = await fromBootstrap<NotificationStatus>('notifications')
+  if (boot) return boot
   const res = await fetch('/api/notifications', { credentials: 'include' })
   if (!res.ok) throw new Error(`Could not load notification settings (${res.status})`)
   return (await res.json()) as NotificationStatus

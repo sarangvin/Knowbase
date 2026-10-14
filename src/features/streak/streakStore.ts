@@ -9,6 +9,7 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useVault } from '../../vault/vaultStore'
 import { localDay } from '../automated-graph/engine'
+import { fromBootstrap } from '../../bootstrap'
 
 export interface StreakDay {
   day: string
@@ -66,7 +67,7 @@ export const useStreak = create<Store>((set, get) => ({
   graduated: false,
 
   load: async () => {
-    const s = await fetchStreak()
+    const s = (await fromBootstrap<StreakState>('streak')) ?? (await fetchStreak())
     if (s) set({ streak: s, graduated: get().graduated || s.justGraduated })
   },
 
