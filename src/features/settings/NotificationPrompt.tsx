@@ -67,9 +67,9 @@ export function NotificationPrompt() {
           <>
             <div className="confirm-title" id="notify-prompt-title">Daily reminders are here 🐇</div>
             <p className="confirm-body">
-              Want a nudge to keep learning? We'll send one reminder a day — 24 hours after you
-              last finished a lesson, quiz or flashcards — and let you know if a streak freeze
-              saves you. Never more than one a day.
+              Want a nudge to keep learning?
+              <br />
+              We'll send you one reminder every day, and never more than that :)
             </p>
             <div className="confirm-actions">
               <button className="ask-btn" disabled={step === 'working'} onClick={decline}>
