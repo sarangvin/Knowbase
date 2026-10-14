@@ -29,69 +29,7 @@
   text-decoration: underline;
 }
 .highlight-bar-error { color: var(--text-error); }
-/* While highlighting, the note's text is not the phone's to select: no
-   system handles, no Copy / Look Up menu, no long-press callout. The app
-   draws its own selection instead (HighlightLayer.tsx). */
-.highlighting .note-container {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-.highlighting .note-container p,
-.highlighting .note-container li { cursor: text; }
-
-/* The layer the marks are drawn in: over the note, scrolling with it, and
-   letting taps through to the text except on the handles. */
-.note-container { position: relative; }
-.hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
-
-/* The mark: a highlighter stroke, not a selection box — warm orange, a
-   little ragged at the ends, laid behind the words' colour. */
-.hl-mark {
-  position: absolute;
-  border-radius: 3px 5px 4px 6px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, #ff9a3c 30%, transparent) 0%,
-    color-mix(in srgb, #ff8a1f 42%, transparent) 55%,
-    color-mix(in srgb, #ff7a00 48%, transparent) 100%
-  );
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, #ff7a00 55%, transparent);
-  mix-blend-mode: screen;
-  transition: left 0.08s, width 0.08s;
-}
-
-/* The handles at the front and back of the mark. The visible part is a
-   2px bar the height of the line with a knob; the element itself is wide,
-   so a thumb can catch it. */
-.hl-handle {
-  position: absolute;
-  width: 28px;
-  margin-left: -14px;
-  pointer-events: auto;
-  touch-action: none;
-  cursor: ew-resize;
-}
-.hl-handle::before {
-  content: '';
-  position: absolute;
-  left: 13px;
-  top: -2px;
-  bottom: -2px;
-  width: 2px;
-  border-radius: 1px;
-  background: #ff7a00;
-}
-.hl-knob {
-  position: absolute;
-  left: 8px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #ff7a00;
-  border: 2px solid var(--bg-primary);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
-}
-.hl-handle-start .hl-knob { top: -12px; }
-.hl-handle-end .hl-knob { bottom: -12px; }
+/* While highlighting, the selection shows in the accent colour so it reads
+   as a highlighter rather than an ordinary text selection. */
+.highlighting .note-container ::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 .icon-btn.is-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }

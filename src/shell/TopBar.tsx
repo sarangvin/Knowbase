@@ -72,6 +72,9 @@ export function TopBar() {
             title={highlight.active ? 'Make a note from the selected words' : 'Highlight words to make a new note'}
             aria-pressed={highlight.active}
             disabled={highlight.busy}
+            // Keeps a text selection alive through the tap on desktop; the
+            // store also captures it as it is made, for phones.
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => note && highlight.toggle(note.path)}
           >
             <Highlighter />

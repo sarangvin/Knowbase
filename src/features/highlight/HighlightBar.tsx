@@ -1,5 +1,6 @@
 // The strip under the top bar while highlighting: what to do next, then what
-// happened. The words themselves are picked in HighlightLayer.tsx.
+// happened. Also where the selection is captured — see highlightStore.ts for
+// why it is captured as it is made.
 import { useEffect } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { useHighlight } from './highlightStore'
@@ -7,11 +8,26 @@ import { PAYMENTS_ENABLED } from '../settings/plans'
 import './highlight.css'
 
 export function HighlightBar({ notePath }: { notePath: string }) {
-  const { active, busy, selection, message, made, upsell, dismiss } = useHighlight()
+  const { active, busy, selection, message, made, upsell, capture, dismiss } = useHighlight()
   const openNote = useVault((s) => s.openNote)
   const openView = useVault((s) => s.openView)
 
-  // The class that turns the system selection off while highlighting (highlight.css).
+  // Only words inside the note itself count, not the top bar or a dialog.
+  useEffect(() => {
+    if (!active) return
+    const onChange = () => {
+      const sel = window.getSelection()
+      const node = sel?.anchorNode
+      const el = node instanceof Element ? node : node?.parentElement
+      if (!sel || !el?.closest('.note-container')) return
+      const text = sel.toString().replace(/\s+/g, ' ').trim()
+      if (text) capture(text)
+    }
+    document.addEventListener('selectionchange', onChange)
+    return () => document.removeEventListener('selectionchange', onChange)
+  }, [active, capture])
+
+  // Selections show in the highlighter colour while the mode is on (highlight.css).
   useEffect(() => {
     document.body.classList.toggle('highlighting', active)
     return () => document.body.classList.remove('highlighting')
@@ -45,7 +61,7 @@ export function HighlightBar({ notePath }: { notePath: string }) {
             make it a note.
           </>
         ) : (
-          'Tap a word to highlight it, drag the ends to take in more, then tap the highlighter again.'
+          'Select a word or phrase in the note, then tap the highlighter again.'
         )}
       </div>
       <div className="highlight-bar-actions">
