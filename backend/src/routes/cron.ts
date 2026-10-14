@@ -8,6 +8,7 @@
 // tier gets drained by a crawler.
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/asyncHandler.js'
+import { notifyEveryone } from '../notifications/run.js'
 import { topUpEveryone, findShortCollections, shelfReport, passDiagnostics } from '../onboarding/topUp.js'
 
 export const cronRouter = Router()
@@ -63,4 +64,15 @@ cronRouter.get('/top-up/preview', asyncHandler(async (req, res) => {
     // sub-daily cron entry.
     maxDurationS: 240,
   })
+}))
+
+/** The daily reminders. Run hourly by .github/workflows/notify.yml; each
+ *  account gets at most one a day, so running it more often only makes the
+ *  24 hours more exact. */
+cronRouter.get('/notify', asyncHandler(async (req, res) => {
+  if (!authorised(req.headers.authorization)) {
+    res.status(404).json({ error: 'not found' })
+    return
+  }
+  res.json(await notifyEveryone())
 }))

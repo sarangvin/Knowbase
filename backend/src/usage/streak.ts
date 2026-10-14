@@ -10,9 +10,17 @@
 //
 // Forgiving on purpose, with streak freezes. Everyone holds up to two. A
 // missed day spends one automatically — nothing to buy or remember — and
-// every seven days kept earns one back, never more than two held. A miss
+// every seven days kept earns one, never more than two held. New accounts
+// start with none (users.starting_freezes); accounts from before that rule
+// started with two. A miss
 // with none left ends the streak. A freeze keeps the streak alive but does
 // not add to it: the count is days actually kept.
+//
+// On top of those, bonus freezes (users.bonus_freezes): one is given for
+// finishing a first lesson, and every account that existed when they were
+// introduced got one too. They sit outside the cap of two, are spent only once the regular ones
+// are gone, are never earned back, and only cover misses on or after the day
+// they were granted — a grant is not a time machine.
 //
 // Days are the reader's local calendar days, as the client sends them —
 // the same convention the quiz, the deck and the review dates use. They come
@@ -78,11 +86,24 @@ export interface Streak {
   /** Whether today's goal is done. Until it is, the streak stands on
    *  yesterday — not doing it yet today is not breaking it. */
   todayDone: boolean
-  /** Freezes held now, 0..MAX_FREEZES. */
+  /** Freezes held now, 0..maxFreezes. */
   freezes: number
   /** Days in the current streak that a freeze covered, oldest first. */
   frozen: string[]
+  /** The most freezes this reader can hold: the cap plus their bonus. */
+  maxFreezes: number
 }
+
+/** A reader's freeze allowance: the regular freezes they start with, and
+ *  bonus freezes outside the cap, usable from `from` on. */
+export interface BonusFreezes {
+  count: number
+  from: string
+  /** Regular freezes held at the start. Defaults to MAX_FREEZES. */
+  start?: number
+}
+
+const NO_BONUS: BonusFreezes = { count: 0, from: '9999-12-31' }
 
 /** The streak as of `today`, from the set of days the goal was met. Pure,
  *  so the rules above can be read in one place and tested without a DB.
@@ -90,11 +111,12 @@ export interface Streak {
  *  Replayed forward from the first day in the lookback, because freezes are
  *  a balance: what is held today depends on every miss and every week kept
  *  before it, in order. */
-export function computeStreak(done: Set<string>, today: string): Streak {
+export function computeStreak(done: Set<string>, today: string, bonus: BonusFreezes = NO_BONUS): Streak {
   const todayDone = done.has(today)
   const from = shift(today, -LOOKBACK_DAYS)
   let days = 0
-  let freezes = MAX_FREEZES
+  let freezes = bonus.start ?? MAX_FREEZES
+  let bonusLeft = bonus.count
   let keptTowardFreeze = 0
   let frozen: string[] = []
   // Up to yesterday; today is only counted if done — not done *yet* is not
@@ -111,6 +133,9 @@ export function computeStreak(done: Set<string>, today: string): Streak {
     } else if (freezes > 0) {
       freezes--
       frozen.push(d)
+    } else if (bonusLeft > 0 && d >= bonus.from) {
+      bonusLeft--
+      frozen.push(d)
     } else {
       days = 0
       keptTowardFreeze = 0
@@ -121,11 +146,57 @@ export function computeStreak(done: Set<string>, today: string): Streak {
     days++
     if (++keptTowardFreeze === DAYS_PER_FREEZE) freezes = Math.min(MAX_FREEZES, freezes + 1)
   }
-  return { days, todayDone, freezes, frozen }
+  return { days, todayDone, freezes: freezes + bonusLeft, frozen, maxFreezes: MAX_FREEZES + bonus.count }
+}
+
+export async function bonusFreezesFor(userId: string): Promise<BonusFreezes> {
+  const [u] = await db
+    .select({ count: users.bonusFreezes, from: users.bonusFreezesFrom, start: users.startingFreezes })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  return u ?? NO_BONUS
 }
 
 export async function streakFor(userId: string, today: string): Promise<Streak> {
-  return computeStreak(await goalDays(userId), today)
+  const [done, bonus] = await Promise.all([goalDays(userId), bonusFreezesFor(userId)])
+  return computeStreak(done, today, bonus)
+}
+
+/**
+ * Give the one bonus freeze a reader earns by finishing their first lesson.
+ *
+ * Called after each finished lesson and on every streak check, so a grant
+ * lost to a failed request is caught up on the next visit. The bonus counts
+ * from the day of that first lesson. Once given, `first_lesson_bonus_at`
+ * makes this a single indexed read; accounts from before the rule have it
+ * set already, and never receive it.
+ */
+export async function maybeGrantFirstLessonBonus(userId: string): Promise<boolean> {
+  try {
+    const [u] = await db
+      .select({ at: users.firstLessonBonusAt })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+    if (!u || u.at) return false
+    const r = await db.execute(sql`
+      SELECT min(metadata->>'day') AS day FROM usage_events
+      WHERE user_id = ${userId} AND event_type = 'note_review'
+        AND metadata->>'day' ~ '^\\d{4}-\\d{2}-\\d{2}$'
+    `)
+    const day = (r.rows[0] as { day: string | null } | undefined)?.day
+    if (!day) return false
+    const done = await db
+      .update(users)
+      .set({ bonusFreezes: sql`${users.bonusFreezes} + 1`, bonusFreezesFrom: day, firstLessonBonusAt: new Date() })
+      .where(and(eq(users.id, userId), isNull(users.firstLessonBonusAt)))
+      .returning({ id: users.id })
+    return done.length > 0
+  } catch (err) {
+    console.error('[streak] first-lesson bonus failed', err)
+    return false
+  }
 }
 
 /**

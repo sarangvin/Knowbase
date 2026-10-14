@@ -3,11 +3,11 @@
 import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { notes, assets, vaults, onboardingJobs } from '../db/schema.js'
+import { notes, assets, vaults, onboardingJobs, users } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { logUsageEvent } from '../usage/logEvent.js'
-import { goalDays, computeStreak, shift, maybeGraduate, GRADUATION_STREAK, MAX_FREEZES } from '../usage/streak.js'
+import { goalDays, computeStreak, shift, maybeGraduate, maybeGrantFirstLessonBonus, bonusFreezesFor, GRADUATION_STREAK } from '../usage/streak.js'
 
 export const accountRouter = Router()
 // Auth, but deliberately NOT requireApproved: someone whose access was
@@ -77,13 +77,19 @@ accountRouter.get('/streak', asyncHandler(async (req, res) => {
     return
   }
   const userId = req.user!.id
-  const justGraduated = await maybeGraduate(userId, day)
-  const done = await goalDays(userId)
-  const streak = computeStreak(done, day)
+  const [justGraduated] = await Promise.all([
+    maybeGraduate(userId, day),
+    maybeGrantFirstLessonBonus(userId),
+    // The app asks for the streak whenever it opens or comes back to the
+    // front, so this is "last seen" for the reminder cutoff.
+    db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId)),
+  ])
+  const [done, bonus] = await Promise.all([goalDays(userId), bonusFreezesFor(userId)])
+  const streak = computeStreak(done, day, bonus)
   // The last seven days, oldest first, for the row of days under the count.
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = shift(day, i - 6)
     return { day: d, state: done.has(d) ? 'done' : streak.frozen.includes(d) ? 'frozen' : 'none' }
   })
-  res.json({ ...streak, week, justGraduated, maxFreezes: MAX_FREEZES, graduationStreak: GRADUATION_STREAK })
+  res.json({ ...streak, week, justGraduated, graduationStreak: GRADUATION_STREAK })
 }))

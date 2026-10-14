@@ -123,7 +123,7 @@ function Card({ c, onClose }: { c: Celebration; onClose: () => void }) {
 
         <p className="streak-line">{line}</p>
 
-        <div className="streak-freezes" title="A missed day uses a freeze instead of ending the streak. Every 7 days kept earns one back.">
+        <div className="streak-freezes" title="A missed day uses a freeze instead of ending the streak. Every 7 days kept earns one, and your first lesson earns a bonus one.">
           {Array.from({ length: streak.maxFreezes }, (_, i) => (
             <Snowflake key={i} width={14} height={14} className={i < streak.freezes ? 'held' : 'spent'} />
           ))}

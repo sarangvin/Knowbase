@@ -16,6 +16,7 @@ import { notesRouter } from './routes/notes.js'
 import { cronRouter } from './routes/cron.js'
 import { demoRouter } from './routes/demo.js'
 import { accountRouter } from './routes/account.js'
+import { notificationsRouter } from './routes/notifications.js'
 import { ModelTimeoutError } from './llm/meter.js'
 import { NewAccountBudgetError } from './usage/allowance.js'
 
@@ -76,6 +77,7 @@ export function createApp() {
   app.use('/api/llm', llmRouter)
   app.use('/api/billing', billingRouter)
   app.use('/api/account', accountRouter)
+  app.use('/api/notifications', notificationsRouter)
   app.use('/api/admin', adminRouter)
   // Unauthenticated by design — see routes/demo.ts.
   app.use('/api/demo', demoRouter)

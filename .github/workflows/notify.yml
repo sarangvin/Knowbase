@@ -1,0 +1,30 @@
+# Hourly pass for the daily reminders (backend/src/notifications/run.ts).
+#
+# Hourly rather than daily because a reminder is due 24 hours after each
+# reader's last lesson, quiz or flashcards, and those times are spread across
+# the day. Vercel's Hobby plan cannot schedule sub-daily crons (see
+# top-up.yml), so this lives here. Running more often never sends more: each
+# account gets at most one notification a day, enforced by the pass itself.
+#
+# Uses the same two repository secrets as top-up.yml:
+#   RABBITHOLE_URL, CRON_SECRET
+name: Daily reminders
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the app to send any reminders that are due
+        run: |
+          if [ -z "${{ secrets.CRON_SECRET }}" ] || [ -z "${{ secrets.RABBITHOLE_URL }}" ]; then
+            echo "RABBITHOLE_URL or CRON_SECRET is not set; nothing to do."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 200 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.RABBITHOLE_URL }}/api/cron/notify"

@@ -42,6 +42,46 @@ export const users = pgTable('users', {
   planTier: text('plan_tier').notNull().default('free'), // 'free' | 'pro' | 'max'; pro synced from subscriptions, max granted in admin
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  // Regular freezes held when the streak replay starts (usage/streak.ts).
+  // New accounts start with none and earn them by keeping days; accounts
+  // that existed before this rule kept the two they already had.
+  startingFreezes: integer('starting_freezes').notNull().default(0),
+  // Freezes granted on top of the regular allowance: one for finishing a
+  // first lesson, and the migration that added this gave every existing
+  // account one too. They are spent only on misses from `bonusFreezesFrom`
+  // on, so a grant cannot reach back and revive a streak that had already
+  // ended, and they are never earned back.
+  bonusFreezes: integer('bonus_freezes').notNull().default(0),
+  bonusFreezesFrom: text('bonus_freezes_from').notNull().default(sql`to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD')`),
+  // Daily reminders (notifications/). Off until the person turns them on in
+  // Settings — nothing is ever sent to an account that did not opt in.
+  notificationsEnabled: boolean('notifications_enabled').notNull().default(false),
+  notificationsEnabledAt: timestamp('notifications_enabled_at', { withTimezone: true }),
+  /** IANA zone from the device that opted in, so "a missed day" and "one a
+   *  day" mean the reader's calendar, as the streak does. */
+  notifyTimezone: text('notify_timezone'),
+  notifyLastSentAt: timestamp('notify_last_sent_at', { withTimezone: true }),
+  /** Position in the rotation of reminder messages. */
+  notifyCursor: integer('notify_cursor').notNull().default(0),
+  /** The last frozen day we told them about, so each freeze is announced once. */
+  notifyFreezeDay: text('notify_freeze_day'),
+  /** When the first-lesson bonus freeze was given. Set for accounts that
+   *  predate it, so they are not given a second. */
+  firstLessonBonusAt: timestamp('first_lesson_bonus_at', { withTimezone: true }),
+  /** Last time the app was opened or brought to the front. Reminders stop
+   *  after a week without it (notifications/run.ts). */
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+})
+
+/** A browser's Web Push subscription. One account can have several devices;
+ *  each opted-in device gets the day's one notification. */
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const sessions = pgTable('sessions', {

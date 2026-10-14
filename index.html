@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- iOS only delivers web push to an app added to the home screen, which
+         needs a manifest with display: standalone. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
     <!-- Deliberately NOT viewport-fit=cover: it expands the layout viewport to
          the whole physical display, which left the layout wider than the
          visible area on Android and cropped ~35px off the right of every

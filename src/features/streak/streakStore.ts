@@ -117,7 +117,15 @@ export function useStreakBoot(): void {
   const load = useStreak((s) => s.load)
   const graduated = useStreak((s) => s.graduated)
   useEffect(() => {
-    if (user) void load()
+    if (!user) return
+    void load()
+    // Coming back to the app counts as seeing it: the streak request is what
+    // records that, and the daily reminders stop after a week without it.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [user, load])
   useEffect(() => {
     if (graduated) void checkAuth()

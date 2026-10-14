@@ -5,6 +5,10 @@ import { PAYMENTS_ENABLED, atLeastPro, planLabel } from './plans'
 import { User, LogOut, Cloud, Pencil, Trash, Archive } from '../../ui/icons'
 import { fetchArchivedCollections, setCollectionArchived, deleteCollection } from '../automated-graph/collectionsApi'
 import { TEXT_SIZES, readTextSize, setTextSize, type TextSizeId } from './textSize'
+import {
+  pushSupported, getNotificationStatus, enableNotifications, disableNotifications, sendTestNotification,
+  type NotificationStatus,
+} from './notifications'
 import './settings.css'
 
 /** `onClose` omitted renders the panel inline as a full pane (the Settings
@@ -40,6 +44,49 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const [archiveBusy, setArchiveBusy] = useState<string | null>(null)
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [notify, setNotify] = useState<NotificationStatus | null>(null)
+  const [notifyBusy, setNotifyBusy] = useState(false)
+  const [notifyMsg, setNotifyMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    getNotificationStatus()
+      .then((s) => !cancelled && setNotify(s))
+      .catch(() => !cancelled && setNotify(null))
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  const toggleNotifications = async () => {
+    if (!notify || notifyBusy) return
+    setNotifyBusy(true)
+    setNotifyMsg(null)
+    try {
+      if (notify.enabled) {
+        await disableNotifications()
+        setNotify({ ...notify, enabled: false })
+      } else {
+        await enableNotifications(notify.publicKey!)
+        setNotify({ ...notify, enabled: true })
+      }
+    } catch (e) {
+      setNotifyMsg(e instanceof Error ? e.message : String(e))
+    } finally {
+      setNotifyBusy(false)
+    }
+  }
+
+  const testNotification = async () => {
+    setNotifyMsg(null)
+    try {
+      await sendTestNotification()
+      setNotifyMsg('Sent. It should appear in a few seconds.')
+    } catch (e) {
+      setNotifyMsg(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   const refresh = () => {
     if (!user) return
@@ -311,6 +358,43 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
               <Archive width={14} height={14} /> Check archive
               {archived != null && archived.length > 0 && ` (${archived.length})`}
             </button>
+          </div>
+        )}
+
+        {user && (
+          <div className="settings-section">
+            <div className="settings-label">Notifications</div>
+            <p className="settings-dim">
+              A daily nudge to do a lesson, quiz or flashcards, sent 24 hours after you last finished
+              one — and a heads-up when a missed day uses a streak freeze. At most one a day, and
+              they pause if you haven't opened the app in a week. Off unless you turn it on.
+            </p>
+            {notify == null ? (
+              <p className="settings-dim">Loading…</p>
+            ) : !notify.publicKey ? (
+              <p className="settings-dim">Notifications aren't available yet.</p>
+            ) : !pushSupported() && !notify.enabled ? (
+              <p className="settings-dim">
+                This browser can't receive notifications. On iPhone, add Rabbithole to your home
+                screen (Share → Add to Home Screen) and open it from there.
+              </p>
+            ) : (
+              <div className="settings-account-actions">
+                <button
+                  className={'ask-btn' + (notify.enabled ? '' : ' primary')}
+                  role="switch"
+                  aria-checked={notify.enabled}
+                  disabled={notifyBusy}
+                  onClick={() => void toggleNotifications()}
+                >
+                  {notifyBusy ? 'Working…' : notify.enabled ? 'Turn off daily reminders' : 'Turn on daily reminders'}
+                </button>
+                {notify.enabled && (
+                  <button className="ask-btn" onClick={() => void testNotification()}>Send a test</button>
+                )}
+              </div>
+            )}
+            {notifyMsg && <p className="settings-dim">{notifyMsg}</p>}
           </div>
         )}
 
