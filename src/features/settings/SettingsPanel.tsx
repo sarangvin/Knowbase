@@ -389,7 +389,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
                 >
                   {notifyBusy ? 'Working…' : notify.enabled ? 'Turn off daily reminders' : 'Turn on daily reminders'}
                 </button>
-                {notify.enabled && (
+                {notify.enabled && user.role === 'owner' && (
                   <button className="ask-btn" onClick={() => void testNotification()}>Send a test</button>
                 )}
               </div>

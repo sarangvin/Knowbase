@@ -5,7 +5,7 @@
 // out turns the switch off and forgets every device, so a stale subscription
 // can never outlive the person's "no".
 import { Router } from 'express'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { users, pushSubscriptions } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
@@ -27,12 +27,14 @@ function validZone(tz: unknown): string | null {
 
 notificationsRouter.get('/', asyncHandler(async (req, res) => {
   const [u] = await db
-    .select({ enabled: users.notificationsEnabled })
+    .select({ enabled: users.notificationsEnabled, promptedAt: users.notifyPromptedAt })
     .from(users)
     .where(eq(users.id, req.user!.id))
     .limit(1)
   res.json({
     enabled: u?.enabled ?? false,
+    // Whether the one-time "want daily reminders?" prompt has been answered.
+    prompted: u?.promptedAt != null,
     // The browser needs this to subscribe; null means the server cannot send.
     publicKey: pushConfigured() ? process.env.VAPID_PUBLIC_KEY : null,
   })
@@ -60,9 +62,19 @@ notificationsRouter.post('/subscribe', asyncHandler(async (req, res) => {
       notificationsEnabledAt: new Date(),
       notifyTimezone: validZone(req.body?.timezone),
       lastSeenAt: new Date(),
+      notifyPromptedAt: sql`coalesce(${users.notifyPromptedAt}, now())`,
     })
     .where(eq(users.id, userId))
   res.json({ enabled: true })
+}))
+
+/** The one-time prompt was answered, either way. First answer wins. */
+notificationsRouter.post('/prompted', asyncHandler(async (req, res) => {
+  await db
+    .update(users)
+    .set({ notifyPromptedAt: new Date() })
+    .where(and(eq(users.id, req.user!.id), isNull(users.notifyPromptedAt)))
+  res.json({ prompted: true })
 }))
 
 notificationsRouter.post('/unsubscribe', asyncHandler(async (req, res) => {
@@ -72,8 +84,13 @@ notificationsRouter.post('/unsubscribe', asyncHandler(async (req, res) => {
   res.json({ enabled: false })
 }))
 
-/** A test notification to the caller's own devices, from Settings. */
+/** A test notification to the caller's own devices, from Settings.
+ *  Owner-only: for checking delivery, not a button for everyone to press. */
 notificationsRouter.post('/test', asyncHandler(async (req, res) => {
+  if (req.user!.role !== 'owner') {
+    res.status(404).json({ error: 'not found' })
+    return
+  }
   if (!pushConfigured()) {
     res.status(503).json({ error: 'notifications are not configured on the server' })
     return

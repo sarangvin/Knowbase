@@ -71,6 +71,9 @@ export const users = pgTable('users', {
   /** Last time the app was opened or brought to the front. Reminders stop
    *  after a week without it (notifications/run.ts). */
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  /** When the app asked, once, whether they want reminders. Set whatever
+   *  they answered, so the question is never asked again on any device. */
+  notifyPromptedAt: timestamp('notify_prompted_at', { withTimezone: true }),
 })
 
 /** A browser's Web Push subscription. One account can have several devices;

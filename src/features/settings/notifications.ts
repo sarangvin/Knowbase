@@ -4,6 +4,8 @@
 
 export interface NotificationStatus {
   enabled: boolean
+  /** Whether the one-time prompt (NotificationPrompt.tsx) has been answered. */
+  prompted: boolean
   /** VAPID public key; null when the server is not set up to send. */
   publicKey: string | null
 }
@@ -67,6 +69,10 @@ export async function disableNotifications(): Promise<void> {
   const reg = await navigator.serviceWorker.getRegistration('/sw.js')
   const sub = await reg?.pushManager.getSubscription()
   await sub?.unsubscribe().catch(() => {})
+}
+
+export async function markPrompted(): Promise<void> {
+  await post('prompted')
 }
 
 export async function sendTestNotification(): Promise<void> {
