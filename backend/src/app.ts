@@ -19,11 +19,15 @@ import { accountRouter } from './routes/account.js'
 import { notificationsRouter } from './routes/notifications.js'
 import { ModelTimeoutError } from './llm/meter.js'
 import { NewAccountBudgetError } from './usage/allowance.js'
+import { trackInstance } from './usage/instances.js'
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
 export function createApp() {
   const app = express()
+
+  // First, so the boot CPU it records is measured before any request work.
+  app.use(trackInstance)
 
   // A missing Origin header does NOT mean same-origin — that was the original
   // assumption here and it was wrong in the one case that matters. Browsers

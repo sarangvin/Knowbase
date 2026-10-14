@@ -217,6 +217,40 @@ export function fetchCompletions(): Promise<AdminCompletionsResponse> {
   return api('/api/admin/completions')
 }
 
+export interface InstanceSummary {
+  cold_starts: number
+  boot_cpu_ms: number
+  avg_boot_cpu_ms: number
+  avg_boot_wall_ms: number
+  cpu_ms: number
+  requests: number
+}
+
+export interface AdminInstanceRow {
+  id: string
+  started_at: string
+  last_request_at: string
+  boot_cpu_ms: number
+  boot_wall_ms: number
+  cpu_ms: number
+  requests: number
+  first_path: string | null
+  region: string | null
+  deployment_id: string | null
+}
+
+export interface AdminInstancesResponse {
+  last24h: InstanceSummary
+  last7d: InstanceSummary
+  byDay: { day: string; cold_starts: number; boot_cpu_ms: number; cpu_ms: number; requests: number }[]
+  byFirstPath: { first_path: string | null; cold_starts: number }[]
+  recent: AdminInstanceRow[]
+}
+
+export function fetchInstances(): Promise<AdminInstancesResponse> {
+  return api('/api/admin/instances')
+}
+
 export function fetchQueue(): Promise<AdminQueueResponse> {
   return api('/api/admin/queue')
 }

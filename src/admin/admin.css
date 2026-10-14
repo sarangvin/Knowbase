@@ -241,3 +241,9 @@
 .admin-plan:disabled { opacity: 0.5; cursor: default; }
 .admin-plan.is-pro { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .admin-plan.is-max { border-color: var(--accent); background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+
+.admin-subhead {
+  margin: 22px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}

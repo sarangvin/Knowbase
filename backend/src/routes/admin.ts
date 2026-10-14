@@ -339,6 +339,59 @@ adminRouter.get('/completions', asyncHandler(async (_req, res) => {
   res.json({ rows, byUser })
 }))
 
+/**
+ * Cold starts: one row per API function instance (usage/instances.ts).
+ *
+ * Boot CPU is what a cold start costs; total CPU is everything that instance
+ * did, boot included. Their ratio is the answer to "how much of the Vercel
+ * Active CPU allowance goes on starting up rather than on work".
+ */
+adminRouter.get('/instances', asyncHandler(async (_req, res) => {
+  const summary = async (interval: string) =>
+    (await db.execute(sql`
+      SELECT count(*)::int AS cold_starts,
+             coalesce(sum(boot_cpu_ms), 0)::int AS boot_cpu_ms,
+             coalesce(round(avg(boot_cpu_ms)), 0)::int AS avg_boot_cpu_ms,
+             coalesce(round(avg(boot_wall_ms)), 0)::int AS avg_boot_wall_ms,
+             coalesce(sum(cpu_ms), 0)::int AS cpu_ms,
+             coalesce(sum(requests), 0)::int AS requests
+      FROM function_instances
+      WHERE started_at > now() - ${sql.raw(`interval '${interval}'`)}
+    `)).rows[0]
+
+  const byDay = (await db.execute(sql`
+    SELECT to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+           count(*)::int AS cold_starts,
+           sum(boot_cpu_ms)::int AS boot_cpu_ms,
+           sum(cpu_ms)::int AS cpu_ms,
+           sum(requests)::int AS requests
+    FROM function_instances
+    WHERE started_at > now() - interval '14 days'
+    GROUP BY 1
+    ORDER BY 1 DESC
+  `)).rows
+
+  // What wakes the function up — useful when one caller dominates.
+  const byFirstPath = (await db.execute(sql`
+    SELECT first_path, count(*)::int AS cold_starts
+    FROM function_instances
+    WHERE started_at > now() - interval '7 days'
+    GROUP BY 1
+    ORDER BY 2 DESC
+    LIMIT 10
+  `)).rows
+
+  const recent = (await db.execute(sql`
+    SELECT id, started_at, last_request_at, boot_cpu_ms, boot_wall_ms, cpu_ms,
+           requests, first_path, region, deployment_id
+    FROM function_instances
+    ORDER BY started_at DESC
+    LIMIT 50
+  `)).rows
+
+  res.json({ last24h: await summary('24 hours'), last7d: await summary('7 days'), byDay, byFirstPath, recent })
+}))
+
 adminRouter.get('/queue', asyncHandler(async (_req, res) => {
   const rows = (await db.execute(sql`
     SELECT q.id, q.status, q.attempts, q.total_attempts, q.last_error, q.source, q.space, q.title, q.path,

@@ -20,10 +20,12 @@ import {
   type AdminUserDetail,
   fetchCompletions,
   type AdminCompletionsResponse,
+  fetchInstances,
+  type AdminInstancesResponse,
 } from './api'
 import './admin.css'
 
-type Tab = 'users' | 'signins' | 'spaces' | 'usage' | 'queue' | 'completions'
+type Tab = 'users' | 'signins' | 'spaces' | 'usage' | 'queue' | 'completions' | 'instances'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -338,10 +340,154 @@ function CompletionsPanel({
   )
 }
 
+/** Cold starts, and how much of the function's CPU goes on booting.
+ *
+ *  Vercel bills Active CPU, and on Hobby neither breaks it down by route nor
+ *  keeps logs long enough to count cold starts, so the function records one
+ *  row per instance itself (backend/src/usage/instances.ts). The share of
+ *  CPU spent booting is the number that says whether making startup lighter
+ *  is worth doing.
+ */
+function InstancesPanel({ data, loading }: { data: AdminInstancesResponse | null; loading: boolean }) {
+  if (loading && !data) return <div className="admin-dim">Loading…</div>
+  if (!data) return null
+
+  const secs = (ms: number) => (ms >= 60_000 ? `${(ms / 60_000).toFixed(1)} min` : `${(ms / 1000).toFixed(1)} s`)
+  const share = (boot: number, total: number) => (total > 0 ? `${Math.round((boot / total) * 100)}%` : '—')
+  const ago = (iso: string) => {
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+    return mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`
+  }
+
+  if (data.last7d.cold_starts === 0) {
+    return (
+      <p className="admin-dim">
+        No cold starts recorded yet. Each new instance of the API function adds a row on its
+        first request; recording only runs on Vercel.
+      </p>
+    )
+  }
+
+  const summaryRow = (label: string, s: AdminInstancesResponse['last24h']) => (
+    <tr>
+      <td>{label}</td>
+      <td>{s.cold_starts}</td>
+      <td>{s.avg_boot_cpu_ms} ms</td>
+      <td>{s.avg_boot_wall_ms} ms</td>
+      <td>{secs(s.boot_cpu_ms)}</td>
+      <td>{secs(s.cpu_ms)}</td>
+      <td>{share(s.boot_cpu_ms, s.cpu_ms)}</td>
+      <td>{s.requests}</td>
+    </tr>
+  )
+
+  return (
+    <>
+      <p className="admin-dim">
+        One row per instance of the API function — each one a cold start. Boot CPU is what Node
+        spends loading the app before the first request; total CPU is everything the instance
+        did, boot included (updated at most every 30s, so its last moments are not counted).
+        Boot share is how much of the Active CPU allowance goes on starting up.
+      </p>
+      <div className="admin-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Window</th>
+              <th>Cold starts</th>
+              <th>Avg boot CPU</th>
+              <th>Avg boot wall</th>
+              <th>Boot CPU</th>
+              <th>Total CPU</th>
+              <th>Boot share</th>
+              <th>Requests</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summaryRow('Last 24 hours', data.last24h)}
+            {summaryRow('Last 7 days', data.last7d)}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 className="admin-subhead">By day (UTC)</h3>
+      <div className="admin-scroll">
+        <table className="admin-table admin-table-compact">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Cold starts</th>
+              <th>Boot CPU</th>
+              <th>Total CPU</th>
+              <th>Boot share</th>
+              <th>Requests</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.byDay.map((d) => (
+              <tr key={d.day}>
+                <td>{d.day}</td>
+                <td>{d.cold_starts}</td>
+                <td>{secs(d.boot_cpu_ms)}</td>
+                <td>{secs(d.cpu_ms)}</td>
+                <td>{share(d.boot_cpu_ms, d.cpu_ms)}</td>
+                <td>{d.requests}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 className="admin-subhead">What woke it (7 days)</h3>
+      <p className="admin-dim">
+        {data.byFirstPath.map((p, i) => (
+          <span key={p.first_path ?? i}>
+            {i > 0 && ' · '}
+            {p.first_path ?? '—'} <strong>{p.cold_starts}</strong>
+          </span>
+        ))}
+      </p>
+
+      <h3 className="admin-subhead">Recent instances</h3>
+      <div className="admin-scroll">
+        <table className="admin-table admin-table-compact">
+          <thead>
+            <tr>
+              <th>Started</th>
+              <th>Woken by</th>
+              <th>Boot CPU</th>
+              <th>Total CPU</th>
+              <th>Requests</th>
+              <th>Last request</th>
+              <th>Region</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.recent.map((r) => (
+              <tr key={r.id}>
+                <td title={r.started_at}>
+                  {new Date(r.started_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </td>
+                <td>{r.first_path ?? '—'}</td>
+                <td>{r.boot_cpu_ms} ms</td>
+                <td>{secs(r.cpu_ms)}</td>
+                <td>{r.requests}</td>
+                <td title={r.last_request_at}>{ago(r.last_request_at)}</td>
+                <td>{r.region ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 export function AdminApp() {
   const [authState, setAuthState] = useState<'checking' | 'denied' | 'ok'>('checking')
   const [tab, setTab] = useState<Tab>('users')
   const [completions, setCompletions] = useState<AdminCompletionsResponse | null>(null)
+  const [instances, setInstances] = useState<AdminInstancesResponse | null>(null)
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState<AdminUserRow[]>([])
   const [signins, setSignins] = useState<AdminSigninRow[]>([])
@@ -397,6 +543,11 @@ export function AdminApp() {
         ? fetchUsage().then((data) => {
             setUsage(data)
             setTotal(data.models.length)
+          })
+        : tab === 'instances'
+        ? fetchInstances().then((data) => {
+            setInstances(data)
+            setTotal(data.recent.length)
           })
         : tab === 'completions'
         ? fetchCompletions().then((data) => {
@@ -593,11 +744,21 @@ export function AdminApp() {
             <span className="admin-badge">{completions!.rows.length}</span>
           )}
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'instances'}
+          className={`admin-tab${tab === 'instances' ? ' admin-tab-active' : ''}`}
+          onClick={() => setTab('instances')}
+        >
+          Cold starts
+        </button>
       </div>
 
       {error && <div className="admin-error">{error}</div>}
 
-      {tab === 'completions' ? (
+      {tab === 'instances' ? (
+        <InstancesPanel data={instances} loading={loading} />
+      ) : tab === 'completions' ? (
         <CompletionsPanel data={completions} loading={loading} />
       ) : tab === 'queue' ? (
         <QueuePanel

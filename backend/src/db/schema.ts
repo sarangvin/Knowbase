@@ -470,3 +470,26 @@ export const collectionStarts = pgTable(
   },
   (t) => [index('collection_starts_user_day_idx').on(t.userId, t.day)],
 )
+
+/** One row per server instance of the API function — a cold start each.
+ *  Written by usage/instances.ts, read by the admin Cold starts tab, and
+ *  pruned to 30 days by the writer. */
+export const functionInstances = pgTable(
+  'function_instances',
+  {
+    id: uuid('id').primaryKey(),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    /** CPU used before the first request: Node startup plus loading the app. */
+    bootCpuMs: integer('boot_cpu_ms').notNull(),
+    bootWallMs: integer('boot_wall_ms').notNull(),
+    /** Path (no query string) of the request that woke it. */
+    firstPath: text('first_path'),
+    region: text('region'),
+    deploymentId: text('deployment_id'),
+    requests: integer('requests').notNull().default(1),
+    /** Whole-process CPU so far, boot included; refreshed at most every 30s. */
+    cpuMs: integer('cpu_ms').notNull(),
+    lastRequestAt: timestamp('last_request_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('function_instances_started_idx').on(t.startedAt)],
+)
