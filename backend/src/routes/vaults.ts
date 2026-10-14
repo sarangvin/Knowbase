@@ -13,8 +13,8 @@
 //     they get their own copy or nothing.
 import { maybeGraduate, maybeGrantFirstLessonBonus } from '../usage/streak.js'
 import { waitUntil } from '@vercel/functions'
-import { Router } from 'express'
-import { and, eq } from 'drizzle-orm'
+import { Router, type Request, type Response } from 'express'
+import { and, eq, inArray, type SQL } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
 import { requireAuth, requireOwner } from '../auth/session.js'
@@ -45,6 +45,63 @@ function parsePathParam(raw: unknown): string | { error: string } {
     return { error: err instanceof PathError ? err.message : 'invalid path' }
   }
 }
+
+// Many notes in one request. Opening a vault used to read every note with
+// its own GET /note, all at once, and a burst like that against a cold
+// function makes Vercel boot an instance per request — fourteen cold starts
+// to open one vault. One request boots at most one.
+//
+// The body is capped on both sides of the 4.5 MB Vercel response limit:
+// at most READ_MAX_PATHS asked for, and notes stop being added once
+// READ_MAX_BYTES of content is in the reply. Whatever did not fit comes back
+// in `deferred` for the client to ask for next. Paths that do not exist (or
+// are hidden) are simply absent, which is what a 404 from /note meant.
+const READ_MAX_PATHS = 500
+const READ_MAX_BYTES = 3_000_000
+
+async function readNotes(req: Request, res: Response, vaultId: string, extra?: SQL) {
+  const raw: unknown = req.body?.paths
+  if (!Array.isArray(raw) || raw.length > READ_MAX_PATHS) {
+    res.status(400).json({ error: `paths must be an array of at most ${READ_MAX_PATHS}` })
+    return
+  }
+  const paths: string[] = []
+  for (const p of raw) {
+    const parsed = parsePathParam(p)
+    if (typeof parsed !== 'string') {
+      res.status(400).json(parsed)
+      return
+    }
+    paths.push(parsed)
+  }
+  if (paths.length === 0) {
+    res.json({ notes: [], deferred: [] })
+    return
+  }
+
+  const rows = await db
+    .select({ path: notes.path, content: notes.content, sizeBytes: notes.sizeBytes })
+    .from(notes)
+    .where(and(eq(notes.vaultId, vaultId), inArray(notes.path, paths), extra))
+
+  const out: { path: string; content: string }[] = []
+  const deferred: string[] = []
+  let bytes = 0
+  for (const r of rows) {
+    // Always at least one, so a single note bigger than the cap still loads.
+    if (out.length > 0 && bytes + r.sizeBytes > READ_MAX_BYTES) deferred.push(r.path)
+    else {
+      out.push({ path: r.path, content: r.content })
+      bytes += r.sizeBytes
+    }
+  }
+  res.json({ notes: out, deferred })
+}
+
+vaultsRouter.post('/mine/notes/read', asyncHandler(async (req, res) => {
+  // NOT_HIDDEN for the same reason as GET /note below.
+  await readNotes(req, res, await getOrCreatePersonalVaultId(req.user!.id), NOT_HIDDEN)
+}))
 
 vaultsRouter.get('/mine/notes', asyncHandler(async (req, res) => {
   const personalVaultId = await getOrCreatePersonalVaultId(req.user!.id)
@@ -402,6 +459,12 @@ globalRouter.get('/notes', asyncHandler(async (_req, res) => {
   res.json(
     rows.map((r) => ({ path: r.path, type: 'note' as const, ext: 'md', size: r.sizeBytes, mtime: r.mtime.getTime(), origin: 'global' as const })),
   )
+}))
+
+globalRouter.post('/notes/read', asyncHandler(async (req, res) => {
+  const vaultId = await requireGlobalVaultId(res)
+  if (!vaultId) return
+  await readNotes(req, res, vaultId)
 }))
 
 globalRouter.get('/note', asyncHandler(async (req, res) => {

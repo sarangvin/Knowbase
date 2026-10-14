@@ -410,6 +410,44 @@ function InstancesPanel({ data, loading }: { data: AdminInstancesResponse | null
         </table>
       </div>
 
+      <h3 className="admin-subhead">By deploy (30 days)</h3>
+      <p className="admin-dim">
+        Newest first, so a change shows up as a row above the numbers it was meant to move. Burst
+        starts are instances that began within 10 s of another — extra cold starts from requests
+        arriving together while nothing was warm. Requests per instance goes up as fewer
+        instances each do more.
+      </p>
+      <div className="admin-scroll">
+        <table className="admin-table admin-table-compact">
+          <thead>
+            <tr>
+              <th>Deploy</th>
+              <th>First seen</th>
+              <th>Cold starts</th>
+              <th>Burst starts</th>
+              <th>Avg boot CPU</th>
+              <th>Boot share</th>
+              <th>Req / instance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.byDeployment ?? []).map((d) => (
+              <tr key={d.deployment_id ?? 'none'}>
+                <td title={d.deployment_id ?? ''}>{d.deployment_id ? d.deployment_id.slice(-7) : '—'}</td>
+                <td title={d.first_seen}>
+                  {new Date(d.first_seen).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </td>
+                <td>{d.cold_starts}</td>
+                <td>{d.burst_starts} ({share(d.burst_starts, d.cold_starts)})</td>
+                <td>{d.avg_boot_cpu_ms} ms</td>
+                <td>{share(d.boot_cpu_ms, d.cpu_ms)}</td>
+                <td>{(d.requests / d.cold_starts).toFixed(1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       <h3 className="admin-subhead">By day (UTC)</h3>
       <div className="admin-scroll">
         <table className="admin-table admin-table-compact">

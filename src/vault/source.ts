@@ -18,6 +18,10 @@ export interface VaultSource {
    *  no reason to care and may ignore it. */
   list(opts?: { background?: boolean }): Promise<VaultFileMeta[]>
   readText(path: string): Promise<string>
+  /** Many notes at once, path → text; paths that do not exist are left out.
+   *  For sources where each readText is a network round trip. Without it,
+   *  callers fall back to readText per path (see readAll in vaultStore). */
+  readMany?(paths: string[]): Promise<Map<string, string>>
   /** Returns an object URL for an asset (image/pdf). Caller may revoke it. */
   assetUrl(path: string): Promise<string>
   writeText?(path: string, text: string): Promise<void>

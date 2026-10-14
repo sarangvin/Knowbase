@@ -381,6 +381,33 @@ adminRouter.get('/instances', asyncHandler(async (_req, res) => {
     LIMIT 10
   `)).rows
 
+  // Before and after a change: one row per deploy, so a fix lands as a new
+  // row directly above the numbers it is meant to move. A burst start is an
+  // instance that began within 10 s of another one of the same deploy —
+  // Vercel booting extra instances because requests arrived together while
+  // nothing was warm, which is what one opening of the vault used to do
+  // with a GET per note.
+  const byDeployment = (await db.execute(sql`
+    WITH t AS (
+      SELECT deployment_id, started_at, boot_cpu_ms, cpu_ms, requests,
+             started_at - lag(started_at) OVER (PARTITION BY deployment_id ORDER BY started_at) < interval '10 seconds' AS burst
+      FROM function_instances
+      WHERE started_at > now() - interval '30 days'
+    )
+    SELECT deployment_id,
+           min(started_at) AS first_seen,
+           count(*)::int AS cold_starts,
+           count(*) FILTER (WHERE burst)::int AS burst_starts,
+           round(avg(boot_cpu_ms))::int AS avg_boot_cpu_ms,
+           sum(boot_cpu_ms)::int AS boot_cpu_ms,
+           sum(cpu_ms)::int AS cpu_ms,
+           sum(requests)::int AS requests
+    FROM t
+    GROUP BY 1
+    ORDER BY 2 DESC
+    LIMIT 10
+  `)).rows
+
   const recent = (await db.execute(sql`
     SELECT id, started_at, last_request_at, boot_cpu_ms, boot_wall_ms, cpu_ms,
            requests, first_path, region, deployment_id
@@ -389,7 +416,7 @@ adminRouter.get('/instances', asyncHandler(async (_req, res) => {
     LIMIT 50
   `)).rows
 
-  res.json({ last24h: await summary('24 hours'), last7d: await summary('7 days'), byDay, byFirstPath, recent })
+  res.json({ last24h: await summary('24 hours'), last7d: await summary('7 days'), byDay, byFirstPath, byDeployment, recent })
 }))
 
 adminRouter.get('/queue', asyncHandler(async (_req, res) => {

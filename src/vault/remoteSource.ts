@@ -18,6 +18,9 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type RemoteVaultMode = 'personal' | 'global'
 
+/** Paths per /notes/read request. The server takes up to 500. */
+const READ_CHUNK = 200
+
 export class RemoteVaultSource implements VaultSource {
   readonly kind = 'remote' as const
   readonly writable = true
@@ -43,6 +46,26 @@ export class RemoteVaultSource implements VaultSource {
   async readText(path: string): Promise<string> {
     const { content } = await api<{ content: string }>(`${this.base}/note?path=${encodeURIComponent(path)}`)
     return content
+  }
+
+  /** One POST per READ_CHUNK paths, one at a time, instead of a GET per note
+   *  all at once. A burst of parallel GETs against a cold function had
+   *  Vercel boot an instance for each of them. The server may hand some
+   *  back in `deferred` when a reply would be too large; those go round
+   *  again. */
+  async readMany(paths: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>()
+    const queue = [...paths]
+    while (queue.length > 0) {
+      const chunk = queue.splice(0, READ_CHUNK)
+      const { notes, deferred } = await api<{ notes: { path: string; content: string }[]; deferred: string[] }>(
+        `${this.base}/notes/read`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths: chunk }) },
+      )
+      for (const n of notes) out.set(n.path, n.content)
+      queue.unshift(...deferred)
+    }
+    return out
   }
 
   async writeText(path: string, text: string): Promise<void> {

@@ -244,6 +244,16 @@ export interface AdminInstancesResponse {
   last7d: InstanceSummary
   byDay: { day: string; cold_starts: number; boot_cpu_ms: number; cpu_ms: number; requests: number }[]
   byFirstPath: { first_path: string | null; cold_starts: number }[]
+  byDeployment: {
+    deployment_id: string | null
+    first_seen: string
+    cold_starts: number
+    burst_starts: number
+    avg_boot_cpu_ms: number
+    boot_cpu_ms: number
+    cpu_ms: number
+    requests: number
+  }[]
   recent: AdminInstanceRow[]
 }
 

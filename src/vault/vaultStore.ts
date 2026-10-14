@@ -210,6 +210,23 @@ function rememberSpace(userId: string | null | undefined, path: string): void {
   }
 }
 
+/** Read and parse a set of notes. Through the source's readMany when it has
+ *  one (the cloud vault: one request, not one per note — a burst of
+ *  parallel requests is what made Vercel cold-start an instance per note),
+ *  otherwise readText per note in parallel, which is free for local
+ *  sources. A note that vanished between the listing and the read is left
+ *  out rather than failing the whole load. */
+async function readAll(source: VaultSource, metas: VaultFileMeta[]): Promise<Note[]> {
+  if (source.readMany) {
+    const texts = await source.readMany(metas.map((m) => m.path))
+    return metas.flatMap((m) => {
+      const text = texts.get(m.path)
+      return text == null ? [] : [parseNote(m.path, text, m.mtime)]
+    })
+  }
+  return Promise.all(metas.map(async (m) => parseNote(m.path, await source.readText(m.path), m.mtime)))
+}
+
 /** One quiet refresh at a time. The poll that drives it fires every five
  *  seconds and a slow pass must not stack on the one before it. */
 let _refreshing = false
@@ -220,9 +237,7 @@ export const useVault = create<VaultState>((set, get) => {
     try {
       const files = await source.list()
       const noteMetas = files.filter((f) => f.type === 'note')
-      const parsed: Note[] = await Promise.all(
-        noteMetas.map(async (m) => parseNote(m.path, await source.readText(m.path), m.mtime)),
-      )
+      const parsed = await readAll(source, noteMetas)
       const index = buildIndex(parsed)
       _searchIndex = buildSearch(parsed)
       const tree = buildTree(files)
@@ -386,9 +401,7 @@ export const useVault = create<VaultState>((set, get) => {
         const removed = [...parsed.keys()].filter((p) => !nextNotes.some((m) => m.path === p))
         if (changed.length === 0 && removed.length === 0 && next.length === files.length) return false
 
-        const fresh = await Promise.all(
-          changed.map(async (m) => parseNote(m.path, await source.readText(m.path), m.mtime)),
-        )
+        const fresh = await readAll(source, changed)
         const byPath = new Map(fresh.map((n) => [n.path, n]))
         // Everything else is reused as already parsed, not re-read.
         const all = nextNotes.map((m) => byPath.get(m.path) ?? parsed.get(m.path)!).filter(Boolean)
