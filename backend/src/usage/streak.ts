@@ -16,11 +16,13 @@
 // with none left ends the streak. A freeze keeps the streak alive but does
 // not add to it: the count is days actually kept.
 //
-// On top of those, bonus freezes (users.bonus_freezes): one is given for
-// finishing a first lesson, and every account that existed when they were
-// introduced got one too. They sit outside the cap of two, are spent only once the regular ones
-// are gone, are never earned back, and only cover misses on or after the day
-// they were granted — a grant is not a time machine.
+// Bonus freezes (users.bonus_freezes): one is given for finishing a first
+// lesson, and every account that existed when they were introduced got one
+// too. A bonus is an ordinary freeze handed over on the day it was granted
+// (users.bonus_freezes_from) — inside the cap of two, not on top of it, so
+// a new account that starts with none shows 1 of 2 after its first lesson,
+// and one already holding two gains nothing. It does not cover misses
+// before that day: a grant is not a time machine.
 //
 // Days are the reader's local calendar days, as the client sends them —
 // the same convention the quiz, the deck and the review dates use. They come
@@ -90,12 +92,12 @@ export interface Streak {
   freezes: number
   /** Days in the current streak that a freeze covered, oldest first. */
   frozen: string[]
-  /** The most freezes this reader can hold: the cap plus their bonus. */
+  /** The most freezes anyone can hold: MAX_FREEZES. */
   maxFreezes: number
 }
 
-/** A reader's freeze allowance: the regular freezes they start with, and
- *  bonus freezes outside the cap, usable from `from` on. */
+/** A reader's freeze allowance: the freezes they start with, and bonus
+ *  freezes added (within the cap) on `from`. */
 export interface BonusFreezes {
   count: number
   from: string
@@ -116,12 +118,20 @@ export function computeStreak(done: Set<string>, today: string, bonus: BonusFree
   const from = shift(today, -LOOKBACK_DAYS)
   let days = 0
   let freezes = bonus.start ?? MAX_FREEZES
-  let bonusLeft = bonus.count
+  let bonusGiven = false
+  // On the grant day (or the first day replayed, for an older grant), before
+  // that day's miss is decided, so it covers a miss on the day itself.
+  const grantBonus = (d: string) => {
+    if (bonusGiven || bonus.count <= 0 || d < bonus.from) return
+    freezes = Math.min(MAX_FREEZES, freezes + bonus.count)
+    bonusGiven = true
+  }
   let keptTowardFreeze = 0
   let frozen: string[] = []
   // Up to yesterday; today is only counted if done — not done *yet* is not
   // a miss.
   for (let d = from; d < today; d = shift(d, 1)) {
+    grantBonus(d)
     if (done.has(d)) {
       days++
       if (++keptTowardFreeze === DAYS_PER_FREEZE) {
@@ -133,20 +143,18 @@ export function computeStreak(done: Set<string>, today: string, bonus: BonusFree
     } else if (freezes > 0) {
       freezes--
       frozen.push(d)
-    } else if (bonusLeft > 0 && d >= bonus.from) {
-      bonusLeft--
-      frozen.push(d)
     } else {
       days = 0
       keptTowardFreeze = 0
       frozen = []
     }
   }
+  grantBonus(today)
   if (todayDone) {
     days++
     if (++keptTowardFreeze === DAYS_PER_FREEZE) freezes = Math.min(MAX_FREEZES, freezes + 1)
   }
-  return { days, todayDone, freezes: freezes + bonusLeft, frozen, maxFreezes: MAX_FREEZES + bonus.count }
+  return { days, todayDone, freezes, frozen, maxFreezes: MAX_FREEZES }
 }
 
 export async function bonusFreezesFor(userId: string): Promise<BonusFreezes> {

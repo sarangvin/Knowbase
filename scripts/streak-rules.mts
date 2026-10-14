@@ -39,6 +39,24 @@ for (const [name, ago, want] of cases) {
 }
 check('streak: never holds more than 2 freezes', streak(Array.from({ length: 30 }, (_, i) => i)).freezes === 2)
 
+// Bonus freezes count inside the cap of two, from the day they were granted.
+const withBonus = (ago: number[], start: number, fromAgo: number) =>
+  computeStreak(new Set(ago.map(d)), T, { count: 1, from: d(fromAgo), start })
+const fb = (s: ReturnType<typeof computeStreak>) => `${s.freezes}/${s.maxFreezes}`
+check('bonus: new account (starts with 0) shows 1/2', fb(withBonus([0], 0, 0)) === '1/2', fb(withBonus([0], 0, 0)))
+check('bonus: holding 2 already stays 2/2, never 3', fb(withBonus([0, 1, 2], 2, 2)) === '2/2', fb(withBonus([0, 1, 2], 2, 2)))
+check('bonus: 30 straight days with a bonus still caps at 2', withBonus(Array.from({ length: 30 }, (_, i) => i), 2, 20).freezes === 2)
+{
+  // Started with none, bonus on day 3-ago, missed 2-ago: the bonus covers it.
+  const s = withBonus([0, 1, 3], 0, 3)
+  check('bonus: covers a miss after the grant', s.days === 3 && s.frozen.length === 1 && s.freezes === 0, JSON.stringify(s))
+}
+{
+  // Missed 2-ago, bonus granted 1-ago: too late for that miss.
+  const s = withBonus([0, 1, 3], 0, 1)
+  check('bonus: does not cover a miss before the grant', s.days === 2 && s.frozen.length === 0, JSON.stringify(s))
+}
+
 // Tier limits: collections/day, grown notes/day, Ask AI/day.
 const lim = (t: string) => {
   const l = limitsFor(t)
