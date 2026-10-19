@@ -1,5 +1,6 @@
 // Coins: earned for finishing things, spent on starting new ones.
 //
+//   + every account starts with             25
 //   + finishing a note for the first time    3
 //   + each quiz question answered right      2  (wrong: 0)
 //   - starting a new collection             10
@@ -12,10 +13,13 @@
 // itself coins; re-finishing a note or re-answering a quiz adds nothing
 // because the records are counted once each.
 //
+// The starting 25 is part of the sum, not a grant written somewhere: so
+// every account has it — new ones from the moment they sign up, and every
+// account that existed when it was introduced — with nothing to backfill.
+//
 // What a collection costs:
-//   - The first one ever is free. A new account has no coins, and charging
-//     for the collection that is the whole point of signing up would leave
-//     them with nothing to earn coins *from*.
+//   - The first one ever is free: it is the whole point of signing up, and
+//     the starting coins are for what comes after it.
 //   - Collections started before coins existed (COINS_FROM) are not charged
 //     retroactively; nobody opens the app to find themselves in debt.
 // The start route refuses a paid collection the balance cannot cover, via
@@ -23,6 +27,7 @@
 import { sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 
+export const STARTING_COINS = 25
 export const COINS_PER = { note: 3, correctAnswer: 2 } as const
 export const COLLECTION_COST = 10
 /** Collection starts from this moment on are paid for. Just after coins
@@ -33,6 +38,8 @@ const COINS_FROM = '2026-10-19T11:58:00Z'
 
 export interface Coins {
   balance: number
+  /** What every account starts with: STARTING_COINS. */
+  starting: number
   notes: number
   /** Quiz questions answered right, all time. */
   correctAnswers: number
@@ -62,7 +69,12 @@ export async function coinsFor(userId: string): Promise<Coins> {
   const correctAnswers = Number(row.correct ?? 0)
   const paidCollections = Number(row.paid ?? 0)
   return {
-    balance: notes * COINS_PER.note + correctAnswers * COINS_PER.correctAnswer - paidCollections * COLLECTION_COST,
+    balance:
+      STARTING_COINS +
+      notes * COINS_PER.note +
+      correctAnswers * COINS_PER.correctAnswer -
+      paidCollections * COLLECTION_COST,
+    starting: STARTING_COINS,
     notes,
     correctAnswers,
     paidCollections,

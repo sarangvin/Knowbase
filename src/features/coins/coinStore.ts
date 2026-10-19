@@ -21,6 +21,8 @@ import { fromBootstrap } from '../../bootstrap'
 
 export interface Coins {
   balance: number
+  /** What every account starts with; absent from an older server. */
+  starting?: number
   notes: number
   correctAnswers: number
   paidCollections: number

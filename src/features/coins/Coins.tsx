@@ -126,6 +126,12 @@ export function CoinBadge() {
             </div>
           </div>
           <ul className="coin-pop-rows">
+            {!!coins.starting && (
+              <li>
+                <span>Starting coins</span>
+                <span className="coin-pop-n">{coins.starting}</span>
+              </li>
+            )}
             <li>
               <span>New notes finished</span>
               <span className="coin-pop-n">{coins.notes} × 3</span>
