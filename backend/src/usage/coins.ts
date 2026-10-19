@@ -25,10 +25,11 @@ import { db } from '../db/client.js'
 
 export const COINS_PER = { note: 3, correctAnswer: 2 } as const
 export const COLLECTION_COST = 10
-/** Collection starts from this moment on are paid for: when coins went
- *  live. (It was 12:00 for the first hour, which let a 11:57 start through
- *  free.) */
-const COINS_FROM = '2026-10-19T11:50:00Z'
+/** Collection starts from this moment on are paid for. Just after coins
+ *  went live: one collection was started at 11:57 under an earlier 12:00
+ *  cutoff, before its owner had the coins, and it stays free rather than
+ *  leave them in debt. */
+const COINS_FROM = '2026-10-19T11:58:00Z'
 
 export interface Coins {
   balance: number
