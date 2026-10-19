@@ -92,7 +92,7 @@ export async function collectionAllowance(
     // Last: the other two are walls, this one is a goal. Say how far off it
     // is and how to get there.
     const short = coins.nextCollectionCost - coins.balance
-    blocked = `A new collection costs ${coins.nextCollectionCost} coins and you have ${coins.balance}. Finish a new note (+3) or today's quiz (+7) to earn the ${short} you need.`
+    blocked = `A new collection costs ${coins.nextCollectionCost} coins and you have ${coins.balance}. Finish a new note (+3) or get quiz questions right (+2 each) to earn the ${short} you need.`
   }
 
   return { limits, activeCount, startedToday, coinCost: coins.nextCollectionCost, coinBalance: coins.balance, blocked }

@@ -1,6 +1,7 @@
 // The quiz tab's half of /api/quiz. The server owns the questions, the
 // answer key and the score; this only asks and renders.
 import { localDay } from '../automated-graph/engine'
+import type { Coins } from '../coins/coinStore'
 
 export interface QuizQuestion {
   noteTitle: string
@@ -68,6 +69,8 @@ export interface AnswerResult {
   /** How the note's confidence moved, or null when it did not — already at
    *  5 and right, already at 0 and wrong. */
   confidence: ConfidenceChange | null
+  /** The new coin balance, when the answer was right and earned some. */
+  coins?: Coins | null
 }
 
 export async function answerQuestion(index: number, choice: number): Promise<AnswerResult> {

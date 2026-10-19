@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { Carrot, Check, X, RotateCw } from '../../ui/icons'
 import { fetchToday, startToday, answerQuestion, type Quiz, type ConfidenceChange } from './quizApi'
-import { useCoins } from '../coins/coinStore'
+import { useCoins, centerOf } from '../coins/coinStore'
 import './quiz.css'
 
 const PASS_MARK = 0.6
@@ -85,7 +85,7 @@ export function QuizView() {
     }
   }
 
-  const pick = async (choice: number) => {
+  const pick = async (choice: number, el?: HTMLElement) => {
     if (!quiz || busy) return
     const q = quiz.questions[at]
     if (!q || q.chosen != null) return
@@ -94,10 +94,9 @@ export function QuizView() {
     try {
       const r = await answerQuestion(at, choice)
       // The last answer completes the quiz, which is a streak day.
-      if (r.completed) {
-        useStreak.getState().goalAction()
-        useCoins.getState().check()
-      }
+      if (r.completed) useStreak.getState().goalAction()
+      // A right answer is worth two coins, minted from the answer itself.
+      if (r.correct && r.coins) useCoins.getState().apply(r.coins, centerOf(el))
       setMoved((m) => ({ ...m, [at]: r.confidence }))
       // Patch in place so the answered state, the revealed key and the score
       // all come from the server's reply rather than from a local guess.
@@ -240,12 +239,16 @@ export function QuizView() {
           {q.options.map((opt, i) => {
             const isAnswer = answered && q.answer === i
             const isWrongPick = answered && q.chosen === i && q.answer !== i
+            // Their pick, and right: the one that gets the gold.
+            const isGolden = isAnswer && q.chosen === i
             return (
               <button
                 key={i}
-                className={'quiz-option' + (isAnswer ? ' is-answer' : '') + (isWrongPick ? ' is-wrong' : '')}
+                className={
+                  'quiz-option' + (isAnswer ? ' is-answer' : '') + (isWrongPick ? ' is-wrong' : '') + (isGolden ? ' is-golden' : '')
+                }
                 disabled={answered || busy}
-                onClick={() => void pick(i)}
+                onClick={(e) => void pick(i, e.currentTarget)}
               >
                 <span className="quiz-option-key">{String.fromCharCode(65 + i)}</span>
                 <span className="quiz-option-text">{opt}</span>

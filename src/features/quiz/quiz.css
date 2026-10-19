@@ -147,6 +147,43 @@
 .quiz-option.is-answer svg { color: var(--text-success); flex: none; }
 .quiz-option.is-wrong svg { color: var(--text-error); flex: none; }
 
+/* A right answer, theirs: it warms to gold, blooms once, and a band of
+   light runs across it — then settles to a soft lasting glow. */
+.quiz-option.is-golden {
+  position: relative;
+  overflow: hidden;
+  border-color: hsl(43 92% 62%);
+  background:
+    radial-gradient(120% 140% at 0% 0%, hsl(46 100% 70% / 0.2), transparent 60%),
+    hsl(38 80% 50% / 0.1);
+  box-shadow: inset 0 0 0 1px hsl(44 100% 70% / 0.35), 0 0 22px hsl(42 100% 58% / 0.28);
+  animation: quiz-gold-bloom 1100ms cubic-bezier(.2,.8,.3,1);
+}
+.quiz-option.is-golden .quiz-option-key {
+  background: linear-gradient(160deg, hsl(48 100% 80%), hsl(36 92% 52%));
+  color: hsl(24 80% 16%);
+  border-color: transparent;
+}
+.quiz-option.is-golden svg { color: hsl(44 100% 66%); }
+.quiz-option.is-golden::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, hsl(50 100% 90% / 0.38), transparent);
+  transform: translateX(-120%) skewX(-20deg);
+  animation: quiz-gold-sheen 900ms 120ms ease-in-out forwards;
+  pointer-events: none;
+}
+@keyframes quiz-gold-bloom {
+  0% { box-shadow: inset 0 0 0 1px hsl(44 100% 70% / 0), 0 0 0 0 hsl(42 100% 58% / 0); transform: scale(1); }
+  30% { box-shadow: inset 0 0 0 1px hsl(44 100% 75% / 0.6), 0 0 38px 6px hsl(42 100% 58% / 0.5); transform: scale(1.015); }
+  100% { box-shadow: inset 0 0 0 1px hsl(44 100% 70% / 0.35), 0 0 22px hsl(42 100% 58% / 0.28); transform: scale(1); }
+}
+@keyframes quiz-gold-sheen {
+  to { transform: translateX(320%) skewX(-20deg); }
+}
+
 .quiz-option-key {
   flex: none;
   width: 24px;
@@ -235,4 +272,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .quiz-btn, .quiz-option, .quiz-progress-bar span { transition: none; }
+  .quiz-option.is-golden, .quiz-option.is-golden::after { animation: none; }
 }

@@ -8,6 +8,7 @@
 import { fillStudyInBackground } from '../notes/studyBackfill.js'
 import { seededRng } from '../util/seeded.js'
 import { maybeGraduate } from '../usage/streak.js'
+import { coinsFor } from '../usage/coins.js'
 import { waitUntil } from '@vercel/functions'
 import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
@@ -190,7 +191,10 @@ quizRouter.post('/answer', asyncHandler(async (req, res) => {
   const vaultId = await getOrCreatePersonalVaultId(userId)
   const confidence = await adjustConfidence(vaultId, q.notePath, correct ? 1 : -1)
 
-  res.json({ correct, answer: q.answer, score, completed, confidence })
+  // A right answer is worth coins; the new balance comes back with it so
+  // the reward plays the moment the answer is revealed, not a poll later.
+  const coins = correct ? await coinsFor(userId) : null
+  res.json({ correct, answer: q.answer, score, completed, confidence, coins })
   // A finished quiz is a streak day.
   if (completed) waitUntil(maybeGraduate(userId, row.day))
 }))

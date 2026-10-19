@@ -1,12 +1,13 @@
 // Coins: earned for finishing things, spent on starting new ones.
 //
 //   + finishing a note for the first time    3
-//   + completing the day's quiz              7
+//   + each quiz question answered right      2  (wrong: 0)
 //   - starting a new collection             10
 //
 // Like the streak (usage/streak.ts), the balance is derived, not stored: it
 // is counted from records that already exist — the first note_review event
-// per note, quizzes.completed_at, and the collection_starts ledger. Nothing
+// per note, quizzes.score (right answers; first answer stands, so it can't
+// be farmed), and the collection_starts ledger. Nothing
 // new to write, nothing to keep in step, and no way for a client to award
 // itself coins; re-finishing a note or re-answering a quiz adds nothing
 // because the records are counted once each.
@@ -22,15 +23,18 @@
 import { sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 
-export const COINS_PER = { note: 3, quiz: 7 } as const
+export const COINS_PER = { note: 3, correctAnswer: 2 } as const
 export const COLLECTION_COST = 10
-/** Collection starts from this moment on are paid for. */
-const COINS_FROM = '2026-10-19T12:00:00Z'
+/** Collection starts from this moment on are paid for: when coins went
+ *  live. (It was 12:00 for the first hour, which let a 11:57 start through
+ *  free.) */
+const COINS_FROM = '2026-10-19T11:50:00Z'
 
 export interface Coins {
   balance: number
   notes: number
-  quizzes: number
+  /** Quiz questions answered right, all time. */
+  correctAnswers: number
   /** Collections paid for with coins. */
   paidCollections: number
   /** What starting the next collection costs: 0 for the first ever. */
@@ -43,8 +47,8 @@ export async function coinsFor(userId: string): Promise<Coins> {
       (SELECT count(DISTINCT metadata->>'path')::int FROM usage_events
         WHERE user_id = ${userId} AND event_type = 'note_review'
           AND metadata->>'path' IS NOT NULL) AS notes,
-      (SELECT count(*)::int FROM quizzes
-        WHERE user_id = ${userId} AND completed_at IS NOT NULL) AS quizzes,
+      (SELECT coalesce(sum(score), 0)::int FROM quizzes
+        WHERE user_id = ${userId}) AS correct,
       (SELECT count(*)::int FROM collection_starts
         WHERE user_id = ${userId}) AS started,
       (SELECT count(*)::int FROM collection_starts c
@@ -54,12 +58,12 @@ export async function coinsFor(userId: string): Promise<Coins> {
   `)
   const row = (r.rows[0] ?? {}) as Record<string, number | undefined>
   const notes = Number(row.notes ?? 0)
-  const quizzes = Number(row.quizzes ?? 0)
+  const correctAnswers = Number(row.correct ?? 0)
   const paidCollections = Number(row.paid ?? 0)
   return {
-    balance: notes * COINS_PER.note + quizzes * COINS_PER.quiz - paidCollections * COLLECTION_COST,
+    balance: notes * COINS_PER.note + correctAnswers * COINS_PER.correctAnswer - paidCollections * COLLECTION_COST,
     notes,
-    quizzes,
+    correctAnswers,
     paidCollections,
     nextCollectionCost: Number(row.started ?? 0) > 0 ? COLLECTION_COST : 0,
   }
