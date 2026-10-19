@@ -21,8 +21,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useVault } from '../../vault/vaultStore'
-import { useStreak } from '../streak/streakStore'
-import { useCoins, type Award } from './coinStore'
+import { useStreak, type StreakState } from '../streak/streakStore'
+import { localDay } from '../automated-graph/engine'
+import { Snowflake } from '../../ui/icons'
+import { useCoins, centerOf, type Award, type Coins } from './coinStore'
 import './coins.css'
 
 // The token's outline: a rabbit's head, cut from gold. One ear stands, the
@@ -146,6 +148,14 @@ export function CoinBadge() {
                 <span className="coin-pop-n spent">−{coins.paidCollections} × 10</span>
               </li>
             )}
+            {!!coins.freezesBought && (
+              <li>
+                <span>Streak freezes bought</span>
+                <span className="coin-pop-n spent">
+                  −{coins.freezesBought} × {coins.freezeCost ?? 50}
+                </span>
+              </li>
+            )}
           </ul>
           <p className="coin-pop-foot">
             {coins.nextCollectionCost === 0
@@ -154,8 +164,89 @@ export function CoinBadge() {
                 ? `A new collection costs ${coins.nextCollectionCost}. You can afford one.`
                 : `A new collection costs ${coins.nextCollectionCost}. ${coins.nextCollectionCost - coins.balance} more to go.`}
           </p>
+          <FreezeShop coins={coins} />
         </div>
       )}
+    </div>
+  )
+}
+
+/** What buying a freeze answers with: both badges' new state. */
+interface Bought {
+  streak: StreakState
+  coins: Coins
+}
+
+/**
+ * The shop: one thing for sale, a streak freeze. It says up front why you
+ * can't buy one (holding the most already, or short of coins) instead of
+ * letting you try; the server checks both again and has the last word.
+ */
+function FreezeShop({ coins }: { coins: Coins }) {
+  const streak = useStreak((s) => s.streak)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!streak || !coins.freezeCost) return null
+
+  const cost = coins.freezeCost
+  const held = streak.freezes
+  const max = streak.maxFreezes
+  const full = held >= max
+  const short = Math.max(0, cost - coins.balance)
+
+  const buy = async (btn: HTMLButtonElement) => {
+    if (busy || full || short) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/account/freezes/buy', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ day: localDay() }),
+      })
+      const body = (await res.json().catch(() => ({}))) as Partial<Bought> & { error?: string }
+      if (!res.ok || !body.streak || !body.coins) throw new Error(body.error || `Could not buy a freeze (${res.status}).`)
+      useStreak.setState({ streak: body.streak })
+      // The coins go from the badge to the button that spent them.
+      useCoins.getState().apply(body.coins, centerOf(btn))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="coin-shop">
+      <div className="coin-shop-title">Shop</div>
+      <div className="coin-shop-item">
+        <span className="coin-shop-icon">
+          <Snowflake width={18} height={18} />
+        </span>
+        <div className="coin-shop-body">
+          <div className="coin-shop-name">Streak freeze</div>
+          <div className="coin-shop-desc">Covers a missed day</div>
+          <div className="coin-shop-desc">
+            <span className="coin-shop-held">
+              {Array.from({ length: max }, (_, i) => (
+                <Snowflake key={i} width={11} height={11} className={i < held ? 'held' : 'spent'} />
+              ))}
+              {held} of {max} held
+            </span>
+          </div>
+        </div>
+        <button
+          className="coin-shop-buy"
+          disabled={busy || full || short > 0}
+          onClick={(e) => void buy(e.currentTarget)}
+          title={full ? `You hold ${max}, the most you can` : short ? `${short} more coins needed` : `Buy a freeze for ${cost} coins`}
+        >
+          {busy ? <span className="spinner" /> : full ? 'Max held' : <CoinCost n={cost} />}
+        </button>
+      </div>
+      {!full && short > 0 && <p className="coin-shop-note">{short} more coins to buy one.</p>}
+      {error && <p className="coin-shop-note is-error">{error}</p>}
     </div>
   )
 }

@@ -4,6 +4,7 @@
 //   + finishing a note for the first time    3
 //   + each quiz question answered right      2  (wrong: 0)
 //   - starting a new collection             10
+//   - buying a streak freeze                50  (freeze_purchases)
 //
 // Like the streak (usage/streak.ts), the balance is derived, not stored: it
 // is counted from records that already exist — the first note_review event
@@ -30,6 +31,7 @@ import { db } from '../db/client.js'
 export const STARTING_COINS = 25
 export const COINS_PER = { note: 3, correctAnswer: 2 } as const
 export const COLLECTION_COST = 10
+export const FREEZE_COST = 50
 /** Collection starts from this moment on are paid for. Just after coins
  *  went live: one collection was started at 11:57 under an earlier 12:00
  *  cutoff, before its owner had the coins, and it stays free rather than
@@ -47,6 +49,9 @@ export interface Coins {
   paidCollections: number
   /** What starting the next collection costs: 0 for the first ever. */
   nextCollectionCost: number
+  /** Streak freezes bought, and what one costs. */
+  freezesBought: number
+  freezeCost: number
 }
 
 export async function coinsFor(userId: string): Promise<Coins> {
@@ -62,7 +67,11 @@ export async function coinsFor(userId: string): Promise<Coins> {
       (SELECT count(*)::int FROM collection_starts c
         WHERE c.user_id = ${userId} AND c.created_at >= ${COINS_FROM}::timestamptz
           AND c.id <> (SELECT f.id FROM collection_starts f WHERE f.user_id = ${userId}
-                       ORDER BY f.created_at, f.id LIMIT 1)) AS paid
+                       ORDER BY f.created_at, f.id LIMIT 1)) AS paid,
+      (SELECT count(*)::int FROM freeze_purchases
+        WHERE user_id = ${userId}) AS freezes,
+      (SELECT coalesce(sum(coins), 0)::int FROM freeze_purchases
+        WHERE user_id = ${userId}) AS freeze_coins
   `)
   const row = (r.rows[0] ?? {}) as Record<string, number | undefined>
   const notes = Number(row.notes ?? 0)
@@ -73,11 +82,14 @@ export async function coinsFor(userId: string): Promise<Coins> {
       STARTING_COINS +
       notes * COINS_PER.note +
       correctAnswers * COINS_PER.correctAnswer -
-      paidCollections * COLLECTION_COST,
+      paidCollections * COLLECTION_COST -
+      Number(row.freeze_coins ?? 0),
     starting: STARTING_COINS,
     notes,
     correctAnswers,
     paidCollections,
     nextCollectionCost: Number(row.started ?? 0) > 0 ? COLLECTION_COST : 0,
+    freezesBought: Number(row.freezes ?? 0),
+    freezeCost: FREEZE_COST,
   }
 }

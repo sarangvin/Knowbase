@@ -17,7 +17,7 @@ import webpush from 'web-push'
 import { and, eq, exists, gte, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { users, pushSubscriptions } from '../db/schema.js'
-import { goalDays, computeStreak, shift, type Streak } from '../usage/streak.js'
+import { goalDays, computeStreak, shift, boughtFreezeDays, type Streak } from '../usage/streak.js'
 import { REMINDERS, freezeUsedMessage, type PushMessage } from './messages.js'
 
 const DAY_MS = 24 * 3_600_000
@@ -156,7 +156,12 @@ export async function notifyEveryone(now = new Date()): Promise<NotifyReport> {
     try {
       const anchor = (await lastTaskAt(u.id)) ?? u.enabledAt
       const today = dayIn(u.tz, now)
-      const streak = computeStreak(await goalDays(u.id), today, { count: u.bonusCount, from: u.bonusFrom, start: u.startingFreezes })
+      const streak = computeStreak(await goalDays(u.id), today, {
+        count: u.bonusCount,
+        from: u.bonusFrom,
+        start: u.startingFreezes,
+        bought: await boughtFreezeDays(u.id),
+      })
       const decision = decide({ now, anchor, lastSentAt: u.lastSentAt, tz: u.tz, streak, freezeDayNotified: u.freezeDay })
       if (decision === 'none') continue
 

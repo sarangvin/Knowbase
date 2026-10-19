@@ -24,6 +24,11 @@
 // and one already holding two gains nothing. It does not cover misses
 // before that day: a grant is not a time machine.
 //
+// Bought freezes (freeze_purchases): 50 coins each, from the coin popover.
+// Like a bonus, a bought freeze joins the ones held on the day it was
+// bought, inside the cap of two — and the shop refuses a sale when two are
+// already held, so one is never paid for and lost to the cap.
+//
 // Days are the reader's local calendar days, as the client sends them —
 // the same convention the quiz, the deck and the review dates use. They come
 // from three records that already exist, so there is nothing new to keep in
@@ -38,7 +43,7 @@
 // script could claim three days in one sitting.
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { users } from '../db/schema.js'
+import { users, freezePurchases } from '../db/schema.js'
 
 export const GRADUATION_STREAK = 3
 const GRADUATION_MIN_AGE_HOURS = 48
@@ -103,6 +108,8 @@ export interface BonusFreezes {
   from: string
   /** Regular freezes held at the start. Defaults to MAX_FREEZES. */
   start?: number
+  /** The day of each freeze bought with coins, any order. */
+  bought?: string[]
 }
 
 const NO_BONUS: BonusFreezes = { count: 0, from: '9999-12-31' }
@@ -126,12 +133,23 @@ export function computeStreak(done: Set<string>, today: string, bonus: BonusFree
     freezes = Math.min(MAX_FREEZES, freezes + bonus.count)
     bonusGiven = true
   }
+  // Bought freezes, by day; a day can have more than one.
+  const boughtOn = new Map<string, number>()
+  for (const d of bonus.bought ?? []) boughtOn.set(d, (boughtOn.get(d) ?? 0) + 1)
+  const grantBought = (d: string) => {
+    const n = boughtOn.get(d)
+    if (n) freezes = Math.min(MAX_FREEZES, freezes + n)
+  }
+  // One bought before the lookback window is long since held or spent;
+  // start from what the window's first day would have had.
+  for (const [d, n] of boughtOn) if (d < from) freezes = Math.min(MAX_FREEZES, freezes + n)
   let keptTowardFreeze = 0
   let frozen: string[] = []
   // Up to yesterday; today is only counted if done — not done *yet* is not
   // a miss.
   for (let d = from; d < today; d = shift(d, 1)) {
     grantBonus(d)
+    grantBought(d)
     if (done.has(d)) {
       days++
       if (++keptTowardFreeze === DAYS_PER_FREEZE) {
@@ -150,6 +168,7 @@ export function computeStreak(done: Set<string>, today: string, bonus: BonusFree
     }
   }
   grantBonus(today)
+  grantBought(today)
   if (todayDone) {
     days++
     if (++keptTowardFreeze === DAYS_PER_FREEZE) freezes = Math.min(MAX_FREEZES, freezes + 1)
@@ -158,12 +177,21 @@ export function computeStreak(done: Set<string>, today: string, bonus: BonusFree
 }
 
 export async function bonusFreezesFor(userId: string): Promise<BonusFreezes> {
-  const [u] = await db
-    .select({ count: users.bonusFreezes, from: users.bonusFreezesFrom, start: users.startingFreezes })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1)
-  return u ?? NO_BONUS
+  const [[u], bought] = await Promise.all([
+    db
+      .select({ count: users.bonusFreezes, from: users.bonusFreezesFrom, start: users.startingFreezes })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+    boughtFreezeDays(userId),
+  ])
+  return u ? { ...u, bought } : { ...NO_BONUS, bought }
+}
+
+/** The day of every freeze this reader has bought. */
+export async function boughtFreezeDays(userId: string): Promise<string[]> {
+  const rows = await db.select({ day: freezePurchases.day }).from(freezePurchases).where(eq(freezePurchases.userId, userId))
+  return rows.map((r) => r.day)
 }
 
 export async function streakFor(userId: string, today: string): Promise<Streak> {

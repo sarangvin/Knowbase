@@ -27,6 +27,9 @@ export interface Coins {
   correctAnswers: number
   paidCollections: number
   nextCollectionCost: number
+  /** Streak freezes bought, and what one costs; absent from an older server. */
+  freezesBought?: number
+  freezeCost?: number
 }
 
 export interface Point {

@@ -456,6 +456,25 @@ export const customQuestions = pgTable(
  *  itself, not from here — that one is about what you have, and deleting
  *  really should free it.
  */
+/** Streak freezes bought with coins (usage/streak.ts, usage/coins.ts). One
+ *  row per freeze. `seq` numbers a user's purchases 1, 2, 3…, and being
+ *  unique per user is what stops a double tap buying twice: two requests
+ *  racing both read the same count and only one insert can claim the next
+ *  number. */
+export const freezePurchases = pgTable(
+  'freeze_purchases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    /** Local YYYY-MM-DD from the client: the day the freeze is held from. */
+    day: text('day').notNull(),
+    coins: integer('coins').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('freeze_purchases_user_seq_unique').on(t.userId, t.seq)],
+)
+
 export const collectionStarts = pgTable(
   'collection_starts',
   {

@@ -3,12 +3,12 @@
 import { Router } from 'express'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { notes, assets, vaults, onboardingJobs, users } from '../db/schema.js'
+import { notes, assets, vaults, onboardingJobs, users, freezePurchases } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { logUsageEvent } from '../usage/logEvent.js'
-import { coinsFor } from '../usage/coins.js'
-import { goalDays, computeStreak, shift, maybeGraduate, maybeGrantFirstLessonBonus, bonusFreezesFor, GRADUATION_STREAK } from '../usage/streak.js'
+import { coinsFor, FREEZE_COST } from '../usage/coins.js'
+import { goalDays, computeStreak, shift, maybeGraduate, maybeGrantFirstLessonBonus, bonusFreezesFor, GRADUATION_STREAK, MAX_FREEZES } from '../usage/streak.js'
 
 export const accountRouter = Router()
 // Auth, but deliberately NOT requireApproved: someone whose access was
@@ -83,6 +83,50 @@ accountRouter.get('/streak', asyncHandler(async (req, res) => {
 /** The reader's coin balance (usage/coins.ts). */
 accountRouter.get('/coins', asyncHandler(async (req, res) => {
   res.json(await coinsFor(req.user!.id))
+}))
+
+/**
+ * Buy one streak freeze with coins: the shop in the coin popover.
+ *
+ * Refused when two are already held — a third would be lost to the cap, and
+ * a shop that takes your coins for nothing is worse than one that says no —
+ * and when the balance cannot cover it. Both are checked here, on the
+ * server's own count; the client only shows the same answer in advance.
+ *
+ * A double tap cannot buy twice: each purchase claims the next `seq` for
+ * this user, and the unique index lets only one of two racing inserts have
+ * it. Answers with the new streak and coins so both badges move at once.
+ */
+accountRouter.post('/freezes/buy', asyncHandler(async (req, res) => {
+  const day = typeof req.body?.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.day) ? req.body.day : null
+  if (!day) {
+    res.status(400).json({ error: 'body.day (YYYY-MM-DD) required' })
+    return
+  }
+  const userId = req.user!.id
+  const [done, bonus, coins] = await Promise.all([goalDays(userId), bonusFreezesFor(userId), coinsFor(userId)])
+  const held = computeStreak(done, day, bonus).freezes
+  if (held >= MAX_FREEZES) {
+    res.status(409).json({ error: `You already hold ${MAX_FREEZES} freezes, the most you can.` })
+    return
+  }
+  if (coins.balance < FREEZE_COST) {
+    res.status(402).json({ error: `A freeze costs ${FREEZE_COST} coins and you have ${coins.balance}.` })
+    return
+  }
+  try {
+    await db.insert(freezePurchases).values({ userId, seq: coins.freezesBought + 1, day, coins: FREEZE_COST })
+  } catch (err) {
+    // Drizzle may wrap the driver's error; the code is on it or its cause.
+    const e = err as { code?: string; cause?: { code?: string } }
+    if (e.code === '23505' || e.cause?.code === '23505') {
+      res.status(409).json({ error: 'That purchase is already going through.' })
+      return
+    }
+    throw err
+  }
+  const [streak, after] = [await streakFor(userId, day), await coinsFor(userId)]
+  res.json({ streak, coins: after })
 }))
 
 /** The streak card's data for `day` (the reader's local date). Also served
