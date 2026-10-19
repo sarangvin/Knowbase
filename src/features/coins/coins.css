@@ -111,20 +111,17 @@
 .cm-edge {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
 }
 .cm-side { backface-visibility: hidden; display: flex; }
 .cm-front { transform: translateZ(3.4px); }
 .cm-back { transform: rotateY(180deg) translateZ(3.4px); }
-/* the coin's thickness: stacked discs, darker toward the middle */
-.cm-edge {
-  background: radial-gradient(circle, hsl(28 85% 34%) 60%, hsl(34 90% 46%) 70%, hsl(24 80% 26%) 100%);
-}
+/* the coin's thickness: stacked silhouettes, in the edge's darker gold */
+.cm-edge { color: hsl(30 86% 38%); display: flex; }
+.cm-edge:nth-child(odd) { color: hsl(26 84% 32%); }
 
 .cm-sheen-clip {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
   overflow: hidden;
 }
 .cm-sheen {

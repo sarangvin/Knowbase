@@ -1,12 +1,13 @@
 // Coins, on screen: the balance in the top bar, and the moments coins
 // arrive and leave.
 //
-// The coin is a struck medallion, not a cartoon token: a milled rim, a
-// bevelled field lit from the top left, and a rabbit's head in raised
-// relief — one ear upright, one folded over at the tip — catching that
-// light along its upper edges and throwing a shadow below. Painterly rather
-// than flat: every surface is a gradient, and the shapes are a little
-// angular, so it reads as cut metal at 18px and as an object at 72.
+// The coin is a rabbit's head cut from gold — the token itself is that
+// shape, one ear standing and one folded at the tip. It is struck like a
+// coin, not drawn like a cartoon: a milled rim that runs all the way round
+// the ears, a bevel lit from the top left, a face engraved into the field
+// (sly angular eyes, recessed inner ears with a lit lip, fine whiskers).
+// Every surface is a gradient, so it reads as metal at 18px and as an
+// object at 72.
 //
 // Earning mints one: it appears where the coins were earned (the middle of
 // the screen, or the quiz answer that earned them), spins up on a burst of
@@ -26,69 +27,93 @@ import { useStreak } from '../streak/streakStore'
 import { useCoins, type Award } from './coinStore'
 import './coins.css'
 
-// The head and both ears, in a 64-unit box. Drawn once and reused for the
-// relief's shadow, highlight and face.
-const HEAD =
-  'M21.2 39.4C21.2 33.2 25.6 29.6 30 29.1L28.3 25.6C26.1 21 24.6 15.6 25.1 11.6C25.4 9.6 27.6 9 28.9 10.4' +
-  'C31.2 13.2 32 19.6 31.9 28.9L32.6 28.9C33.2 23.2 34.4 17.4 37.3 13.7C38.9 11.7 41.7 11.4 43.4 12.8' +
-  'C44.6 13.8 44.3 15.4 42.9 15.9C40.9 16.6 39.3 18.6 38.4 21.6L36.9 29.6C40.9 30.6 43.2 34.4 42.9 39.4' +
-  'C42.5 45 37.9 48.6 32 48.6C26 48.6 21.2 45.2 21.2 39.4Z'
+// The token's outline: a rabbit's head, cut from gold. One ear stands, the
+// other folds over at the tip — the one bit of character in the shape. In a
+// 64-unit box; everything else (rim, engraving, the 3D edge, the shine's
+// mask) is drawn from this one path so they always agree.
+export const RABBIT =
+  'M32 58C21.5 58 13.5 52.5 13.5 44.5C13.5 38.5 16.8 34.2 21.2 32.2' +
+  'C19 25.5 17.6 16 18.6 9.6C19.2 5.8 22.6 4.4 24.8 7C27.8 10.6 29.2 20 28.8 30.4' +
+  'C30.2 30.2 31.4 30.1 32.6 30.2C33.6 22 36 14.4 40.4 10.2C43 7.8 47.6 7.6 51.6 10.4' +
+  'C54.4 12.4 55 15.6 53.6 17.2C52.4 18.4 50.2 17.4 48.6 16.6C46.4 17.8 44.4 23 43 31.8' +
+  'C47.6 33.8 50.5 38.4 50.5 44.5C50.5 52.5 42.5 58 32 58Z'
+// Recessed inner ears, following each ear (the right one round its fold).
 const EARS_INNER =
-  'M27.2 13.6C28.6 15.8 29.6 20.6 29.8 26.6L28.9 26.4C27.6 22.4 26.7 17.8 27.2 13.6Z' +
-  'M41.4 14.2C39.3 15 37.6 17 36.6 20.4L35.2 27.2L34.5 27.1C35 22.6 36.3 18 38.4 15.2C39.4 14 40.6 13.8 41.4 14.2Z'
+  'M23.6 11C25.4 14 26 21 25.8 28.4C24.6 28.6 23.4 28.6 22.6 28.4C21.6 22 21.8 15 23.6 11Z' +
+  'M37 26C38 19.8 40.2 14.6 43.4 12.4C46 11 48.8 11.4 50.4 12.8C48 13.2 46 14.4 44.6 16.4' +
+  'C42.6 19.4 41.2 23.6 40.4 28.4C39.2 28 38 27.2 37 26Z'
+/** Square box around the outline, with room for the rim's outer half. */
+export const RABBIT_VIEWBOX = '4 1 60 60'
 
 export function CoinIcon({ size = 18, className }: { size?: number; className?: string }) {
   const id = useId().replace(/:/g, '')
   const u = (n: string) => `url(#${id}-${n})`
   return (
-    <svg className={className} width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+    <svg className={className} width={size} height={size} viewBox={RABBIT_VIEWBOX} aria-hidden="true">
       <defs>
-        <radialGradient id={`${id}-rim`} cx="0.32" cy="0.28" r="0.85">
-          <stop offset="0" stopColor="hsl(46 100% 80%)" />
-          <stop offset="0.45" stopColor="hsl(38 92% 56%)" />
-          <stop offset="0.8" stopColor="hsl(27 86% 38%)" />
-          <stop offset="1" stopColor="hsl(20 80% 24%)" />
-        </radialGradient>
-        <radialGradient id={`${id}-field`} cx="0.36" cy="0.3" r="0.8">
-          <stop offset="0" stopColor="hsl(42 96% 62%)" />
-          <stop offset="0.55" stopColor="hsl(32 88% 45%)" />
-          <stop offset="1" stopColor="hsl(23 84% 29%)" />
-        </radialGradient>
-        <linearGradient id={`${id}-relief`} x1="0.2" y1="0" x2="0.8" y2="1">
-          <stop offset="0" stopColor="hsl(48 100% 86%)" />
-          <stop offset="0.5" stopColor="hsl(40 96% 64%)" />
-          <stop offset="1" stopColor="hsl(30 88% 46%)" />
+        <linearGradient id={`${id}-rim`} x1="0.15" y1="0" x2="0.85" y2="1">
+          <stop offset="0" stopColor="hsl(48 100% 84%)" />
+          <stop offset="0.4" stopColor="hsl(39 94% 58%)" />
+          <stop offset="0.75" stopColor="hsl(28 86% 40%)" />
+          <stop offset="1" stopColor="hsl(21 80% 26%)" />
         </linearGradient>
-        <path id={`${id}-head`} d={HEAD} />
+        <radialGradient id={`${id}-field`} cx="0.38" cy="0.42" r="0.7">
+          <stop offset="0" stopColor="hsl(46 100% 74%)" />
+          <stop offset="0.5" stopColor="hsl(38 94% 56%)" />
+          <stop offset="1" stopColor="hsl(27 86% 38%)" />
+        </radialGradient>
+        <path id={`${id}-shape`} d={RABBIT} />
+        <clipPath id={`${id}-clip`}>
+          <use href={`#${id}-shape`} />
+        </clipPath>
       </defs>
 
-      {/* rim, milled edge, bevel */}
-      <circle cx="32" cy="32" r="31" fill={u('rim')} />
-      <circle cx="32" cy="32" r="29.2" fill="none" stroke="hsl(24 80% 22%)" strokeOpacity="0.55" strokeWidth="1.6" strokeDasharray="1.1 1.5" />
-      <circle cx="32" cy="32" r="25.6" fill="hsl(22 80% 24%)" opacity="0.55" />
-      <circle cx="32" cy="32" r="25" fill={u('field')} />
-      <path d="M11.5 27A21 21 0 0 1 27 11.2" fill="none" stroke="hsl(48 100% 90%)" strokeOpacity="0.55" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M52.5 37A21 21 0 0 1 37 52.8" fill="none" stroke="hsl(20 80% 22%)" strokeOpacity="0.45" strokeWidth="1.2" strokeLinecap="round" />
+      {/* outer edge in shadow, then the rim (the stroke's inner half) round
+          a gold field, then the milling that runs along the rim */}
+      <use href={`#${id}-shape`} fill="none" stroke="hsl(20 80% 18%)" strokeOpacity="0.7" strokeWidth="7" strokeLinejoin="round" />
+      <use href={`#${id}-shape`} fill={u('field')} stroke={u('rim')} strokeWidth="5" strokeLinejoin="round" />
+      <use href={`#${id}-shape`} fill="none" stroke="hsl(22 80% 24%)" strokeOpacity="0.3" strokeWidth="0.9" strokeDasharray="0.5 0.9" />
 
-      {/* the relief: shadow below-right, light above-left, then the face —
-          a touch larger than drawn, so it holds up at badge size */}
-      <g transform="translate(32 31) scale(1.1) translate(-32 -31)">
-        <use href={`#${id}-head`} fill="hsl(20 80% 16%)" opacity="0.6" transform="translate(1.3 1.6)" />
-        <use href={`#${id}-head`} fill="hsl(50 100% 92%)" opacity="0.9" transform="translate(-0.8 -0.9)" />
-        <use href={`#${id}-head`} fill={u('relief')} stroke="hsl(24 80% 26%)" strokeOpacity="0.5" strokeWidth="0.7" />
-        <path d={EARS_INNER} fill="hsl(26 86% 40%)" opacity="0.75" />
-        {/* eyes, angular; a nose; a mouth */}
-        <path d="M26.4 37.2L29.6 36.2L29 38.8Z" fill="hsl(20 80% 18%)" />
-        <path d="M37.6 37.2L34.4 36.2L35 38.8Z" fill="hsl(20 80% 18%)" />
-        <path d="M30.6 42.2H33.4L32 43.9Z" fill="hsl(20 80% 22%)" />
-        <path d="M32 43.9V45.2M32 45.2C31 46 29.8 46 29 45.4M32 45.2C33 46 34.2 46 35 45.4" fill="none" stroke="hsl(20 80% 24%)" strokeWidth="0.8" strokeLinecap="round" />
+      <g clipPath={u('clip')}>
+        {/* the bevel: light catching the inside of the rim along the top
+            left, shade along the bottom right */}
+        <use href={`#${id}-shape`} fill="none" stroke="hsl(50 100% 92%)" strokeOpacity="0.6" strokeWidth="1.2" transform="translate(-0.9 -1)" />
+        <use href={`#${id}-shape`} fill="none" stroke="hsl(20 80% 22%)" strokeOpacity="0.4" strokeWidth="5.6" transform="translate(1.6 1.8)" />
+
+        {/* engraving: recessed inner ears, with a lit lower lip */}
+        <path d={EARS_INNER} fill="hsl(26 86% 36%)" opacity="0.8" />
+        <path d={EARS_INNER} fill="none" stroke="hsl(48 100% 86%)" strokeOpacity="0.5" strokeWidth="0.7" transform="translate(0.5 0.6)" />
+
+        {/* eyes: angular, a little sly */}
+        <path d="M22.4 42.6C23.6 40.4 26.2 39.6 28.6 40.4C27.8 42.8 25.4 44 22.4 42.6Z" fill="hsl(20 80% 16%)" />
+        <path d="M41.6 42.6C40.4 40.4 37.8 39.6 35.4 40.4C36.2 42.8 38.6 44 41.6 42.6Z" fill="hsl(20 80% 16%)" />
+        <circle cx="26.6" cy="41.4" r="0.6" fill="hsl(50 100% 92%)" />
+        <circle cx="37.4" cy="41.4" r="0.6" fill="hsl(50 100% 92%)" />
+        {/* nose, mouth, whiskers */}
+        <path d="M30.2 47.2H33.8L32 49.4Z" fill="hsl(20 80% 20%)" />
+        <path d="M32 49.4V50.8M32 50.8C30.8 51.8 29.4 51.8 28.4 51M32 50.8C33.2 51.8 34.6 51.8 35.6 51" fill="none" stroke="hsl(20 80% 22%)" strokeWidth="0.9" strokeLinecap="round" />
+        <path d="M19 47.4L25 48.2M19.4 50.4L25.2 49.6M45 47.4L39 48.2M44.6 50.4L38.8 49.6" stroke="hsl(22 80% 26%)" strokeOpacity="0.55" strokeWidth="0.7" strokeLinecap="round" />
       </g>
 
-      {/* a four-point glint */}
-      <path d="M50 10.5L51 13.6L54.1 14.6L51 15.6L50 18.7L49 15.6L45.9 14.6L49 13.6Z" fill="hsl(50 100% 96%)" opacity="0.9" />
+      {/* a four-point glint on the standing ear */}
+      <path d="M21.6 13.2L22.4 15.6L24.8 16.4L22.4 17.2L21.6 19.6L20.8 17.2L18.4 16.4L20.8 15.6Z" fill="hsl(50 100% 97%)" opacity="0.9" />
     </svg>
   )
 }
+
+/** The token's silhouette in one flat colour: a layer of the coin's edge. */
+function CoinEdge({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox={RABBIT_VIEWBOX} aria-hidden="true">
+      <path d={RABBIT} fill="currentColor" stroke="currentColor" strokeWidth="5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** The silhouette as a CSS mask, so the shine stays inside the shape. */
+const RABBIT_MASK = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='${RABBIT_VIEWBOX}'><path d='${RABBIT}' fill='#000' stroke='#000' stroke-width='5' stroke-linejoin='round'/></svg>`,
+)}") center / contain no-repeat`
 
 export function CoinBadge() {
   const user = useVault((s) => s.user)
@@ -249,7 +274,7 @@ function Mint({ award }: { award: Award }) {
       glow.style.left = `${o.x}px`
       glow.style.top = `${o.y}px`
       label.style.left = `${o.x}px`
-      label.style.top = `${o.y - size * 0.95}px`
+      label.style.top = `${o.y - size * 1.2}px`
       anims.push(
         glow.animate(
           [
@@ -354,12 +379,14 @@ function Mint({ award }: { award: Award }) {
         <div className="cm-coin">
           <div className="cm-side cm-front">
             <CoinIcon size={size} />
-            <div className="cm-sheen-clip">
+            <div className="cm-sheen-clip" style={{ mask: RABBIT_MASK, WebkitMask: RABBIT_MASK }}>
               <div className="cm-sheen" />
             </div>
           </div>
           {Array.from({ length: EDGE_LAYERS }, (_, i) => (
-            <div key={i} className="cm-edge" style={{ transform: `translateZ(${(i - (EDGE_LAYERS - 1) / 2) * 1.1}px)` }} />
+            <div key={i} className="cm-edge" style={{ transform: `translateZ(${(i - (EDGE_LAYERS - 1) / 2) * 1.1}px)` }}>
+              <CoinEdge size={size} />
+            </div>
           ))}
           <div className="cm-side cm-back">
             <CoinIcon size={size} />
