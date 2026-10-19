@@ -17,6 +17,7 @@ import { collectionStarts } from '../db/schema.js'
 import { listUserSpaces, archivedSpaces } from '../vault/spaces.js'
 import { limitsFor } from '../plans.js'
 import { collectionsStartedLast24h } from '../usage/allowance.js'
+import { coinsFor } from '../usage/coins.js'
 
 interface PlanLimits {
   /** Collections that are not archived. */
@@ -35,6 +36,10 @@ export interface CollectionAllowance {
   limits: PlanLimits
   activeCount: number
   startedToday: number
+  /** Coins the next collection costs (0 for a first one), and the balance
+   *  that has to cover it (usage/coins.ts). */
+  coinCost: number
+  coinBalance: number
   /** Null when they may start one; otherwise the reason, written to be read
    *  by the person who hit it. */
   blocked: string | null
@@ -48,7 +53,7 @@ export async function collectionAllowance(
 ): Promise<CollectionAllowance> {
   const limits = collectionLimits(planTier)
 
-  const [spaces, archived, startedRow, last24h] = await Promise.all([
+  const [spaces, archived, startedRow, last24h, coins] = await Promise.all([
     listUserSpaces(vaultId),
     archivedSpaces(vaultId),
     db
@@ -57,6 +62,7 @@ export async function collectionAllowance(
       .where(and(eq(collectionStarts.userId, userId), eq(collectionStarts.day, day)))
       .then((r) => r[0]),
     collectionsStartedLast24h(userId),
+    coinsFor(userId),
   ])
 
   const activeCount = spaces.filter((s) => !archived.has(s)).length
@@ -82,9 +88,14 @@ export async function collectionAllowance(
       startedToday === 1
         ? `You've started a new collection today, which is the daily limit ${plan}. You can start another tomorrow.`
         : `That's ${startedToday} new collections today, which is the daily limit ${plan}. You can start another tomorrow.`
+  } else if (coins.balance < coins.nextCollectionCost) {
+    // Last: the other two are walls, this one is a goal. Say how far off it
+    // is and how to get there.
+    const short = coins.nextCollectionCost - coins.balance
+    blocked = `A new collection costs ${coins.nextCollectionCost} coins and you have ${coins.balance}. Finish a new note (+3) or today's quiz (+7) to earn the ${short} you need.`
   }
 
-  return { limits, activeCount, startedToday, blocked }
+  return { limits, activeCount, startedToday, coinCost: coins.nextCollectionCost, coinBalance: coins.balance, blocked }
 }
 
 /** Record a start. Called only once the job is actually being created, so a

@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { Carrot, Check, X, RotateCw } from '../../ui/icons'
 import { fetchToday, startToday, answerQuestion, type Quiz, type ConfidenceChange } from './quizApi'
+import { useCoins } from '../coins/coinStore'
 import './quiz.css'
 
 const PASS_MARK = 0.6
@@ -93,7 +94,10 @@ export function QuizView() {
     try {
       const r = await answerQuestion(at, choice)
       // The last answer completes the quiz, which is a streak day.
-      if (r.completed) useStreak.getState().goalAction()
+      if (r.completed) {
+        useStreak.getState().goalAction()
+        useCoins.getState().check()
+      }
       setMoved((m) => ({ ...m, [at]: r.confidence }))
       // Patch in place so the answered state, the revealed key and the score
       // all come from the server's reply rather than from a local guess.

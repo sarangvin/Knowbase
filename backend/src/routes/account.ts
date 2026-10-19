@@ -7,6 +7,7 @@ import { notes, assets, vaults, onboardingJobs, users } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { coinsFor } from '../usage/coins.js'
 import { goalDays, computeStreak, shift, maybeGraduate, maybeGrantFirstLessonBonus, bonusFreezesFor, GRADUATION_STREAK } from '../usage/streak.js'
 
 export const accountRouter = Router()
@@ -77,6 +78,11 @@ accountRouter.get('/streak', asyncHandler(async (req, res) => {
     return
   }
   res.json(await streakFor(req.user!.id, day))
+}))
+
+/** The reader's coin balance (usage/coins.ts). */
+accountRouter.get('/coins', asyncHandler(async (req, res) => {
+  res.json(await coinsFor(req.user!.id))
 }))
 
 /** The streak card's data for `day` (the reader's local date). Also served

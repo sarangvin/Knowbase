@@ -21,6 +21,8 @@ import {
   type LibrarySpace,
 } from './onboardingApi'
 import { ArrowRight, RotateCw, Sparkles } from '../../ui/icons'
+import { useCoins } from '../coins/coinStore'
+import { CoinCost } from '../coins/Coins'
 
 /** Below this the library copy is too thin to be worth suggesting — a space
  *  whose run died after two topics is not a collection anyone should be
@@ -88,12 +90,23 @@ export function CollectionSuggestion({
     if (!approved && !onStart) return
     let cancelled = false
     void fetchLibrarySpaces().then((l) => !cancelled && setLibrary(l))
-    if (approved) void fetchCollectionAllowance().then((a) => !cancelled && setAllowance(a))
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approved, started])
+
+  // Apart from the library, so a coin balance changing re-reads only what
+  // it can change: whether they can afford the next collection.
+  const coinBalance = useCoins((s) => s.coins?.balance)
+  useEffect(() => {
+    if (!approved) return
+    let cancelled = false
+    void fetchCollectionAllowance().then((a) => !cancelled && setAllowance(a))
+    return () => {
+      cancelled = true
+    }
+  }, [approved, started, coinBalance])
 
   const candidates = useMemo(() => {
     if (!library) return []
@@ -187,6 +200,7 @@ export function CollectionSuggestion({
             <div className="suggestion-actions">
               <button className="ob-btn primary" onClick={() => void start()} disabled={busy}>
                 {busy ? <span className="spinner" /> : <ArrowRight />} {busy ? 'Adding…' : 'Start this collection'}
+                {!busy && !onStart && !!allowance?.coinCost && <CoinCost n={allowance.coinCost} />}
               </button>
               {candidates.length > 1 && (
                 <button className="ob-btn" onClick={another} disabled={busy}>

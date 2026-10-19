@@ -16,7 +16,7 @@
 // save requests, never lose data.
 import { localDay } from './features/automated-graph/engine'
 
-type Part = 'streak' | 'allowance' | 'library' | 'onboarding' | 'notifications'
+type Part = 'streak' | 'coins' | 'allowance' | 'library' | 'onboarding' | 'notifications'
 
 const SHARE_MS = 2_000
 /** Only the app's opening is worth a bootstrap; a first ask after this

@@ -1,0 +1,139 @@
+/* ── top bar: a coin and a number, next to the flame ── */
+.coin-wrap { position: relative; display: inline-flex; }
+
+.coin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: hsl(40 88% 68%);
+  font: 600 13px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.coin-badge:hover { background: var(--bg-hover); }
+.coin-badge-icon { filter: drop-shadow(0 1px 2px hsl(var(--soil-h) 50% 3% / 0.6)); }
+
+@media (max-width: 767px) {
+  .coin-badge { height: 42px; padding: 0 8px; font-size: 16px; }
+  .coin-badge-icon { width: 21px; height: 21px; }
+}
+
+.coin-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 900;
+  width: 236px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-modal);
+  box-shadow: var(--shadow-pop);
+  animation: coin-pop-in 160ms ease-out;
+}
+.coin-pop-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.coin-pop-total { font: 700 20px/1.1 var(--font-ui); color: hsl(40 88% 68%); font-variant-numeric: tabular-nums; }
+.coin-pop-sub { font-size: 12px; color: var(--text-faint); }
+.coin-pop-rows { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--divider); }
+.coin-pop-rows li { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); padding: 3px 0; }
+.coin-pop-n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.coin-pop-n.spent { color: var(--tag-text); }
+.coin-pop-foot { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-faint); }
+
+/* the price tag on a button that spends coins */
+.coin-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  padding: 2px 6px 2px 3px;
+  border-radius: 999px;
+  background: hsl(var(--soil-h) 40% 8% / 0.28);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes coin-pop-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── the burst: coins up out of the burrow ── */
+.coin-burst {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  pointer-events: none;
+  overflow: hidden;
+}
+.cb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+.cb-hole {
+  position: absolute;
+  width: 112px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 40%, var(--bg-deep) 45%, hsl(var(--soil-h) 20% 12%) 72%, transparent 74%);
+  box-shadow:
+    0 0 0 3px hsl(var(--soil-h) 18% 18%),
+    0 0 34px 8px var(--accent-glow);
+  opacity: 0;
+}
+
+.cb-ears {
+  position: absolute;
+  display: flex;
+  gap: 6px;
+  transform-origin: 50% 100%;
+  opacity: 0;
+}
+.cb-ears span {
+  display: block;
+  width: 14px;
+  height: 42px;
+  border-radius: 50% 50% 45% 45%;
+  background: hsl(30 22% 86%);
+  box-shadow: inset 0 0 0 3px hsl(30 22% 86%);
+  background-image: linear-gradient(var(--tag-text), var(--tag-text));
+  background-size: 4px 70%;
+  background-position: 50% 30%;
+  background-repeat: no-repeat;
+}
+.cb-ears span:first-child { transform: rotate(-12deg); }
+.cb-ears span:last-child { transform: rotate(12deg); }
+
+.cb-plus {
+  position: absolute;
+  font: 800 30px/1 var(--font-ui);
+  color: hsl(42 95% 66%);
+  text-shadow: 0 2px 0 hsl(22 75% 30%), 0 0 18px var(--accent-glow);
+  letter-spacing: -0.5px;
+  opacity: 0;
+}
+
+.coin-burst.spend .cb-plus { color: var(--tag-text); text-shadow: 0 2px 0 hsl(var(--blush-h) 40% 25%); }
+
+.cb-coin {
+  position: absolute;
+  left: -17px;
+  top: -17px;
+  perspective: 300px;
+  opacity: 0;
+}
+.cb-face { display: flex; filter: drop-shadow(0 3px 5px hsl(var(--soil-h) 50% 3% / 0.55)); }
+
+.cb-fleck {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(44 100% 72%);
+  box-shadow: 0 0 6px hsl(40 100% 60%);
+}

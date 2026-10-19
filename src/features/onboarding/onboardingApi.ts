@@ -7,6 +7,7 @@
 // doesn't happen when someone locks their phone.
 import { localDay } from '../automated-graph/engine'
 import { fromBootstrap } from '../../bootstrap'
+import { useCoins } from '../coins/coinStore'
 
 export interface OnboardingJob {
   topic: string
@@ -52,6 +53,8 @@ export async function startOnboarding(topic: string): Promise<OnboardingJob> {
   // other than the banner itself would go unnoticed until the tab next
   // regained focus. Tell it directly.
   announceServerWork()
+  // A new collection after the first costs coins (backend/src/usage/coins.ts).
+  useCoins.getState().check()
   return job
 }
 
@@ -205,6 +208,10 @@ export interface CollectionAllowance {
   limits: { active: number | null; perDay: number | null }
   activeCount: number
   startedToday: number
+  /** Coins the next collection costs (0 for a first one); absent from an
+   *  older server. */
+  coinCost?: number
+  coinBalance?: number
   /** Null when they may start one; otherwise why not, ready to show. */
   blocked: string | null
 }

@@ -24,6 +24,7 @@ import type { Note } from '../../vault/types'
 import { requestSpaceGrowth } from '../onboarding/onboardingApi'
 import { computeNextUp, configOf, isReviewedToday, localDay, spaceOfPath } from '../automated-graph/engine'
 import type { NextCard } from './InterestSwipe'
+import { useCoins } from '../coins/coinStore'
 
 export const MAX_CONFIDENCE = 5
 
@@ -160,6 +161,8 @@ export function useFinishNote(note: Note | undefined, touch: boolean): NoteFinis
       // A note finished for the first time is a streak day. Whether it was
       // the first time is the server's call; it is asked either way.
       useStreak.getState().goalAction()
+      // And, the first time, coins.
+      useCoins.getState().check()
       // Finishing a topic is exactly when the tree should grow: the server
       // tops it back up, using what they now know as the prerequisites and
       // what they just said about interest as the steer. Not awaited, and

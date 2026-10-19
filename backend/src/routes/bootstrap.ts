@@ -15,6 +15,7 @@
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { streakFor } from './account.js'
+import { coinsFor } from '../usage/coins.js'
 import { allowanceFor, statusFor } from './onboarding.js'
 import { notificationStatusFor } from './notifications.js'
 import { librarySpaces } from './vaults.js'
@@ -37,12 +38,13 @@ bootstrapRouter.get('/', asyncHandler(async (req, res) => {
   // connection (db/client.ts), so they would queue for it regardless.
   const library = await part('library', librarySpaces)
   if (!user) {
-    res.json({ library, streak: null, allowance: null, onboarding: null, notifications: null })
+    res.json({ library, streak: null, coins: null, allowance: null, onboarding: null, notifications: null })
     return
   }
   res.json({
     library,
     streak: day ? await part('streak', () => streakFor(user.id, day)) : null,
+    coins: await part('coins', () => coinsFor(user.id)),
     allowance: await part('allowance', () => allowanceFor(user, day ?? '')),
     onboarding: await part('onboarding', () => statusFor(user.id)),
     notifications: await part('notifications', () => notificationStatusFor(user.id)),

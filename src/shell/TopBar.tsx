@@ -15,6 +15,8 @@
 // read/edit toggle.
 import { StreakBadge } from '../features/streak/Streak'
 import { useStreakBoot } from '../features/streak/streakStore'
+import { CoinBadge, CoinBurst } from '../features/coins/Coins'
+import { useCoinsBoot } from '../features/coins/coinStore'
 import { useVault } from '../vault/vaultStore'
 import { ArrowLeft, ArrowRight, Search, Highlighter } from '../ui/icons'
 import { useHighlight } from '../features/highlight/highlightStore'
@@ -27,6 +29,7 @@ export function TopBar() {
   const note = view?.kind === 'note' ? s.getNote(view.path) : null
   const crumbs = note ? note.path.replace(/\.md$/i, '').split('/') : []
   useStreakBoot()
+  useCoinsBoot()
   const highlight = useHighlight()
   // Highlighting writes into the note, so only on the reader's own topic
   // notes — not the demo, the library, or a Next Up page.
@@ -66,6 +69,8 @@ export function TopBar() {
 
       <div className="topbar-right">
         <StreakBadge />
+        <CoinBadge />
+        <CoinBurst />
         {canHighlight && (
           <button
             className={'icon-btn' + (highlight.active ? ' is-on' : '')}

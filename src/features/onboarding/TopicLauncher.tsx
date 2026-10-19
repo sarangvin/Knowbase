@@ -14,6 +14,8 @@ import { useVault } from '../../vault/vaultStore'
 import { startOnboarding, fetchCollectionAllowance, type CollectionAllowance } from './onboardingApi'
 import { randomTopicPlaceholder } from './examples'
 import { Sparkles, ArrowRight } from '../../ui/icons'
+import { useCoins } from '../coins/coinStore'
+import { CoinCost } from '../coins/Coins'
 
 export function TopicLauncher({
   title,
@@ -38,9 +40,11 @@ export function TopicLauncher({
   const [allowance, setAllowance] = useState<CollectionAllowance | null>(null)
 
   const approved = !!user
+  const coinBalance = useCoins((s) => s.coins?.balance)
 
   // Re-read after every start, because starting one is exactly what uses
-  // the allowance up.
+  // the allowance up — and when the coin balance moves, which can be what
+  // decides it.
   useEffect(() => {
     if (!approved) return
     let cancelled = false
@@ -48,7 +52,7 @@ export function TopicLauncher({
     return () => {
       cancelled = true
     }
-  }, [approved, started])
+  }, [approved, started, coinBalance])
 
   // Generation spends the owner's model key, so the server refuses an
   // unapproved account. Saying so here beats letting them type a topic and
@@ -112,6 +116,7 @@ export function TopicLauncher({
         />
         <button className="ob-btn primary launcher-go" disabled={!topic.trim() || busy} onClick={() => void submit()}>
           {busy ? <span className="spinner" /> : <ArrowRight />} {busy ? 'Starting…' : 'Build it'}
+          {!busy && !!allowance?.coinCost && <CoinCost n={allowance.coinCost} />}
         </button>
       </div>
       {error && <div className="ob-error launcher-error">{error}</div>}
