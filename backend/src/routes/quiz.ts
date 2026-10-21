@@ -191,9 +191,10 @@ quizRouter.post('/answer', asyncHandler(async (req, res) => {
   const vaultId = await getOrCreatePersonalVaultId(userId)
   const confidence = await adjustConfidence(vaultId, q.notePath, correct ? 1 : -1)
 
-  // A right answer is worth coins; the new balance comes back with it so
-  // the reward plays the moment the answer is revealed, not a poll later.
-  const coins = correct ? await coinsFor(userId) : null
+  // Right answers are worth coins, paid when the quiz is completed: the
+  // answer that completes it brings the new balance back, so the reward can
+  // play on the results screen rather than after a poll.
+  const coins = completed ? await coinsFor(userId) : null
   res.json({ correct, answer: q.answer, score, completed, confidence, coins })
   // A finished quiz is a streak day.
   if (completed) waitUntil(maybeGraduate(userId, row.day))

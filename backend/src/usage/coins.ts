@@ -2,7 +2,8 @@
 //
 //   + every account starts with             25
 //   + finishing a note for the first time    3
-//   + each quiz question answered right      2  (wrong: 0)
+//   + each quiz question answered right      2  (wrong: 0), paid when the
+//                                               quiz is completed
 //   - starting a new collection             10
 //   - buying a streak freeze                50  (freeze_purchases)
 //
@@ -43,7 +44,7 @@ export interface Coins {
   /** What every account starts with: STARTING_COINS. */
   starting: number
   notes: number
-  /** Quiz questions answered right, all time. */
+  /** Quiz questions answered right, in completed quizzes. */
   correctAnswers: number
   /** Collections paid for with coins. */
   paidCollections: number
@@ -61,7 +62,7 @@ export async function coinsFor(userId: string): Promise<Coins> {
         WHERE user_id = ${userId} AND event_type = 'note_review'
           AND metadata->>'path' IS NOT NULL) AS notes,
       (SELECT coalesce(sum(score), 0)::int FROM quizzes
-        WHERE user_id = ${userId}) AS correct,
+        WHERE user_id = ${userId} AND completed_at IS NOT NULL) AS correct,
       (SELECT count(*)::int FROM collection_starts
         WHERE user_id = ${userId}) AS started,
       (SELECT count(*)::int FROM collection_starts c

@@ -10,14 +10,17 @@
 // the exercise — a retry until right measures persistence, not recall — and
 // it is enforced on the server, so reloading does not reset it.
 import { useStreak } from '../streak/streakStore'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { Carrot, Check, X, RotateCw } from '../../ui/icons'
 import { fetchToday, startToday, answerQuestion, type Quiz, type ConfidenceChange } from './quizApi'
-import { useCoins, centerOf } from '../coins/coinStore'
+import { useCoins, centerOf, type Coins } from '../coins/coinStore'
+import { CoinIcon } from '../coins/Coins'
 import './quiz.css'
 
 const PASS_MARK = 0.6
+/** What each right answer pays when the quiz is complete (backend/src/usage/coins.ts). */
+const COINS_PER_RIGHT = 2
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -49,6 +52,24 @@ export function QuizView() {
   // the answer is visible where the answer was given, rather than being a
   // number that quietly moved on another screen.
   const [moved, setMoved] = useState<Record<number, ConfidenceChange | null>>({})
+  // The coins a completed quiz paid, held until the results screen is up so
+  // they are minted from the score rather than from the last answer.
+  const pendingCoins = useRef<Coins | null>(null)
+  const scoreRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showResults || !pendingCoins.current) return
+    useCoins.getState().apply(pendingCoins.current, centerOf(scoreRef.current))
+    pendingCoins.current = null
+  }, [showResults])
+
+  // Left before asking for the results: the coins are theirs all the same.
+  useEffect(
+    () => () => {
+      if (pendingCoins.current) useCoins.getState().apply(pendingCoins.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -85,7 +106,7 @@ export function QuizView() {
     }
   }
 
-  const pick = async (choice: number, el?: HTMLElement) => {
+  const pick = async (choice: number) => {
     if (!quiz || busy) return
     const q = quiz.questions[at]
     if (!q || q.chosen != null) return
@@ -95,8 +116,8 @@ export function QuizView() {
       const r = await answerQuestion(at, choice)
       // The last answer completes the quiz, which is a streak day.
       if (r.completed) useStreak.getState().goalAction()
-      // A right answer is worth two coins, minted from the answer itself.
-      if (r.correct && r.coins) useCoins.getState().apply(r.coins, centerOf(el))
+      // Right answers pay out when the quiz is complete, on the results.
+      if (r.completed && r.coins) pendingCoins.current = r.coins
       setMoved((m) => ({ ...m, [at]: r.confidence }))
       // Patch in place so the answered state, the revealed key and the score
       // all come from the server's reply rather than from a local guess.
@@ -174,10 +195,15 @@ export function QuizView() {
     return (
       <Shell>
         <div className="quiz-done">
-          <div className={'quiz-score' + (ratio >= PASS_MARK ? ' is-good' : '')}>
+          <div ref={scoreRef} className={'quiz-score' + (ratio >= PASS_MARK ? ' is-good' : '')}>
             {quiz.score}
             <span className="quiz-score-of">/{quiz.total}</span>
           </div>
+          {quiz.score > 0 && (
+            <div className="quiz-coins">
+              <CoinIcon size={18} />+{quiz.score * COINS_PER_RIGHT} coins
+            </div>
+          )}
           <p className="quiz-done-line">
             {ratio === 1
               ? 'Every one. Nothing to revisit.'
@@ -248,7 +274,7 @@ export function QuizView() {
                   'quiz-option' + (isAnswer ? ' is-answer' : '') + (isWrongPick ? ' is-wrong' : '') + (isGolden ? ' is-golden' : '')
                 }
                 disabled={answered || busy}
-                onClick={(e) => void pick(i, e.currentTarget)}
+                onClick={() => void pick(i)}
               >
                 <span className="quiz-option-key">{String.fromCharCode(65 + i)}</span>
                 <span className="quiz-option-text">{opt}</span>
