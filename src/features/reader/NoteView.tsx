@@ -14,6 +14,7 @@ import { parseQuestions, questionsSection } from './questionsFormat'
 import { extractSection } from '../../vault/sections'
 import { FindSources } from './FindSources'
 import { HighlightBar } from '../highlight/HighlightBar'
+import { FinishHint } from './FinishHint'
 import { useHighlight } from '../highlight/highlightStore'
 import './noteview.css'
 
@@ -263,6 +264,8 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
           </span>
         </div>
       )}
+      {/* The first note they could finish: how to, once. */}
+      <FinishHint active={finisher.canFinish} touch={touch} />
     </div>
   )
 }

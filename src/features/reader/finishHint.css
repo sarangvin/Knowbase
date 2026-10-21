@@ -1,0 +1,140 @@
+/* The one-time "how to finish a note" card. */
+.fh-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: hsl(var(--soil-h) 30% 3% / 0.72);
+  animation: fh-fade 180ms ease-out;
+}
+.fh-card {
+  width: 100%;
+  max-width: 340px;
+  padding: 22px 22px 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg-modal);
+  text-align: center;
+  box-shadow: var(--shadow-modal);
+  animation: fh-rise 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+/* the demo: a small page on a stack, rocking right then left */
+.fh-demo {
+  position: relative;
+  height: 150px;
+  margin: 2px auto 16px;
+  width: 170px;
+}
+.fh-under,
+.fh-page {
+  position: absolute;
+  inset: 8px 22px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+}
+.fh-under {
+  background: var(--bg-hover);
+  transform: translateY(6px) scale(0.94);
+}
+.fh-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 14px;
+  background: var(--bg-elevated);
+  transform-origin: 50% 120%;
+}
+.fh-page.swipes { animation: fh-swipe 3.6s cubic-bezier(0.45, 0, 0.3, 1) 0.4s infinite; }
+.fh-line { display: block; height: 6px; border-radius: 3px; background: var(--border-strong); }
+.fh-line.w95 { width: 95%; }
+.fh-line.w90 { width: 90%; }
+.fh-line.w80 { width: 80%; }
+.fh-line.w60 { width: 60%; }
+.fh-line.w40 { width: 40%; }
+
+.fh-stamp {
+  position: absolute;
+  top: 14px;
+  padding: 3px 7px;
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  font: 800 10px/1 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--bg-elevated);
+  opacity: 0;
+}
+.fh-stamp.yes { left: 8px; color: var(--accent); transform: rotate(-11deg); animation: fh-yes 3.6s ease 0.4s infinite; }
+.fh-stamp.no { right: 8px; color: var(--text-muted); transform: rotate(11deg); animation: fh-no 3.6s ease 0.4s infinite; }
+
+.fh-button {
+  align-self: center;
+  margin-top: auto;
+  padding: 5px 10px;
+  border-radius: var(--radius-m);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font: 600 11px/1 var(--font-ui);
+  animation: fh-press 2.4s ease 0.6s infinite;
+}
+
+/* a fingertip that drags with the page */
+.fh-finger {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  background: hsl(30 22% 90% / 0.85);
+  box-shadow: 0 0 0 6px hsl(30 22% 90% / 0.16);
+  animation: fh-finger 3.6s cubic-bezier(0.45, 0, 0.3, 1) 0.4s infinite;
+  pointer-events: none;
+}
+
+.fh-title { font-size: 18px; font-weight: 700; color: var(--text-normal); margin-bottom: 6px; }
+.fh-line-text { margin: 0 0 6px; font-size: 14px; line-height: 1.45; color: var(--text-muted); }
+.fh-line-text strong { color: var(--text-normal); }
+.fh-sub { margin: 0 0 16px; font-size: 13px; line-height: 1.45; color: var(--text-faint); }
+.fh-ok { width: 100%; justify-content: center; }
+
+@keyframes fh-swipe {
+  0%, 8% { transform: translateX(0) rotate(0); }
+  28%, 34% { transform: translateX(46px) rotate(7deg); }
+  48%, 56% { transform: translateX(0) rotate(0); }
+  76%, 82% { transform: translateX(-46px) rotate(-7deg); }
+  96%, 100% { transform: translateX(0) rotate(0); }
+}
+@keyframes fh-finger {
+  0%, 8% { transform: translateX(0); opacity: 0.9; }
+  28%, 34% { transform: translateX(46px); opacity: 0.9; }
+  48%, 56% { transform: translateX(0); opacity: 0.9; }
+  76%, 82% { transform: translateX(-46px); opacity: 0.9; }
+  96%, 100% { transform: translateX(0); opacity: 0.9; }
+}
+@keyframes fh-yes {
+  0%, 14% { opacity: 0; }
+  26%, 38% { opacity: 1; }
+  48%, 100% { opacity: 0; }
+}
+@keyframes fh-no {
+  0%, 62% { opacity: 0; }
+  74%, 86% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+@keyframes fh-press {
+  0%, 60%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-glow); }
+  70% { transform: scale(0.94); box-shadow: 0 0 0 6px var(--accent-glow); }
+}
+@keyframes fh-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fh-rise { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fh-backdrop, .fh-card, .fh-page.swipes, .fh-finger, .fh-button { animation: none; }
+  .fh-stamp { animation: none; opacity: 1; }
+}

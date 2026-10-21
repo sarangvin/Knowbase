@@ -44,11 +44,7 @@
 .coin-pop-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .coin-pop-total { font: 700 20px/1.1 var(--font-ui); color: hsl(40 88% 68%); font-variant-numeric: tabular-nums; }
 .coin-pop-sub { font-size: 12px; color: var(--text-faint); }
-.coin-pop-rows { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--divider); }
-.coin-pop-rows li { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); padding: 3px 0; }
-.coin-pop-n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.coin-pop-n.spent { color: var(--tag-text); }
-.coin-pop-foot { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-faint); }
+.coin-pop-foot { margin: 0; padding-top: 10px; border-top: 1px solid var(--divider); font-size: 12px; line-height: 1.4; color: var(--text-faint); }
 
 /* the shop */
 .coin-shop { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--divider); }

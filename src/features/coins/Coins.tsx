@@ -127,36 +127,6 @@ export function CoinBadge() {
               <div className="coin-pop-sub">coins</div>
             </div>
           </div>
-          <ul className="coin-pop-rows">
-            {!!coins.starting && (
-              <li>
-                <span>Starting coins</span>
-                <span className="coin-pop-n">{coins.starting}</span>
-              </li>
-            )}
-            <li>
-              <span>New notes finished</span>
-              <span className="coin-pop-n">{coins.notes} × 3</span>
-            </li>
-            <li>
-              <span>Quiz answers right</span>
-              <span className="coin-pop-n">{coins.correctAnswers} × 2</span>
-            </li>
-            {coins.paidCollections > 0 && (
-              <li>
-                <span>Collections started</span>
-                <span className="coin-pop-n spent">−{coins.paidCollections} × 10</span>
-              </li>
-            )}
-            {!!coins.freezesBought && (
-              <li>
-                <span>Streak freezes bought</span>
-                <span className="coin-pop-n spent">
-                  −{coins.freezesBought} × {coins.freezeCost ?? 50}
-                </span>
-              </li>
-            )}
-          </ul>
           <p className="coin-pop-foot">
             {coins.nextCollectionCost === 0
               ? 'Your first collection is free. After that, each new one costs 10.'
