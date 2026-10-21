@@ -102,3 +102,43 @@
   vertical-align: 1px;
   cursor: help;
 }
+
+/* the info button by "New topics", and its popup */
+.dv-h-info { display: flex; align-items: center; gap: 6px; }
+.dv-info { position: relative; display: inline-flex; }
+.dv-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.dv-info-btn:hover,
+.dv-info-btn[aria-expanded='true'] { background: var(--bg-hover); color: var(--text-muted); }
+.dv-info-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -8px;
+  z-index: 50;
+  width: min(290px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-modal);
+  box-shadow: var(--shadow-pop);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.dv-info-pop ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; }
+.dv-info-pop strong { color: var(--text-normal); font-weight: 600; }
+.dv-info-pop p { margin: 8px 0 0; color: var(--text-faint); }

@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
+import { HelpCircle } from '../../ui/icons'
 import {
   computeNextUp,
   computeToday,
@@ -82,6 +84,54 @@ function ReviewTable({ rows, withSpace }: { rows: ReviewTopic[]; withSpace?: boo
   )
 }
 
+/**
+ * How this page works, in the few lines a reader needs — behind a button
+ * rather than written out under every collection. The long version (scores,
+ * weights, thresholds) was for tuning, not for reading.
+ */
+function NextUpInfo() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent | TouchEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    window.addEventListener('mousedown', close)
+    window.addEventListener('touchstart', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('touchstart', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  return (
+    <span className="dv-info" ref={ref}>
+      <button
+        className="dv-info-btn"
+        aria-label="How this works"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <HelpCircle width={15} height={15} />
+      </button>
+      {open && (
+        <div className="dv-info-pop" role="dialog" aria-label="How this works">
+          <ul>
+            <li><strong>Ready now</strong>: topics you can start, because you have read what they build on.</li>
+            <li>The ones that open up the most other topics come first.</li>
+            <li><strong>Locked</strong>: waiting on a topic you have not read yet.</li>
+            <li><strong>Review</strong>: topics you have finished, to come back to.</li>
+          </ul>
+          <p>Interested finishes a note; Not interested skips it. Either way, your answer decides what gets written next.</p>
+        </div>
+      )}
+    </span>
+  )
+}
+
 export function NextUp({ space }: { space: string }) {
   const index = useVault((s) => s.index)
   if (!index) return null
@@ -116,7 +166,10 @@ export function NextUp({ space }: { space: string }) {
         </p>
       )}
 
-      <h4 className="dv-h">New topics (ready now)</h4>
+      <h4 className="dv-h dv-h-info">
+        New topics (ready now)
+        <NextUpInfo />
+      </h4>
       {r.ranked.length ? (
         <table className="dv-table">
           <thead>

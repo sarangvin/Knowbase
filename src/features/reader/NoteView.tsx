@@ -11,7 +11,7 @@ import { Editor } from '../editor/Editor'
 import { MyNotes } from './MyNotes'
 import { Questions } from './Questions'
 import { parseQuestions, questionsSection } from './questionsFormat'
-import { extractSection } from '../../vault/sections'
+import { extractSection, removeSection } from '../../vault/sections'
 import { FindSources } from './FindSources'
 import { HighlightBar } from '../highlight/HighlightBar'
 import { FinishHint } from './FinishHint'
@@ -126,7 +126,18 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
 
   // Avoid showing the title twice: if the body opens with an H1 equal to the
   // note title (common in this vault), drop that leading H1 from the rendered body.
-  const body = stripLeadingTitle(note.body, note.title)
+  // Next Up pages were written with a long "How this works" section at the
+  // foot. What a reader needs from it now sits behind the info button by
+  // "New topics" (automated-graph/Dashboards.tsx), so the stored section is
+  // left out here — for every collection, without rewriting anyone's notes.
+  // Older ones also open with a line about the Dataview plugin, which this
+  // app renders natively; that goes too.
+  const body = /\/Next Up\.md$/i.test(note.path)
+    ? removeSection(stripLeadingTitle(note.body, note.title), 'How this works').replace(
+        /^Requires the Dataview plugin[^\n]*\n?/m,
+        '',
+      )
+    : stripLeadingTitle(note.body, note.title)
 
   // Three things in a topic note are components rather than markdown, and
   // each has to be spliced into the prose at the right offset:
@@ -257,10 +268,10 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
       {swipeable && (
         <div className="note-stamps" aria-hidden="true">
           <span className="note-stamp note-stamp-yes" style={{ opacity: Math.max(0, deck.lean) }}>
-            More like this
+            Interested
           </span>
           <span className="note-stamp note-stamp-no" style={{ opacity: Math.max(0, -deck.lean) }}>
-            Not for me
+            Not interested
           </span>
         </div>
       )}

@@ -29,3 +29,11 @@ export function replaceSection(raw: string, name: string, newContent: string): s
   const sep = raw.endsWith('\n') ? '\n' : '\n\n'
   return `${raw}${sep}## ${name}\n${body}`
 }
+
+/** Drop a `## Name` section, heading and all; the note unchanged if absent. */
+export function removeSection(raw: string, name: string): string {
+  const sec = extractSection(raw, name)
+  if (!sec) return raw
+  const heading = raw.lastIndexOf('##', sec.contentStart - 1)
+  return (raw.slice(0, heading).trimEnd() + '\n' + raw.slice(sec.contentEnd)).trimEnd() + '\n'
+}
