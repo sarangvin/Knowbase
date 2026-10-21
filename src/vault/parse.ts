@@ -186,3 +186,19 @@ export function setFrontmatterValue(raw: string, key: string, value: string | nu
 
   return raw.slice(0, m.index! ) + m[0].replace(block, next.join('\n')) + raw.slice(m.index! + m[0].length)
 }
+
+/**
+ * setFrontmatterValue, but adds the key at the end of the block when the note
+ * does not declare it yet. For flags the app itself introduces (`skipped`),
+ * which no existing note carries; everything the reader can edit goes
+ * through setFrontmatterValue, which never invents a key.
+ */
+export function upsertFrontmatterValue(raw: string, key: string, value: string | number): string {
+  const set = setFrontmatterValue(raw, key, value)
+  if (set !== raw) return set
+  const m = raw.match(FRONTMATTER_RE)
+  if (!m) return raw
+  const block = m[1]
+  if (new RegExp(`^${key}\\s*:`, 'im').test(block)) return raw // present, value unchanged
+  return raw.slice(0, m.index!) + m[0].replace(block, () => `${block.replace(/\n*$/, '')}\n${key}: ${value}`) + raw.slice(m.index! + m[0].length)
+}

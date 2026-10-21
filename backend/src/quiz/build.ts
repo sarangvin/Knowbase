@@ -17,6 +17,7 @@ import type { QuizQuestionRow } from '../db/schema.js'
 import { SPACE_ROOT, spaceOf, archivedSpaces } from '../vault/spaces.js'
 import { NOT_HIDDEN } from '../vault/hidden.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
+import { isSkippedNote } from '../vault/skipped.js'
 import { quizOf } from '../notes/study.js'
 import type { Rng } from '../util/seeded.js'
 
@@ -55,6 +56,8 @@ export async function collectCandidates(vaultId: string): Promise<Candidate[]> {
     // Reviewed only. `last_reviewed` is the same test the ranking and the
     // review control use, so "studied" means one thing across the app.
     if (!frontmatterValue(r.content, 'last_reviewed')) continue
+    // Marked "not interested": passed over, so not something to be tested on.
+    if (isSkippedNote(r.content)) continue
     for (const q of quizOf(r.content)) {
       out.push({ notePath: r.path, noteTitle: titleOf(r.path), question: q.stem, correct: q.correct, wrong: q.wrong })
     }

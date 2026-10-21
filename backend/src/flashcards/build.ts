@@ -12,6 +12,7 @@ import type { FlashcardRow } from '../db/schema.js'
 import { SPACE_ROOT, spaceOf, archivedSpaces } from '../vault/spaces.js'
 import { NOT_HIDDEN } from '../vault/hidden.js'
 import { frontmatterValue, frontmatterNumber } from '../vault/frontmatter.js'
+import { isSkippedNote } from '../vault/skipped.js'
 import { termsOf, type StudyTerm } from '../notes/study.js'
 import type { Rng } from '../util/seeded.js'
 import { limitsFor } from '../plans.js'
@@ -103,6 +104,8 @@ export async function collectSources(vaultId: string): Promise<NoteSource[]> {
     // control and the quiz use. Drilling a note nobody has read is testing
     // the generator.
     if (!frontmatterValue(r.content, 'last_reviewed')) continue
+    // Marked "not interested": passed over, so nothing to drill.
+    if (isSkippedNote(r.content)) continue
     // A note with no stored terms has nothing to deal. That is either a note
     // not yet filled in by the backfill, or one with no real terms in it.
     const terms = termsOf(r.content)

@@ -19,7 +19,7 @@
 import { useStreak } from '../streak/streakStore'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { setFrontmatterValue } from '../../vault/parse'
+import { setFrontmatterValue, upsertFrontmatterValue } from '../../vault/parse'
 import type { Note } from '../../vault/types'
 import { requestSpaceGrowth } from '../onboarding/onboardingApi'
 import { computeNextUp, configOf, isReviewedToday, localDay, spaceOfPath } from '../automated-graph/engine'
@@ -142,11 +142,21 @@ export function useFinishNote(note: Note | undefined, touch: boolean): NoteFinis
       // quiz answer or a flashcard may have moved its confidence.
       const current = getNote(path)
       if (!current) throw new Error('note not found')
+      // "Not interested" passes the note over rather than finishing it: it
+      // is dated (so what builds on it unlocks and the collection grows past
+      // it) and marked skipped, but earns no confidence, no streak day and no
+      // coins, and stays out of the quiz and flashcards — see isSkipped.
+      const skipping = interest <= NOT_INTERESTED
       const threshold = index && space ? configOf(index, space).confidence_threshold : 3
-      const confidence = Math.min(MAX_CONFIDENCE, currentConfidence(current.frontmatter) + 1)
+      const confidence = skipping
+        ? currentConfidence(current.frontmatter)
+        : Math.min(MAX_CONFIDENCE, currentConfidence(current.frontmatter) + 1)
       let raw = setFrontmatterValue(current.raw, 'last_reviewed', localDay())
       raw = setFrontmatterValue(raw, 'confidence', confidence)
       raw = setFrontmatterValue(raw, 'interest', interest)
+      // Written either way once present, so changing your mind later on a
+      // skipped note (finishing it as interested) makes it complete.
+      if (skipping || 'skipped' in current.frontmatter) raw = upsertFrontmatterValue(raw, 'skipped', skipping ? 'true' : 'false')
       // Status follows confidence. A review only ever adds, so this can only
       // flip a note up to "known" — but written as both directions anyway,
       // because a wrong quiz answer can have taken it down since the note
@@ -158,11 +168,13 @@ export function useFinishNote(note: Note | undefined, touch: boolean): NoteFinis
         raw = setFrontmatterValue(raw, 'status', 'frontier')
       }
       if (raw !== current.raw) await saveNote(path, raw)
-      // A note finished for the first time is a streak day. Whether it was
-      // the first time is the server's call; it is asked either way.
-      useStreak.getState().goalAction()
-      // And, the first time, coins.
-      useCoins.getState().check()
+      if (!skipping) {
+        // A note finished for the first time is a streak day. Whether it was
+        // the first time is the server's call; it is asked either way.
+        useStreak.getState().goalAction()
+        // And, the first time, coins.
+        useCoins.getState().check()
+      }
       // Finishing a topic is exactly when the tree should grow: the server
       // tops it back up, using what they now know as the prerequisites and
       // what they just said about interest as the steer. Not awaited, and

@@ -23,6 +23,7 @@ import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 import { NOT_HIDDEN } from '../vault/hidden.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
+import { isSkippedNote } from '../vault/skipped.js'
 import { SPACE_ROOT, spaceOf, normalizeTopic, getOrCreatePersonalVaultId, getGlobalVaultId, adoptSpaceInto, contributeToLibrary, archivedSpaces, setSpaceArchived, deleteSpace } from '../vault/spaces.js'
 
 export const vaultsRouter = Router()
@@ -221,7 +222,15 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
   // record of the moment that exists.
   const was = before ? frontmatterValue(before.content, 'last_reviewed') : null
   const now = frontmatterValue(content, 'last_reviewed')
-  if (now && /^\d/.test(now) && now !== was) {
+  // A note marked "not interested" is passed over, not finished: it is
+  // logged as a skip, which the streak and the coin balance do not count.
+  if (now && /^\d/.test(now) && now !== was && isSkippedNote(content)) {
+    void logUsageEvent({
+      userId: req.user!.id,
+      eventType: 'note_skip',
+      metadata: { path, space: spaceOf(path), day: now },
+    })
+  } else if (now && /^\d/.test(now) && now !== was) {
     const graduation = logUsageEvent({
       userId: req.user!.id,
       eventType: 'note_review',

@@ -35,7 +35,7 @@ import { Check, RotateCw } from '../../ui/icons'
 import { useScrollReview } from './useScrollReview'
 import { InterestSwipe } from './InterestSwipe'
 import { ReviewDialog, type ReviewScores } from './ReviewDialog'
-import { INTERESTED, MAX_CONFIDENCE, NOT_INTERESTED, currentConfidence, type NoteFinisher } from './useFinishNote'
+import { INTERESTED, NOT_INTERESTED, type NoteFinisher } from './useFinishNote'
 import './score.css'
 
 /** Ring plus glyph in one 36-unit box, so the whole thing scales with the
@@ -79,7 +79,6 @@ export function ReviewBar({
   const [scroller, setScroller] = useState<HTMLElement | null>(null)
   useEffect(() => setScroller(scrollRef.current), [scrollRef, note.path])
 
-  const conf = currentConfidence(note.frontmatter)
 
   // Held in a ref so the gesture's onComplete — attached once, outside
   // React's render cycle — never calls a stale copy of the write.
@@ -115,10 +114,7 @@ export function ReviewBar({
   // without this both controls would vanish mid-"Review complete".
   if (reviewedToday && !done) return null
 
-  const detail =
-    conf >= MAX_CONFIDENCE
-      ? 'Records today’s review, then asks how much you want more like this.'
-      : 'Adds one to confidence, then asks how much you want more like this.'
+  const detail = 'Then choose Interested to finish it, or Not interested to skip it.'
 
   const rawInterest = Number(note.frontmatter.interest)
   const initialInterest = Number.isFinite(rawInterest) ? Math.min(5, Math.max(1, Math.round(rawInterest))) : 3

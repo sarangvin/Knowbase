@@ -87,8 +87,8 @@ export function FinishHint({ active, touch }: { active: boolean; touch: boolean 
             <span className="fh-line w40" />
             {touch ? (
               <>
-                <span className="fh-stamp yes">More like this</span>
-                <span className="fh-stamp no">Not for me</span>
+                <span className="fh-stamp yes">Interested</span>
+                <span className="fh-stamp no">Not interested</span>
               </>
             ) : (
               <span className="fh-button">Mark reviewed</span>
@@ -101,19 +101,20 @@ export function FinishHint({ active, touch }: { active: boolean; touch: boolean 
           <>
             <div className="fh-title">Swipe to finish a note</div>
             <p className="fh-line-text">
-              When you have read it, swipe the note <strong>right</strong> if you want more like it, or{' '}
-              <strong>left</strong> if it is not for you.
+              When you have read it, swipe <strong>right</strong> if you are interested — that finishes it.
+              Swipe <strong>left</strong> if not, and it is skipped.
             </p>
           </>
         ) : (
           <>
             <div className="fh-title">Finish a note when you have read it</div>
             <p className="fh-line-text">
-              Press <strong>Mark reviewed</strong> at the end of the notes and say whether you want more like it.
+              Press <strong>Mark reviewed</strong> at the end of the notes, then <strong>Interested</strong> to
+              finish it or <strong>Not interested</strong> to skip it.
             </p>
           </>
         )}
-        <p className="fh-sub">That marks it done, and your next notes are written around what you are interested in.</p>
+        <p className="fh-sub">Your answers decide which notes get written next.</p>
 
         <button className="ob-btn primary fh-ok" onClick={close} autoFocus>
           Got it

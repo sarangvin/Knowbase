@@ -108,6 +108,18 @@ export function lastReviewedDay(fm: Record<string, unknown>): string | null {
   return null
 }
 
+/** A topic the reader marked "not interested": passed over, not finished.
+ *  It keeps its `last_reviewed` — that is what lets the topics built on it
+ *  unlock and the collection grow past it — but it is not complete: no
+ *  Review list, no quiz, no flashcards, no coins or streak day. Notes from
+ *  before the flag existed say the same thing with `interest: 1` (the swipe
+ *  left wrote exactly that). Mirrored on the server in vault/skipped.ts. */
+export function isSkipped(fm: Record<string, unknown>): boolean {
+  const v = fm.skipped
+  if (v === true || String(v).toLowerCase() === 'true') return true
+  return !!lastReviewedDay(fm) && num(fm.interest) > 0 && num(fm.interest) <= 1
+}
+
 export function isReviewedToday(fm: Record<string, unknown>): boolean {
   return lastReviewedDay(fm) === localDay()
 }
@@ -244,7 +256,7 @@ export function computeNextUp(index: VaultIndex, space: string): NextUpResult {
   // at all — not in the frontier, not here. Half-learned material falling
   // out of the system is the worst failure this page can have.
   const review: ReviewTopic[] = topics
-    .filter((p) => !!lastReviewedDay(p.frontmatter))
+    .filter((p) => !!lastReviewedDay(p.frontmatter) && !isSkipped(p.frontmatter))
     .map((p) => ({
       path: p.path,
       title: p.title,
@@ -340,7 +352,7 @@ export function computeFlashcards(index: VaultIndex, limit = 10): FlashcardCandi
   for (const space of listSpaces(index)) {
     for (const p of topicsOfSpace(index, space)) {
       const confidence = num(p.frontmatter.confidence)
-      if (confidence <= 0) continue
+      if (confidence <= 0 || isSkipped(p.frontmatter)) continue
       candidates.push({
         space,
         path: p.path,

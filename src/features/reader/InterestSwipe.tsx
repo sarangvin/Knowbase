@@ -156,10 +156,10 @@ export function InterestSwipe({
             {/* Stamped on the card, on the side it is moving away from, so
                 the word stays readable the whole way out. */}
             <span className="sw-stamp sw-stamp-yes" aria-hidden="true" style={{ opacity: Math.max(0, lean) }}>
-              More like this
+              Interested
             </span>
             <span className="sw-stamp sw-stamp-no" aria-hidden="true" style={{ opacity: Math.max(0, -lean) }}>
-              Not for me
+              Not interested
             </span>
             <div className="sw-card-eyebrow">This note</div>
             <h2 className="sw-title" id="sw-title">{title}</h2>
@@ -171,10 +171,10 @@ export function InterestSwipe({
 
         <div className="sw-foot">
           <button className="sw-btn sw-no" onClick={() => !locked && throwCard('left', -BUTTON_THROW_SPEED, -0.15, BUTTON_THROW_SLOWER)} disabled={locked}>
-            <X width={16} height={16} /> Not for me
+            <X width={16} height={16} /> Not interested
           </button>
           <button className="sw-btn sw-yes" onClick={() => !locked && throwCard('right', BUTTON_THROW_SPEED, -0.15, BUTTON_THROW_SLOWER)} disabled={locked}>
-            {busy ? <span className="spinner" /> : <Check width={16} height={16} />} More like this
+            {busy ? <span className="spinner" /> : <Check width={16} height={16} />} Interested
           </button>
         </div>
       </div>
