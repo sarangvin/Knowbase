@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { StreakCelebration } from './features/streak/Streak'
+import { StreakCelebration, FreezeNotice } from './features/streak/Streak'
 import { NotificationPrompt } from './features/settings/NotificationPrompt'
 import { useVault } from './vault/vaultStore'
 import { useKeybindings } from './ui/useKeybindings'
@@ -170,6 +170,7 @@ export default function App() {
       <CommandPalette />
       <QuickSwitcher />
       <StreakCelebration />
+      <FreezeNotice />
       <NotificationPrompt />
     </div>
   )

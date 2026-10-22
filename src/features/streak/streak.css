@@ -199,3 +199,11 @@
     animation: none;
   }
 }
+
+/* The freeze notice: the streak card, in winter colours. */
+.freeze-card .freeze-icon,
+.streak-card:not(.extending) .freeze-icon svg { color: var(--streak-ice); stroke: var(--streak-ice); fill: var(--streak-ice-soft); }
+.freeze-title { font-size: 22px; font-weight: 700; margin: 6px 0 2px; }
+.freeze-left { justify-content: center; font-size: 14px; margin-top: 4px; }
+.freeze-left .held { color: var(--streak-ice); }
+.freeze-hint { color: var(--text-faint); font-size: 13px; margin: 8px 0 16px; text-align: center; }

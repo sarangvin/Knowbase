@@ -145,3 +145,71 @@ function Card({ c, onClose }: { c: Celebration; onClose: () => void }) {
     </div>
   )
 }
+
+function dayName(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { weekday: 'long', timeZone: 'UTC' })
+}
+
+/**
+ * Told once, the next time the app opens after a freeze was spent: which day
+ * it covered, that the streak is still going, and how many are left. A
+ * freeze working silently is a safety net nobody knows is there — and the
+ * reader who has just used their last one is the one who most needs to know.
+ */
+export function FreezeNotice() {
+  const notice = useStreak((s) => s.freezeNotice)
+  const dismiss = useStreak((s) => s.dismissFreeze)
+  const celebration = useStreak((s) => s.celebration)
+
+  useEffect(() => {
+    if (!notice) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'Enter') dismiss()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [notice, dismiss])
+
+  // One card at a time: the celebration first if both are due.
+  if (!notice || celebration) return null
+  const { days, remaining, max, streakDays } = notice
+  const missed =
+    days.length === 1 ? dayName(days[0]) : `${days.slice(0, -1).map(dayName).join(', ')} and ${dayName(days[days.length - 1])}`
+  const used = days.length === 1 ? 'A streak freeze' : `${days.length} streak freezes`
+
+  return (
+    <div className="streak-backdrop" onClick={dismiss}>
+      <div className="streak-card freeze-card" role="dialog" aria-label="Streak freeze used" onClick={(e) => e.stopPropagation()}>
+        <div className="streak-flame freeze-icon">
+          <Snowflake width={52} height={52} />
+        </div>
+        <div className="freeze-title">{used} used</div>
+        <p className="streak-line">
+          You missed {missed}, so {days.length === 1 ? 'a freeze' : 'your freezes'} kept your
+          {streakDays > 0 ? ` ${streakDays}-day` : ''} streak going.
+        </p>
+
+        <div className="streak-freezes freeze-left">
+          {Array.from({ length: max }, (_, i) => (
+            <Snowflake key={i} width={18} height={18} className={i < remaining ? 'held' : 'spent'} />
+          ))}
+          <span>
+            {remaining} of {max} freezes left
+          </span>
+        </div>
+
+        <p className="freeze-hint">
+          {remaining === 0
+            ? 'None left — miss another day and the streak starts over. Keep it for 7 days to earn one back.'
+            : remaining < max
+              ? 'Keep your streak for 7 days to earn one back.'
+              : 'You’re back to a full set.'}
+        </p>
+
+        <button className="ob-btn primary streak-continue" onClick={dismiss} autoFocus>
+          Got it
+        </button>
+      </div>
+    </div>
+  )
+}

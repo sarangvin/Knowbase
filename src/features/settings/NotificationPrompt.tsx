@@ -16,8 +16,8 @@ type Step = 'ask' | 'working' | 'on' | 'declined' | 'error'
 
 export function NotificationPrompt() {
   const user = useVault((s) => s.user)
-  // Never on top of the streak card; wait for it to be dismissed.
-  const celebrating = useStreak((s) => s.celebration != null)
+  // Never on top of the streak card or the freeze notice; wait for them.
+  const celebrating = useStreak((s) => s.celebration != null || s.freezeNotice != null)
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [step, setStep] = useState<Step | null>(null)
   const [error, setError] = useState<string | null>(null)

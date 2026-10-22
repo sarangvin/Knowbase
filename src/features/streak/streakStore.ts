@@ -48,9 +48,46 @@ async function fetchStreak(): Promise<StreakState | null> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** A freeze that was spent while the reader was away: the day it covered,
+ *  and what is left. */
+export interface FreezeNotice {
+  days: string[]
+  remaining: number
+  max: number
+  streakDays: number
+}
+
+// Which frozen days this reader has already been told about, so a freeze is
+// announced once, the first time the app opens after it was spent — not on
+// every visit for the rest of the streak. Per device and per account, like
+// the other small things this app remembers; wrapped, because storage can
+// throw, and losing it costs one repeated popup, not an error.
+const FREEZE_SEEN_KEY = 'kb:freezes-seen'
+
+function seenFrozen(userId: string): string[] {
+  try {
+    const raw = localStorage.getItem(`${FREEZE_SEEN_KEY}:${userId}`)
+    return raw ? (JSON.parse(raw) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+function markFrozenSeen(userId: string, days: string[]): void {
+  try {
+    const all = [...new Set([...seenFrozen(userId), ...days])].sort().slice(-60)
+    localStorage.setItem(`${FREEZE_SEEN_KEY}:${userId}`, JSON.stringify(all))
+  } catch {
+    // Told again next visit; nothing else depends on it.
+  }
+}
+
 interface Store {
   streak: StreakState | null
   celebration: Celebration | null
+  /** Set when a load finds a freeze spent since the reader last saw one. */
+  freezeNotice: FreezeNotice | null
+  dismissFreeze: () => void
   /** Set when a check made this account graduate, so the shell can refresh
    *  the user (and with it the limits it shows). */
   graduated: boolean
@@ -64,11 +101,21 @@ let checking = false
 export const useStreak = create<Store>((set, get) => ({
   streak: null,
   celebration: null,
+  freezeNotice: null,
   graduated: false,
 
   load: async () => {
     const s = (await fromBootstrap<StreakState>('streak')) ?? (await fetchStreak())
-    if (s) set({ streak: s, graduated: get().graduated || s.justGraduated })
+    if (!s) return
+    set({ streak: s, graduated: get().graduated || s.justGraduated })
+    // A freeze spent on a day they missed: tell them, once, and say what is left.
+    const userId = useVault.getState().user?.id
+    if (!userId || get().freezeNotice) return
+    const seen = new Set(seenFrozen(userId))
+    const fresh = (s.frozen ?? []).filter((d) => !seen.has(d))
+    if (fresh.length) {
+      set({ freezeNotice: { days: fresh, remaining: s.freezes, max: s.maxFreezes, streakDays: s.days } })
+    }
   },
 
   /**
@@ -108,6 +155,13 @@ export const useStreak = create<Store>((set, get) => ({
   },
 
   dismiss: () => set({ celebration: null }),
+
+  dismissFreeze: () => {
+    const n = get().freezeNotice
+    const userId = useVault.getState().user?.id
+    if (n && userId) markFrozenSeen(userId, n.days)
+    set({ freezeNotice: null })
+  },
 }))
 
 /** Fetches the streak once there is a user, and refreshes the user when a
