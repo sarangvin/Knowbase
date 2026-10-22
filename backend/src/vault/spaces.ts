@@ -8,6 +8,7 @@ import { and, eq, like, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes, vaults, draftQueue, flashcardReviews, onboardingJobs } from '../db/schema.js'
 import { frontmatterValue, setFrontmatterValue } from './frontmatter.js'
+import { firePixel } from '../usage/pixel.js'
 
 export const SPACE_ROOT = 'Automated Graph/'
 
@@ -41,6 +42,7 @@ export async function getOrCreatePersonalVaultId(userId: string): Promise<string
     .insert(vaults)
     .values({ ownerUserId: userId, kind: 'personal', name: 'My Vault' })
     .returning({ id: vaults.id })
+  firePixel('vault_created')
   return row.id
 }
 

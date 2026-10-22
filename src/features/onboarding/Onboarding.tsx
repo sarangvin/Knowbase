@@ -15,6 +15,7 @@ import { startOnboarding } from './onboardingApi'
 import { randomTopicPlaceholder } from './examples'
 import { CollectionSuggestion } from './CollectionSuggestion'
 import { RabbitSolid, Eye, Cloud, Pencil, ArrowRight, Sparkles, User } from '../../ui/icons'
+import { pixel } from '../../pixel'
 import './onboarding.css'
 
 export function Onboarding() {
@@ -49,6 +50,7 @@ export function Onboarding() {
     setPendingTopic(t)
 
     if (user == null) {
+      pixel('signup_click')
       loginWithGoogle() // full-page redirect; the topic is waiting when we return
       return
     }
@@ -88,6 +90,15 @@ export function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
+  // Once per time the landing screen is actually shown — not while it is
+  // still a spinner, which would count the boot path rather than people.
+  const viewed = useRef(false)
+  useEffect(() => {
+    if (viewed.current || status === 'loading') return
+    viewed.current = true
+    pixel(user == null ? 'landing_view' : 'landing_view_signed_in')
+  }, [status, user])
+
   // Every hook is above this line, deliberately. An early return placed
   // before a useRef/useEffect is a hook-order violation that only shows up
   // once the component renders in both states — which here meant the whole
@@ -116,6 +127,7 @@ export function Onboarding() {
   // the box would start generating on arrival for someone who only wanted
   // to get back in.
   const logIn = () => {
+    pixel('login_click')
     clearPendingTopic()
     loginWithGoogle()
   }

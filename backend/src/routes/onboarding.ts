@@ -13,6 +13,7 @@ import { db } from '../db/client.js'
 import { onboardingJobs } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
+import { firePixel } from '../usage/pixel.js'
 import { runOnboarding } from '../onboarding/run.js'
 import { growSpace, MAX_UNREVIEWED } from '../onboarding/grow.js'
 import { MAX_ONBOARDING_ATTEMPTS } from '../onboarding/run.js'
@@ -324,6 +325,7 @@ onboardingRouter.post('/start', asyncHandler(async (req, res) => {
   await recordCollectionStart(userId, raw, day ?? new Date().toISOString().slice(0, 10))
 
   res.status(202).json({ job: await currentJob(userId) })
+  firePixel('onboarding_start')
 
   waitUntil(runOnboarding(userId, raw))
 }))

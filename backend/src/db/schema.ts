@@ -512,3 +512,21 @@ export const functionInstances = pgTable(
   },
   (t) => [index('function_instances_started_idx').on(t.startedAt)],
 )
+
+/**
+ * Anonymous funnel counters: one row per checkpoint per hour, holding only a
+ * count. Deliberately no user id, IP or anything else about who — the point
+ * is to see where people drop off (above all, either side of Google sign-in,
+ * where half the funnel has no account to attach a row to) without keeping a
+ * per-person trail. See usage/pixel.ts.
+ */
+export const pixels = pgTable(
+  'pixels',
+  {
+    /** Start of the hour, UTC. */
+    hour: timestamp('hour', { withTimezone: true }).notNull(),
+    name: text('name').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [uniqueIndex('pixels_hour_name_unique').on(t.hour, t.name)],
+)

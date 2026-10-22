@@ -33,6 +33,7 @@ import {
   setSpaceArchived,
 } from '../vault/spaces.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { firePixel } from '../usage/pixel.js'
 import { enqueueDrafts } from './queue.js'
 import { growSpace } from './grow.js'
 
@@ -56,6 +57,8 @@ async function patchJob(userId: string, topic: string, patch: JobPatch): Promise
     .update(onboardingJobs)
     .set({ ...patch, updatedAt: new Date() })
     .where(and(eq(onboardingJobs.userId, userId), eq(onboardingJobs.topic, topic)))
+  if (patch.status === 'ready') firePixel('onboarding_ready')
+  else if (patch.status === 'failed') firePixel('onboarding_failed')
 }
 
 /** The sentence every placeholder body carries. Kept in step with

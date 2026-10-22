@@ -17,6 +17,7 @@ import { quizzes } from '../db/schema.js'
 import type { QuizQuestionRow } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
+import { firePixel } from '../usage/pixel.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectCandidates, pickQuestions, buildQuestions, QUIZ_LENGTH } from '../quiz/build.js'
 import { adjustConfidence } from '../vault/confidence.js'
@@ -197,5 +198,8 @@ quizRouter.post('/answer', asyncHandler(async (req, res) => {
   const coins = completed ? await coinsFor(userId) : null
   res.json({ correct, answer: q.answer, score, completed, confidence, coins })
   // A finished quiz is a streak day.
-  if (completed) waitUntil(maybeGraduate(userId, row.day))
+  if (completed) {
+    firePixel('quiz_completed')
+    waitUntil(maybeGraduate(userId, row.day))
+  }
 }))

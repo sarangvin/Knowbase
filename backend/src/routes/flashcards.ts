@@ -15,6 +15,7 @@ import { flashcardDecks } from '../db/schema.js'
 import type { FlashcardRow } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
+import { firePixel } from '../usage/pixel.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectSources, pickSources, termPool, dealDeck, cardsPerDay, NOTES_PER_DECK } from '../flashcards/build.js'
 import { tierOf } from '../plans.js'
@@ -196,7 +197,10 @@ flashcardsRouter.post('/turn', asyncHandler(async (req, res) => {
   })
   // The last card turned completes the deck, and a completed deck is a
   // streak day.
-  if (!already && cards.every((c) => c.turnedAt != null)) waitUntil(maybeGraduate(userId, day))
+  if (!already && cards.every((c) => c.turnedAt != null)) {
+    firePixel('flashcards_completed')
+    waitUntil(maybeGraduate(userId, day))
+  }
 }))
 
 /** Bookmark a card, or take the bookmark off.

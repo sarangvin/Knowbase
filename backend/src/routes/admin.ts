@@ -340,6 +340,23 @@ adminRouter.get('/completions', asyncHandler(async (_req, res) => {
 }))
 
 /**
+ * Funnel checkpoints (usage/pixel.ts): anonymous per-hour counters, summed
+ * over the last 24 hours and the 24 before them for comparison. Hours are
+ * whole buckets, so "last 24 hours" is the current hour plus the 23 before it.
+ */
+adminRouter.get('/pixels', asyncHandler(async (_req, res) => {
+  const rows = (await db.execute(sql`
+    SELECT name,
+           coalesce(sum(count) FILTER (WHERE hour >  date_trunc('hour', now()) - interval '24 hours'), 0)::int AS last_24h,
+           coalesce(sum(count) FILTER (WHERE hour <= date_trunc('hour', now()) - interval '24 hours'), 0)::int AS prev_24h
+    FROM pixels
+    WHERE hour > date_trunc('hour', now()) - interval '48 hours'
+    GROUP BY name
+  `)).rows
+  res.json({ rows })
+}))
+
+/**
  * Cold starts: one row per API function instance (usage/instances.ts).
  *
  * Boot CPU is what a cold start costs; total CPU is everything that instance

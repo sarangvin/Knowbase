@@ -22,10 +22,12 @@ import {
   type AdminCompletionsResponse,
   fetchInstances,
   type AdminInstancesResponse,
+  fetchPixels,
+  type AdminPixelsResponse,
 } from './api'
 import './admin.css'
 
-type Tab = 'users' | 'signins' | 'spaces' | 'usage' | 'queue' | 'completions' | 'instances'
+type Tab = 'users' | 'signins' | 'spaces' | 'usage' | 'queue' | 'completions' | 'instances' | 'funnel'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -521,11 +523,113 @@ function InstancesPanel({ data, loading }: { data: AdminInstancesResponse | null
   )
 }
 
+/** The sign-up funnel, step by step. "From prev" is each step against the
+ *  one above it, so the Google drop-off is the row where it falls. Counts are
+ *  events, not people — the counters store no one — but the steps after
+ *  sign-in mostly happen once per person anyway. */
+const FUNNEL: { name: string; label: string }[] = [
+  { name: 'landing_view', label: 'Landing page opened (signed out)' },
+  { name: 'signup_click', label: 'Clicked "Sign up" → sent to Google' },
+  { name: 'oauth_new_account', label: 'Back from Google, new account' },
+  { name: 'onboarding_start', label: 'Collection started' },
+  { name: 'onboarding_ready', label: 'Collection ready (onboarded)' },
+  { name: 'note_completed', label: 'Note finished' },
+]
+
+const OTHER: { name: string; label: string }[] = [
+  { name: 'landing_view_signed_in', label: 'Landing page opened (signed in)' },
+  { name: 'login_click', label: 'Clicked "Log in" → sent to Google' },
+  { name: 'oauth_returning', label: 'Back from Google, existing account' },
+  { name: 'oauth_failed', label: 'Google sign-in failed or cancelled' },
+  { name: 'vault_created', label: 'Vault created' },
+  { name: 'onboarding_failed', label: 'Collection failed' },
+  { name: 'quiz_completed', label: 'Quiz completed' },
+  { name: 'flashcards_completed', label: 'Flashcard deck completed' },
+  { name: 'note_not_interested', label: 'Note marked Not interested' },
+  { name: 'note_swipe_left', label: '…of which by swiping left' },
+]
+
+function FunnelPanel({ data, loading }: { data: AdminPixelsResponse | null; loading: boolean }) {
+  if (loading && !data) return <div className="admin-dim">Loading…</div>
+  if (!data) return null
+
+  const by = new Map(data.rows.map((r) => [r.name, r]))
+  const n = (name: string) => by.get(name)?.last_24h ?? 0
+  const prev = (name: string) => by.get(name)?.prev_24h ?? 0
+  const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—')
+
+  const clicks = n('signup_click') + n('login_click')
+  const returned = n('oauth_new_account') + n('oauth_returning')
+
+  return (
+    <>
+      <p className="admin-dim">
+        Anonymous counters — a name and a count per hour, nothing about who. Last 24 hours,
+        with the 24 before them alongside.
+      </p>
+      <p>
+        Google round trip: <strong>{clicks}</strong> sent to Google, <strong>{returned}</strong> came
+        back signed in ({pct(returned, clicks)}), <strong>{n('oauth_failed')}</strong> failed or
+        cancelled.
+      </p>
+
+      <h3 className="admin-subhead">Sign-up funnel</h3>
+      <div className="admin-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Step</th>
+              <th>Last 24h</th>
+              <th>From prev</th>
+              <th>From top</th>
+              <th>Prev 24h</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FUNNEL.map((s, i) => (
+              <tr key={s.name}>
+                <td title={s.name}>{s.label}</td>
+                <td><strong>{n(s.name)}</strong></td>
+                <td>{i === 0 ? '—' : pct(n(s.name), n(FUNNEL[i - 1].name))}</td>
+                <td>{i === 0 ? '—' : pct(n(s.name), n(FUNNEL[0].name))}</td>
+                <td className="admin-dim">{prev(s.name)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 className="admin-subhead">Other checkpoints</h3>
+      <div className="admin-scroll">
+        <table className="admin-table admin-table-compact">
+          <thead>
+            <tr>
+              <th>Checkpoint</th>
+              <th>Last 24h</th>
+              <th>Prev 24h</th>
+            </tr>
+          </thead>
+          <tbody>
+            {OTHER.map((s) => (
+              <tr key={s.name}>
+                <td title={s.name}>{s.label}</td>
+                <td><strong>{n(s.name)}</strong></td>
+                <td className="admin-dim">{prev(s.name)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 export function AdminApp() {
   const [authState, setAuthState] = useState<'checking' | 'denied' | 'ok'>('checking')
   const [tab, setTab] = useState<Tab>('users')
   const [completions, setCompletions] = useState<AdminCompletionsResponse | null>(null)
   const [instances, setInstances] = useState<AdminInstancesResponse | null>(null)
+  const [pixels, setPixels] = useState<AdminPixelsResponse | null>(null)
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState<AdminUserRow[]>([])
   const [signins, setSignins] = useState<AdminSigninRow[]>([])
@@ -581,6 +685,11 @@ export function AdminApp() {
         ? fetchUsage().then((data) => {
             setUsage(data)
             setTotal(data.models.length)
+          })
+        : tab === 'funnel'
+        ? fetchPixels().then((data) => {
+            setPixels(data)
+            setTotal(data.rows.length)
           })
         : tab === 'instances'
         ? fetchInstances().then((data) => {
@@ -790,11 +899,21 @@ export function AdminApp() {
         >
           Cold starts
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'funnel'}
+          className={`admin-tab${tab === 'funnel' ? ' admin-tab-active' : ''}`}
+          onClick={() => setTab('funnel')}
+        >
+          Funnel
+        </button>
       </div>
 
       {error && <div className="admin-error">{error}</div>}
 
-      {tab === 'instances' ? (
+      {tab === 'funnel' ? (
+        <FunnelPanel data={pixels} loading={loading} />
+      ) : tab === 'instances' ? (
         <InstancesPanel data={instances} loading={loading} />
       ) : tab === 'completions' ? (
         <CompletionsPanel data={completions} loading={loading} />
@@ -1097,7 +1216,7 @@ export function AdminApp() {
       {/* /spaces returns every row at once — it is one row per space, not per
           note, so it stays small. Showing a pager there would imply pages
           that do not exist. */}
-      {tab !== 'spaces' && tab !== 'queue' && tab !== 'completions' && (
+      {tab !== 'spaces' && tab !== 'queue' && tab !== 'completions' && tab !== 'funnel' && (
         <div className="admin-pager">
           <button className="admin-btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
           <span className="admin-dim">Page {page} / {pageCount}</span>

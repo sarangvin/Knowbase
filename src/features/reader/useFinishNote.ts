@@ -25,6 +25,7 @@ import { requestSpaceGrowth } from '../onboarding/onboardingApi'
 import { computeNextUp, configOf, isReviewedToday, localDay, spaceOfPath } from '../automated-graph/engine'
 import type { NextCard } from './InterestSwipe'
 import { useCoins } from '../coins/coinStore'
+import { pixel } from '../../pixel'
 
 export const MAX_CONFIDENCE = 5
 
@@ -168,6 +169,7 @@ export function useFinishNote(note: Note | undefined, touch: boolean): NoteFinis
         raw = setFrontmatterValue(raw, 'status', 'frontier')
       }
       if (raw !== current.raw) await saveNote(path, raw)
+      if (skipping && opts.swiped) pixel('note_swipe_left')
       if (!skipping) {
         // A note finished for the first time is a streak day. Whether it was
         // the first time is the server's call; it is asked either way.

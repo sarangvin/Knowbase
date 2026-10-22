@@ -257,6 +257,14 @@ export interface AdminInstancesResponse {
   recent: AdminInstanceRow[]
 }
 
+export interface AdminPixelsResponse {
+  rows: { name: string; last_24h: number; prev_24h: number }[]
+}
+
+export function fetchPixels(): Promise<AdminPixelsResponse> {
+  return api('/api/admin/pixels')
+}
+
 export function fetchInstances(): Promise<AdminInstancesResponse> {
   return api('/api/admin/instances')
 }

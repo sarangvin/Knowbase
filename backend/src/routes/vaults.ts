@@ -21,6 +21,7 @@ import { requireAuth, requireOwner } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { firePixel } from '../usage/pixel.js'
 import { NOT_HIDDEN } from '../vault/hidden.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
 import { isSkippedNote } from '../vault/skipped.js'
@@ -225,12 +226,14 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
   // A note marked "not interested" is passed over, not finished: it is
   // logged as a skip, which the streak and the coin balance do not count.
   if (now && /^\d/.test(now) && now !== was && isSkippedNote(content)) {
+    firePixel('note_not_interested')
     void logUsageEvent({
       userId: req.user!.id,
       eventType: 'note_skip',
       metadata: { path, space: spaceOf(path), day: now },
     })
   } else if (now && /^\d/.test(now) && now !== was) {
+    firePixel('note_completed')
     const graduation = logUsageEvent({
       userId: req.user!.id,
       eventType: 'note_review',

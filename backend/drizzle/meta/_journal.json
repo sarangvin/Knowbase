@@ -169,6 +169,13 @@
       "when": 1792427584933,
       "tag": "0023_freeze_purchases",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792667714779,
+      "tag": "0024_pixels",
+      "breakpoints": true
     }
   ]
 }

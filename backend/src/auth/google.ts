@@ -8,6 +8,7 @@ import { db } from '../db/client.js'
 import { users } from '../db/schema.js'
 import { createSession, setSessionCookie } from './session.js'
 import { logUsageEvent } from '../usage/logEvent.js'
+import { firePixel } from '../usage/pixel.js'
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -131,6 +132,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
 
   const existing = await db.select().from(users).where(eq(users.googleSub, profile.sub)).limit(1)
   let userId: string
+  firePixel(existing[0] ? 'oauth_returning' : 'oauth_new_account')
   if (existing[0]) {
     userId = existing[0].id
     await db

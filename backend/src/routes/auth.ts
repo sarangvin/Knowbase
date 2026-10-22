@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { googleAuthStart, googleAuthCallback } from '../auth/google.js'
 import { clearSessionCookie, destroySession, requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
+import { firePixel } from '../usage/pixel.js'
 import { db } from '../db/client.js'
 import { users } from '../db/schema.js'
 import { eq, isNull, and } from 'drizzle-orm'
@@ -10,10 +11,17 @@ export const authRouter = Router()
 
 authRouter.get('/google/start', googleAuthStart)
 authRouter.get('/google/callback', (req, res) => {
-  googleAuthCallback(req, res).catch((err) => {
-    console.error('OAuth callback failed', err)
-    res.status(500).send('Sign-in failed')
-  })
+  googleAuthCallback(req, res)
+    .then(() => {
+      // Every early exit in the callback (cancelled at Google, bad state,
+      // profile fetch failed) answers with an error status rather than throwing.
+      if (res.statusCode >= 400) firePixel('oauth_failed')
+    })
+    .catch((err) => {
+      console.error('OAuth callback failed', err)
+      firePixel('oauth_failed')
+      res.status(500).send('Sign-in failed')
+    })
 })
 
 authRouter.get('/me', (req, res) => {

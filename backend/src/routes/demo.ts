@@ -33,7 +33,7 @@ const WINDOW_MS = 60_000
 const MAX_PER_WINDOW = 10
 const hits = new Map<string, { windowStart: number; count: number }>()
 
-function rateLimited(ip: string): boolean {
+export function rateLimited(ip: string): boolean {
   const now = Date.now()
   const entry = hits.get(ip)
   if (!entry || now - entry.windowStart > WINDOW_MS) {
