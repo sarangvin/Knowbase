@@ -26,6 +26,8 @@ import { computeNextUp, configOf, isReviewedToday, localDay, spaceOfPath } from 
 import type { NextCard } from './InterestSwipe'
 import { useCoins } from '../coins/coinStore'
 import { pixel } from '../../pixel'
+import type { FinishVia } from '../../vault/source'
+import { useSwipeUndo } from './swipeUndoStore'
 
 export const MAX_CONFIDENCE = 5
 
@@ -78,13 +80,22 @@ export interface NoteFinisher {
   /** Where finishing on a phone sends you: Next Up's own pick. What the card
    *  and the note reveal underneath themselves. Touch only. */
   next: NextCard | null
-  /** Save it. `swiped` finishes land on `next`; the desktop form goes back
-   *  to Next Up as it always did. Resolves true once saved. */
-  finish: (interest: number, opts: { swiped: boolean }) => Promise<boolean>
+  /** Save it. `swiped` finishes land on `next` and can be undone for a moment;
+   *  the desktop form goes back to Next Up as it always did. `via` says which
+   *  control it was, for telling a thrown note from the finish card. Resolves
+   *  true once saved. */
+  finish: (interest: number, opts: { swiped: boolean; via: FinishVia }) => Promise<boolean>
   clearError: () => void
 }
 
-export function useFinishNote(note: Note | undefined, touch: boolean): NoteFinisher {
+/** How much of the note the reader had seen when they finished it. */
+export interface ReadingStats {
+  msOnNote: number
+  scrollDepth: number
+  scrollTop: number
+}
+
+export function useFinishNote(note: Note | undefined, touch: boolean, readingStats: () => ReadingStats): NoteFinisher {
   const saveNote = useVault((s) => s.saveNote)
   const getNote = useVault((s) => s.getNote)
   const openNote = useVault((s) => s.openNote)
@@ -133,7 +144,7 @@ export function useFinishNote(note: Note | undefined, touch: boolean): NoteFinis
   }, [path])
   useEffect(() => () => void (holdRef.current && clearTimeout(holdRef.current)), [])
 
-  const finish = async (interest: number, opts: { swiped: boolean }): Promise<boolean> => {
+  const finish = async (interest: number, opts: { swiped: boolean; via: FinishVia }): Promise<boolean> => {
     if (busy || !note) return false
     setBusy(true)
     setError(null)
@@ -168,20 +179,31 @@ export function useFinishNote(note: Note | undefined, touch: boolean): NoteFinis
       } else if (confidence < threshold && status === 'known') {
         raw = setFrontmatterValue(raw, 'status', 'frontier')
       }
-      if (raw !== current.raw) await saveNote(path, raw)
-      if (skipping && opts.swiped) pixel('note_swipe_left')
-      if (!skipping) {
-        // A note finished for the first time is a streak day. Whether it was
-        // the first time is the server's call; it is asked either way.
-        useStreak.getState().goalAction()
-        // And, the first time, coins.
-        useCoins.getState().check()
+      const { msOnNote, scrollDepth, scrollTop } = readingStats()
+      if (raw !== current.raw) {
+        await saveNote(path, raw, { finish: { via: opts.via, msOnNote, scrollDepth } })
       }
-      // Finishing a topic is exactly when the tree should grow: the server
-      // tops it back up, using what they now know as the prerequisites and
-      // what they just said about interest as the steer. Not awaited, and
-      // its failure cannot surface here — the review is already saved.
-      if (space) requestSpaceGrowth(space)
+      if (skipping && opts.swiped) pixel('note_swipe_left')
+      const settle = () => {
+        if (!skipping) {
+          // A note finished for the first time is a streak day. Whether it was
+          // the first time is the server's call; it is asked either way.
+          useStreak.getState().goalAction()
+          // And, the first time, coins.
+          useCoins.getState().check()
+        }
+        // Finishing a topic is exactly when the tree should grow: the server
+        // tops it back up, using what they now know as the prerequisites and
+        // what they just said about interest as the steer. Not awaited, and
+        // its failure cannot surface here — the review is already saved.
+        if (space) requestSpaceGrowth(space)
+      }
+      // A swipe can be a mistake, so what follows from it waits until it stands.
+      if (opts.swiped) {
+        useSwipeUndo.getState().offer({ path, previousRaw: current.raw, skipping, scrollTop, commit: settle })
+      } else {
+        settle()
+      }
       // After a swipe, onto what was revealed underneath — landing there is
       // keeping a promise the gesture made. The desktop form showed nothing
       // underneath, and goes back to Next Up as it always did.

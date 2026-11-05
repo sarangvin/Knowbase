@@ -7,6 +7,7 @@ import { Properties } from './Properties'
 import { ReviewBar } from './ReviewBar'
 import { useCardThrow } from './useCardThrow'
 import { INTERESTED, NOT_INTERESTED, useFinishNote, useTouchPrimary } from './useFinishNote'
+import { takeRestoredScroll } from './swipeUndoStore'
 import { Editor } from '../editor/Editor'
 import { MyNotes } from './MyNotes'
 import { Questions } from './Questions'
@@ -61,7 +62,32 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
   // the card they open, and the note itself (below). One owner, so they
   // cannot disagree about whether it is done.
   const touch = useTouchPrimary()
-  const finisher = useFinishNote(note, touch)
+
+  // How long this note has been open and how far down it they have been, sent
+  // with a finish so a swipe made while reading can be told from a mistaken
+  // one made seconds after opening.
+  const openedAt = useRef(0)
+  const deepestScroll = useRef(0)
+  const scrollDepth = () => {
+    const el = scrollRef.current
+    return el && el.scrollHeight > 0 ? Math.min(1, (el.scrollTop + el.clientHeight) / el.scrollHeight) : 0
+  }
+  const trackScroll = () => {
+    deepestScroll.current = Math.max(deepestScroll.current, scrollDepth())
+  }
+  useEffect(() => {
+    openedAt.current = Date.now()
+    deepestScroll.current = 0
+  }, [path])
+
+  const finisher = useFinishNote(note, touch, () => {
+    trackScroll()
+    return {
+      msOnNote: Date.now() - openedAt.current,
+      scrollDepth: deepestScroll.current,
+      scrollTop: scrollRef.current?.scrollTop ?? 0,
+    }
+  })
 
   // On a phone the note is the top card of the deck: throw it right for more
   // like this, left for not, and the note Next Up would pick is revealed
@@ -80,7 +106,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
     axisLock: true,
     accept: acceptNoteSwipe,
     onThrown: (dir) => {
-      void finisher.finish(dir === 'right' ? INTERESTED : NOT_INTERESTED, { swiped: true }).then((ok) => {
+      void finisher.finish(dir === 'right' ? INTERESTED : NOT_INTERESTED, { swiped: true, via: 'note-swipe' }).then((ok) => {
         // Saved: the next note is arriving in this same element, so put it
         // back without an animation. Failed: bring this note back into view
         // with the spring, and the review sheet says what went wrong.
@@ -107,9 +133,10 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
     else scrollRef.current?.scrollTo({ top: 0 })
   }, [path, heading, mode, note])
 
-  // Reset scroll on note change (when no heading target).
+  // Reset scroll on note change (when no heading target), or put it back where
+  // it was if this note is reopening because a swipe was undone.
   useEffect(() => {
-    if (!heading) scrollRef.current?.scrollTo({ top: 0 })
+    if (!heading) scrollRef.current?.scrollTo({ top: takeRestoredScroll(path) ?? 0 })
   }, [path, heading])
 
   if (!note) {
@@ -241,7 +268,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
           </div>
         </div>
       )}
-    <div className="note-scroll" ref={scrollRef} {...deck.handlers}>
+    <div className="note-scroll" ref={scrollRef} onScroll={trackScroll} {...deck.handlers}>
       <div className="note-container">
         <HighlightBar notePath={note.path} />
         <h1 className="note-title">{note.title}</h1>

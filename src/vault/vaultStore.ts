@@ -6,7 +6,7 @@
 import { create } from 'zustand'
 import MiniSearch from 'minisearch'
 import type { Note, TreeNode, VaultFileMeta, VaultIndex } from './types'
-import type { VaultSource } from './source'
+import type { SaveContext, VaultSource } from './source'
 import { SeedVaultSource, FsAccessVaultSource } from './source'
 import { RemoteVaultSource, fetchCurrentUser, signInWithGoogle, signOut, type RemoteUser } from './remoteSource'
 import { parseNote } from './parse'
@@ -111,7 +111,7 @@ interface VaultState {
   setMode: (mode: Mode) => void
 
   // ── actions: editing ──
-  saveNote: (path: string, text: string) => Promise<void>
+  saveNote: (path: string, text: string, context?: SaveContext) => Promise<void>
   createNote: (path: string, content?: string) => Promise<void>
   createNotes: (entries: { path: string; content: string }[], openPath?: string) => Promise<void>
 
@@ -482,10 +482,10 @@ export const useVault = create<VaultState>((set, get) => {
     setActiveTab: (id) => set({ activeTabId: id }),
     setMode: (mode) => set({ mode }),
 
-    saveNote: async (path, text) => {
+    saveNote: async (path, text, context) => {
       const { source, index } = get()
       if (!source?.writable || !source.writeText) throw new Error('This vault is read-only')
-      await source.writeText(path, text)
+      await source.writeText(path, text, context)
       if (!index) return
       // Re-parse just this note and rebuild the index (vault is small).
       const note = parseNote(path, text, Date.now())

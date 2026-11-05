@@ -8,7 +8,7 @@
 //   • 'global' — /api/vaults/global/* — owner-only editing of the raw global
 //     vault itself; the backend 403s any non-owner that hits these routes.
 import type { VaultFileMeta } from './types'
-import type { VaultSource } from './source'
+import type { SaveContext, VaultSource } from './source'
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
@@ -68,12 +68,12 @@ export class RemoteVaultSource implements VaultSource {
     return out
   }
 
-  async writeText(path: string, text: string): Promise<void> {
+  async writeText(path: string, text: string, context?: SaveContext): Promise<void> {
     const res = await fetch(`${this.base}/note?path=${encodeURIComponent(path)}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify({ content: text, ...context }),
     })
     if (!res.ok) throw new Error(`Could not save ${path}: ${res.status}`)
   }

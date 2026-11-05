@@ -92,7 +92,7 @@ export function ReviewBar({
   }
 
   const submit = async (interest: number) => {
-    if (await finisher.finish(interest, { swiped: touch })) setAsking(false)
+    if (await finisher.finish(interest, { swiped: touch, via: touch ? 'finish-card' : 'form' })) setAsking(false)
   }
   runRef.current = () => ask()
 

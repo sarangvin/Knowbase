@@ -547,6 +547,7 @@ const OTHER: { name: string; label: string }[] = [
   { name: 'flashcards_completed', label: 'Flashcard deck completed' },
   { name: 'note_not_interested', label: 'Note marked Not interested' },
   { name: 'note_swipe_left', label: '…of which by swiping left' },
+  { name: 'note_swipe_undo', label: 'Finish undone after a swipe' },
 ]
 
 function FunnelPanel({ data, loading }: { data: AdminPixelsResponse | null; loading: boolean }) {

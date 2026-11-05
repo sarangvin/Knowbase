@@ -14,7 +14,7 @@
 import { maybeGraduate, maybeGrantFirstLessonBonus } from '../usage/streak.js'
 import { waitUntil } from '@vercel/functions'
 import { Router, type Request, type Response } from 'express'
-import { and, eq, inArray, type SQL } from 'drizzle-orm'
+import { and, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { notes } from '../db/schema.js'
 import { requireAuth, requireOwner } from '../auth/session.js'
@@ -38,6 +38,50 @@ vaultsRouter.use(requireAuth)
 // account with only the demo vault. Every signed-in account gets its own now;
 // what bounds the cost is the limits on *generating* notes (plans.ts), not
 // access to the ones already written.
+
+/** How a note was finished, as reported by the client on the save. Only ever
+ *  telemetry, so anything unexpected is dropped rather than refused. */
+function finishContext(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object') return {}
+  const { via, msOnNote, scrollDepth } = raw as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  if (via === 'note-swipe' || via === 'finish-card' || via === 'form') out.via = via
+  if (typeof msOnNote === 'number' && Number.isFinite(msOnNote) && msOnNote >= 0) {
+    out.ms_on_note = Math.min(Math.round(msOnNote), 86_400_000)
+  }
+  if (typeof scrollDepth === 'number' && Number.isFinite(scrollDepth)) {
+    out.scroll_depth = Math.round(Math.min(1, Math.max(0, scrollDepth)) * 100) / 100
+  }
+  return out
+}
+
+/** Take back a finish the reader just undid.
+ *
+ *  Renamed rather than deleted. The streak, coins, reminders and admin stats
+ *  all count `note_review` (and `note_skip`) by type, so the rename removes it
+ *  from every one of them at once, while the row stays as the record of a
+ *  mistake: `undone_at` minus `created_at` is how quickly they caught it. */
+async function markFinishUndone(userId: string, path: string, day: string): Promise<void> {
+  try {
+    const r = await db.execute(sql`
+      UPDATE usage_events
+      SET event_type = event_type || '_undone',
+          metadata = metadata || jsonb_build_object('undone_at', now())
+      WHERE id = (
+        SELECT id FROM usage_events
+        WHERE user_id = ${userId}
+          AND event_type IN ('note_review', 'note_skip')
+          AND metadata->>'path' = ${path}
+          AND metadata->>'day' = ${day}
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+    `)
+    if (!r.rowCount) console.warn('[notes] undo found no finish event to take back')
+  } catch (err) {
+    console.error('[notes] could not mark finish undone', err)
+  }
+}
 
 function parsePathParam(raw: unknown): string | { error: string } {
   if (typeof raw !== 'string') return { error: 'path query param required' }
@@ -223,15 +267,25 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
   // record of the moment that exists.
   const was = before ? frontmatterValue(before.content, 'last_reviewed') : null
   const now = frontmatterValue(content, 'last_reviewed')
+  // An undo puts last_reviewed back, which would otherwise read as a new
+  // finish on the earlier date below.
+  if (req.body?.undoFinish === true) {
+    firePixel('note_swipe_undo')
+    if (was) waitUntil(markFinishUndone(req.user!.id, path, was))
+    return
+  }
+  const context = finishContext(req.body?.finish)
   // A note marked "not interested" is passed over, not finished: it is
   // logged as a skip, which the streak and the coin balance do not count.
   if (now && /^\d/.test(now) && now !== was && isSkippedNote(content)) {
     firePixel('note_not_interested')
-    void logUsageEvent({
+    // Kept alive past the response: an undo can follow within a second or two
+    // and has to find this row.
+    waitUntil(logUsageEvent({
       userId: req.user!.id,
       eventType: 'note_skip',
-      metadata: { path, space: spaceOf(path), day: now },
-    })
+      metadata: { path, space: spaceOf(path), day: now, ...context },
+    }))
   } else if (now && /^\d/.test(now) && now !== was) {
     firePixel('note_completed')
     const graduation = logUsageEvent({
@@ -244,6 +298,7 @@ vaultsRouter.put('/mine/note', asyncHandler(async (req, res) => {
         confidence: frontmatterValue(content, 'confidence'),
         interest: frontmatterValue(content, 'interest'),
         day: now,
+        ...context,
       },
     }).then(() => Promise.all([maybeGraduate(req.user!.id, now), maybeGrantFirstLessonBonus(req.user!.id)]))
     // Once the event is in: it is one of the days the streak counts.

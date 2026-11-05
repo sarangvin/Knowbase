@@ -7,6 +7,16 @@
 import { get as idbGet, set as idbSet, del as idbDel, keys as idbKeys, clear as idbClear, createStore } from 'idb-keyval'
 import type { VaultFileMeta } from './types'
 
+/** Which control finished a note. */
+export type FinishVia = 'note-swipe' | 'finish-card' | 'form'
+
+/** What a save means, beyond the text. Only the server-backed source uses it,
+ *  since a review is otherwise just a difference between two versions of a note. */
+export interface SaveContext {
+  finish?: { via: FinishVia; msOnNote: number; scrollDepth: number }
+  undoFinish?: boolean
+}
+
 export interface VaultSource {
   readonly kind: 'seed' | 'fs' | 'remote'
   readonly name: string
@@ -24,7 +34,7 @@ export interface VaultSource {
   readMany?(paths: string[]): Promise<Map<string, string>>
   /** Returns an object URL for an asset (image/pdf). Caller may revoke it. */
   assetUrl(path: string): Promise<string>
-  writeText?(path: string, text: string): Promise<void>
+  writeText?(path: string, text: string, context?: SaveContext): Promise<void>
   /**
    * Finer-grained than `writable` — lets a source mark individual files
    * read-only (e.g. RemoteVaultSource's global-vault overlay) while the vault

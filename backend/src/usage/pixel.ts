@@ -23,6 +23,7 @@ export const SERVER_PIXELS = [
   'vault_created',
   'note_completed',
   'note_not_interested',
+  'note_swipe_undo',
   'quiz_completed',
   'flashcards_completed',
 ] as const

@@ -15,6 +15,7 @@ import { MainPane } from './shell/MainPane'
 import { BottomNav } from './shell/BottomNav'
 import { CommandPalette } from './features/palette/CommandPalette'
 import { QuickSwitcher } from './features/palette/QuickSwitcher'
+import { SwipeUndo } from './features/reader/SwipeUndo'
 import './ui/controls.css'
 import './App.css'
 
@@ -167,6 +168,7 @@ export default function App() {
       </div>
       <BottomNav />
       <OnboardingBanner />
+      <SwipeUndo />
       <CommandPalette />
       <QuickSwitcher />
       <StreakCelebration />
