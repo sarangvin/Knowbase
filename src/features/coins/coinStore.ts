@@ -72,6 +72,12 @@ interface Store {
   load: () => Promise<void>
   check: (at?: Point) => void
   apply: (c: Coins, at?: Point) => void
+  /** Pay out now, ahead of the server, for an award the client can be sure
+   *  of (a note's first finish). `sync` later puts right anything it got
+   *  wrong — an undo, a failed save. */
+  grant: (amount: number, at?: Point) => void
+  /** Re-read the balance and show it as it is, without an animation. */
+  sync: (delayMs?: number) => void
   /** Move the shown count one coin toward the balance. */
   step: () => void
   /** The award has finished playing. */
@@ -123,6 +129,25 @@ export const useCoins = create<Store>((set, get) => ({
     if (before == null) set({ coins: c, shown: c.balance })
     else if (c.balance === before || get().award) set({ coins: c })
     else set({ coins: c, award: { id: nextId++, amount: c.balance - before, at } })
+  },
+
+  grant: (amount, at) => {
+    const c = get().coins
+    if (!c || amount <= 0) return
+    const coins = { ...c, balance: c.balance + amount, notes: c.notes + 1 }
+    // One playing already: the count simply goes further when it settles.
+    if (get().award) set({ coins })
+    else set({ coins, award: { id: nextId++, amount, at } })
+  },
+
+  sync: (delayMs = 0) => {
+    void (async () => {
+      if (delayMs) await sleep(delayMs)
+      const c = await fetchCoins()
+      if (!c) return
+      if (get().award) set({ coins: c })
+      else set({ coins: c, shown: c.balance })
+    })()
   },
 
   step: () =>

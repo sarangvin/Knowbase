@@ -55,6 +55,7 @@ export function InterestSwipe({
   busy,
   error,
   onChoose,
+  onCommit,
   onCancel,
 }: {
   title: string
@@ -63,6 +64,8 @@ export function InterestSwipe({
   error: string | null
   /** true = thrown right, wants more like this. */
   onChoose: (interested: boolean) => void
+  /** The moment the card is let go, before it has flown. */
+  onCommit?: (interested: boolean) => void
   onCancel: () => void
 }) {
   const cardRef = useRef<HTMLDivElement>(null)
@@ -75,6 +78,7 @@ export function InterestSwipe({
     maxTilt: 14,
     capture: true,
     onThrown: (dir) => onChoose(dir === 'right'),
+    onCommit: (dir) => onCommit?.(dir === 'right'),
   })
   const { thrown, dragging, lean, vars, throwCard, reset } = card
   const locked = busy || thrown !== null

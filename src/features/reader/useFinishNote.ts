@@ -22,7 +22,7 @@ import { useVault } from '../../vault/vaultStore'
 import { setFrontmatterValue, upsertFrontmatterValue } from '../../vault/parse'
 import type { Note } from '../../vault/types'
 import { requestSpaceGrowth } from '../onboarding/onboardingApi'
-import { computeNextUp, configOf, isReviewedToday, localDay, spaceOfPath } from '../automated-graph/engine'
+import { computeNextUp, configOf, isReviewedToday, localDay, spaceOfPath, lastReviewedDay, isSkipped } from '../automated-graph/engine'
 import type { NextCard } from './InterestSwipe'
 import { useCoins } from '../coins/coinStore'
 import { pixel } from '../../pixel'
@@ -37,6 +37,8 @@ export const MAX_CONFIDENCE = 5
  *  desktop form writes whatever 1-5 was picked. */
 export const INTERESTED = 5
 export const NOT_INTERESTED = 1
+/** What a note's first finish pays (backend/src/usage/coins.ts). */
+const COINS_PER_NOTE = 3
 
 /** How long the finished state stays up before it reverts. */
 const HOLD_MS = 1000
@@ -86,6 +88,10 @@ export interface NoteFinisher {
    *  true once saved. */
   finish: (interest: number, opts: { swiped: boolean; via: FinishVia }) => Promise<boolean>
   clearError: () => void
+  /** Pay this note's coins now, at the moment a swipe is let go, ahead of
+   *  `finish` (which then does not pay them again). Only an Interested
+   *  first finish pays. */
+  payOut: (interested: boolean) => void
 }
 
 /** How much of the note the reader had seen when they finished it. */
@@ -106,6 +112,8 @@ export function useFinishNote(note: Note | undefined, touch: boolean, readingSta
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The note whose coins a swipe already paid at the moment it was let go.
+  const paidRef = useRef<string | null>(null)
 
   const path = note?.path ?? ''
   const fm = note?.frontmatter ?? {}
@@ -180,17 +188,31 @@ export function useFinishNote(note: Note | undefined, touch: boolean, readingSta
         raw = setFrontmatterValue(raw, 'status', 'frontier')
       }
       const { msOnNote, scrollDepth, scrollTop } = readingStats()
+      // Coins are paid the moment the note is finished, not after the save
+      // and the undo window: a reward that arrives seconds later does not
+      // feel like one. Only a note's first finish pays (the server counts one
+      // per note), and a skipped note was never finished, so finishing it
+      // now is a first. The server stays the authority: an undo or a failed
+      // save re-syncs the balance (swipeUndoStore, below).
+      const firstFinish = !skipping && (!lastReviewedDay(current.frontmatter) || isSkipped(current.frontmatter))
+      if (firstFinish && paidRef.current !== path) useCoins.getState().grant(COINS_PER_NOTE)
+      paidRef.current = null
       if (raw !== current.raw) {
-        await saveNote(path, raw, { finish: { via: opts.via, msOnNote, scrollDepth } })
+        try {
+          await saveNote(path, raw, { finish: { via: opts.via, msOnNote, scrollDepth } })
+        } catch (e) {
+          if (firstFinish) useCoins.getState().sync()
+          throw e
+        }
       }
+      // Once the server has logged the finish, quietly confirm the balance.
+      if (firstFinish) useCoins.getState().sync(2500)
       if (skipping && opts.swiped) pixel('note_swipe_left')
       const settle = () => {
         if (!skipping) {
           // A note finished for the first time is a streak day. Whether it was
           // the first time is the server's call; it is asked either way.
           useStreak.getState().goalAction()
-          // And, the first time, coins.
-          useCoins.getState().check()
         }
         // Finishing a topic is exactly when the tree should grow: the server
         // tops it back up, using what they now know as the prerequisites and
@@ -233,5 +255,12 @@ export function useFinishNote(note: Note | undefined, touch: boolean, readingSta
     next,
     finish,
     clearError: () => setError(null),
+    payOut: (interested) => {
+      if (!interested || !note || !canFinish || paidRef.current === path) return
+      const fm = getNote(path)?.frontmatter ?? note.frontmatter
+      if (lastReviewedDay(fm) && !isSkipped(fm)) return
+      paidRef.current = path
+      useCoins.getState().grant(COINS_PER_NOTE)
+    },
   }
 }

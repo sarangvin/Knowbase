@@ -231,11 +231,16 @@ export function CoinCost({ n }: { n: number }) {
   )
 }
 
-/** Plays each award, once, after any streak card has been dismissed. */
+/** Plays each award, once. One that comes while a streak card is up waits
+ *  for it; one already playing is not interrupted by a card that arrives
+ *  mid-flight (a finish pays at once, and its streak card follows). */
 export function CoinBurst() {
   const award = useCoins((s) => s.award)
   const celebration = useStreak((s) => s.celebration)
-  if (!award || celebration) return null
+  const playing = useRef<number | null>(null)
+  if (!award) return null
+  if (celebration && playing.current !== award.id) return null
+  playing.current = award.id
   return createPortal(<Mint key={award.id} award={award} />, document.body)
 }
 
@@ -306,7 +311,9 @@ function Mint({ award }: { award: Award }) {
       )
 
     if (!spend) {
-      const T = 2000
+      // Quick on purpose: the count should move about a second after the
+      // thing that earned it, not after a show.
+      const T = 1100
       // The light it appears in: a soft halo and slow rays, at the origin.
       const glow = q('.cm-glow')
       glow.style.left = `${o.x}px`
@@ -329,9 +336,9 @@ function Mint({ award }: { award: Award }) {
         fly.animate(
           [
             { transform: at(o.x, o.y, 0.2), opacity: 0, easing: 'cubic-bezier(.3,1.5,.5,1)' },
-            { transform: at(o.x, o.y - 6, 1), opacity: 1, offset: 0.13 },
-            { transform: at(o.x, o.y - 6, 1), opacity: 1, offset: 0.66, easing: 'cubic-bezier(.45,0,.75,.5)' },
-            { transform: at((o.x + bx) / 2 + 30, Math.min(o.y, by) + Math.abs(o.y - by) * 0.25, 0.6), opacity: 1, offset: 0.84 },
+            { transform: at(o.x, o.y - 6, 1), opacity: 1, offset: 0.14 },
+            { transform: at(o.x, o.y - 6, 1), opacity: 1, offset: 0.5, easing: 'cubic-bezier(.45,0,.75,.5)' },
+            { transform: at((o.x + bx) / 2 + 30, Math.min(o.y, by) + Math.abs(o.y - by) * 0.25, 0.6), opacity: 1, offset: 0.76 },
             { transform: at(bx, by, tiny), opacity: 1 },
           ],
           { duration: T, fill: 'both' },
@@ -340,15 +347,15 @@ function Mint({ award }: { award: Award }) {
         spin.animate(
           [
             { transform: 'rotateY(0deg)', easing: 'cubic-bezier(.1,.7,.25,1)' },
-            { transform: 'rotateY(1440deg)', offset: 0.56 },
-            { transform: 'rotateY(1440deg)', offset: 0.68, easing: 'ease-in' },
-            { transform: 'rotateY(1800deg)' },
+            { transform: 'rotateY(1080deg)', offset: 0.44 },
+            { transform: 'rotateY(1080deg)', offset: 0.5, easing: 'ease-in' },
+            { transform: 'rotateY(1440deg)' },
           ],
           { duration: T, fill: 'both' },
         ),
         q('.cm-sheen').animate(
           [{ transform: 'translateX(-130%) skewX(-18deg)' }, { transform: 'translateX(130%) skewX(-18deg)' }],
-          { duration: 420, delay: 1060, easing: 'ease-in-out', fill: 'both' },
+          { duration: 260, delay: 400, easing: 'ease-in-out', fill: 'both' },
         ),
         label.animate(
           [
@@ -357,7 +364,7 @@ function Mint({ award }: { award: Award }) {
             { transform: 'translate(-50%, -14px) scale(1)', opacity: 1, offset: 0.75 },
             { transform: 'translate(-50%, -26px) scale(1)', opacity: 0 },
           ],
-          { duration: 1500, delay: 260, easing: 'ease-out', fill: 'both' },
+          { duration: 1000, delay: 60, easing: 'ease-out', fill: 'both' },
         ),
       )
       later(T, () => {
@@ -366,8 +373,8 @@ function Mint({ award }: { award: Award }) {
         ring()
         sparkle(root, bx, by)
       })
-      roll(T, 380)
-      later(T + 650, settle)
+      roll(T, 250)
+      later(T + 450, settle)
     } else {
       const T = 1300
       label.style.left = `${o.x}px`

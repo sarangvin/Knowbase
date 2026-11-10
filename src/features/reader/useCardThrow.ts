@@ -69,6 +69,10 @@ export interface CardThrowOptions {
   /** Called once the throw has landed and what was underneath has been
    *  seen. The caller reports the answer here. */
   onThrown: (dir: Direction) => void
+  /** Called the instant the card is let go and its way is decided, before
+   *  it has flown. For what should answer the gesture itself, not wait for
+   *  the animation — a reward, say. */
+  onCommit?: (dir: Direction) => void
   /** Wait for a clearly sideways movement before taking the gesture. */
   axisLock?: boolean
   /** Capture the pointer explicitly. For a small card, whose drags always
@@ -140,6 +144,7 @@ export function useCardThrow(o: CardThrowOptions) {
     if (thrownRef.current) return
     drag.current = null
     setDragging(false)
+    opts.current.onCommit?.(dir)
     if (reducedMotion()) {
       opts.current.onThrown(dir)
       return

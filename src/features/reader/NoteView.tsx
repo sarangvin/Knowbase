@@ -105,6 +105,8 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
     maxTilt: 5,
     axisLock: true,
     accept: acceptNoteSwipe,
+    // The coins answer the swipe itself, not the end of its animation.
+    onCommit: (dir) => finisher.payOut(dir === 'right'),
     onThrown: (dir) => {
       void finisher.finish(dir === 'right' ? INTERESTED : NOT_INTERESTED, { swiped: true, via: 'note-swipe' }).then((ok) => {
         // Saved: the next note is arriving in this same element, so put it

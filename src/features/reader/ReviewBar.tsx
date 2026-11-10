@@ -202,6 +202,7 @@ export function ReviewBar({
           busy={busy}
           error={error}
           onChoose={(interested) => void submit(interested ? INTERESTED : NOT_INTERESTED)}
+          onCommit={(interested) => finisher.payOut(interested)}
           onCancel={() => {
             if (busy) return
             setAsking(false)

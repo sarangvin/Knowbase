@@ -12,6 +12,7 @@
 // celebration and that round of growth are skipped.
 import { create } from 'zustand'
 import { useVault } from '../../vault/vaultStore'
+import { useCoins } from '../coins/coinStore'
 
 const UNDO_MS = 5000
 const ERROR_MS = 4000
@@ -81,6 +82,9 @@ export const useSwipeUndo = create<SwipeUndoState>((set, get) => ({
       const frontmatter = pending.previousRaw.match(FRONTMATTER)?.[0]
       const raw = frontmatter ? current.raw.replace(FRONTMATTER, () => frontmatter) : pending.previousRaw
       await saveNote(pending.path, raw, { undoFinish: true })
+      // The coins were paid at the swipe; the server has just taken the
+      // finish back, so show the balance it now has.
+      useCoins.getState().sync(800)
       restoreScroll = { path: pending.path, top: pending.scrollTop }
       openNote(pending.path)
     } catch {
