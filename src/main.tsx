@@ -4,9 +4,13 @@ import './index.css'
 import App from './App.tsx'
 import { applyTextSize, readTextSize } from './features/settings/textSize'
 import { installApiGate } from './apiGate'
+import { installUpdateCheck } from './appVersion'
 
 // Before anything can call the API — see apiGate.ts.
 installApiGate()
+
+// A phone keeps the app open for days; see appVersion.ts.
+installUpdateCheck()
 
 // Before the first render, so a reader who chose a larger size never sees
 // the app paint at the default and then jump.
