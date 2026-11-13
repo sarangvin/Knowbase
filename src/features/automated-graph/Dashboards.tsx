@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { HelpCircle } from '../../ui/icons'
+import { Check, HelpCircle, Lock, Star } from '../../ui/icons'
 import {
   computeNextUp,
   computeToday,
@@ -120,10 +120,10 @@ function NextUpInfo() {
       {open && (
         <div className="dv-info-pop" role="dialog" aria-label="How this works">
           <ul>
-            <li><strong>Ready now</strong>: topics you can start, because you have read what they build on.</li>
-            <li>The ones that open up the most other topics come first.</li>
-            <li><strong>Locked</strong>: waiting on a topic you have not read yet.</li>
-            <li><strong>Review</strong>: topics you have finished, to come back to.</li>
+            <li><strong>Start</strong>: the best topic to read next.</li>
+            <li><strong>Stars</strong>: ready to read, because you have read what they build on. The ones that open up the most come first.</li>
+            <li><strong>Locks</strong>: waiting on a topic you have not read yet.</li>
+            <li><strong>Checks</strong>: topics you have finished. Tap one to review it.</li>
           </ul>
           <p>Interested finishes a note; Not interested skips it. Either way, your answer decides what gets written next.</p>
         </div>
@@ -132,94 +132,145 @@ function NextUpInfo() {
   )
 }
 
+type PathStep = {
+  key: string
+  state: 'done' | 'current' | 'open' | 'locked'
+  path: string
+  title: string
+  pending?: boolean
+  isNew?: boolean
+  meta: string
+}
+
+/** How many finished topics show above the current one before the rest
+ *  fold away. A long run of check marks pushes the thing to do off screen. */
+const DONE_VISIBLE = 3
+
+/** Sideways offset of the n-th step, in px: a gentle zig-zag so the path
+ *  reads as a route rather than a list. */
+function swayOf(i: number): number {
+  return Math.round(Math.sin(i * 0.9) * 44)
+}
+
+function StepIcon({ state }: { state: PathStep['state'] }) {
+  if (state === 'done') return <Check width={26} height={26} strokeWidth={3} />
+  if (state === 'locked') return <Lock width={22} height={22} />
+  return <Star width={state === 'current' ? 30 : 24} height={state === 'current' ? 30 : 24} fill="currentColor" strokeWidth={1.5} />
+}
+
+function PathNode({ step, index }: { step: PathStep; index: number }) {
+  const openNote = useVault((s) => s.openNote)
+  return (
+    <li className={`lp-step is-${step.state}`} style={{ '--sway': `${swayOf(index)}px` } as CSSProperties}>
+      <div className="lp-node-wrap">
+        {step.state === 'current' && <span className="lp-bubble">Start</span>}
+        <button
+          className="lp-node"
+          onClick={() => openNote(step.path)}
+          aria-label={`${step.title} (${step.state === 'current' ? 'start here' : step.state})`}
+        >
+          <StepIcon state={step.state} />
+        </button>
+      </div>
+      <div className="lp-label">
+        <a className="lp-title" onClick={() => openNote(step.path)}>{step.title}</a>
+        {step.isNew && (
+          <span className="dv-new" title="Just unlocked by finishing your last note.">New</span>
+        )}
+        {step.pending && (
+          <span className="dv-soon" title="Being written now — the full note will appear here shortly.">
+            Coming soon
+          </span>
+        )}
+        <div className="lp-meta">{step.meta}</div>
+      </div>
+    </li>
+  )
+}
+
 export function NextUp({ space }: { space: string }) {
   const index = useVault((s) => s.index)
+  const [showAllDone, setShowAllDone] = useState(false)
   if (!index) return null
   const r = computeNextUp(index, space)
 
+  // The path runs the way you walked it: what you have finished on top
+  // (oldest first), the pick, what is open after it, and what is still
+  // locked at the bottom. The engine's review order (most worth revisiting
+  // first) is for choosing a review, not for drawing a route.
+  const done: PathStep[] = r.review
+    .filter((t) => !(r.pick?.isReview && t.path === r.pick.path))
+    .slice()
+    .sort((a, b) => a.lastReviewed.localeCompare(b.lastReviewed))
+    .map((t) => ({
+      key: t.path,
+      state: 'done',
+      path: t.path,
+      title: t.title,
+      pending: t.pending,
+      meta: `Confidence ${t.confidence}/5 · ${t.daysSince === 0 ? 'today' : t.daysSince === 1 ? 'yesterday' : t.daysSince == null ? 'read' : `${t.daysSince} days ago`}`,
+    }))
+  const current: PathStep[] = r.pick
+    ? [{
+        key: r.pick.path,
+        state: 'current',
+        path: r.pick.path,
+        title: r.pick.title,
+        pending: r.pick.pending,
+        isNew: r.pick.isNew,
+        meta: r.pick.isReview
+          ? `Review · confidence ${r.pick.confidence}/5`
+          : r.pick.unlocks
+            ? `Unlocks ${r.pick.unlocks} more`
+            : 'Up next',
+      }]
+    : []
+  const open: PathStep[] = r.ranked
+    .filter((t) => t.path !== r.pick?.path)
+    .map((t) => ({
+      key: t.path,
+      state: 'open',
+      path: t.path,
+      title: t.title,
+      pending: t.pending,
+      isNew: t.isNew,
+      meta: t.unlocks ? `Ready · unlocks ${t.unlocks} more` : 'Ready',
+    }))
+  const locked: PathStep[] = r.locked.map((t) => ({
+    key: t.path,
+    state: 'locked',
+    path: t.path,
+    title: t.title,
+    pending: t.pending,
+    meta: t.needs.length ? `After ${t.needs.map((n) => n.title).join(', ')}` : 'Locked',
+  }))
+
+  const hidden = showAllDone ? 0 : Math.max(0, done.length - DONE_VISIBLE)
+  const steps = [...done.slice(hidden), ...current, ...open, ...locked]
+
   return (
     <div className="dv">
-      {r.pick ? (
-        <div className="dv-pick">
-          <div className="dv-pick-label">{r.pick.isReview ? 'Review next' : 'Pick'}</div>
-          <div className="dv-pick-title">
-            <NoteLink path={r.pick.path} label={r.pick.title} pending={r.pick.pending} isNew={r.pick.isNew} />
-          </div>
-          <div className="dv-pick-meta">
-            {r.pick.isReview ? (
-              <>
-                Nothing new left today · interest {r.pick.interest} · confidence{' '}
-                {r.pick.confidence}/5
-              </>
-            ) : (
-              <>
-                Score <strong>{r.pick.score.toFixed(1)}</strong> · unlocks {r.pick.unlocks} · interest {r.pick.interest} · confidence{' '}
-                {r.pick.confidence}/5
-              </>
-            )}
-          </div>
-        </div>
+      <h4 className="dv-h dv-h-info">
+        Your path
+        <NextUpInfo />
+      </h4>
+      {hidden > 0 && (
+        <button className="lp-more" onClick={() => setShowAllDone(true)}>
+          Show {hidden} earlier {hidden === 1 ? 'topic' : 'topics'}
+        </button>
+      )}
+      {steps.length ? (
+        <ol className="lp">
+          {steps.map((s, i) => <PathNode key={s.key} step={s} index={i + hidden} />)}
+        </ol>
       ) : (
+        <p className="dv-faint">Nothing here yet.</p>
+      )}
+      {!r.pick && steps.length > 0 && (
         <p className="dv-faint">
           Nothing to study right now — every topic here has been reviewed today, or is waiting on a
           prerequisite.
         </p>
-      )}
-
-      <h4 className="dv-h dv-h-info">
-        New topics (ready now)
-        <NextUpInfo />
-      </h4>
-      {r.ranked.length ? (
-        <table className="dv-table">
-          <thead>
-            <tr><th>Topic</th><th>Conf.</th><th>Unlocks</th><th>Int.</th><th>Score</th></tr>
-          </thead>
-          <tbody>
-            {r.ranked.map((c) => (
-              <tr key={c.path}>
-                <td><NoteLink path={c.path} label={c.title} pending={c.pending} isNew={c.isNew} /></td>
-                <td>{c.confidence}/5</td>
-                <td>{c.unlocks}</td>
-                <td>{c.interest}</td>
-                <td><strong>{c.score.toFixed(1)}</strong></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p className="dv-faint">No new topics — everything ready has been opened at least once.</p>
-      )}
-
-      {r.locked.length > 0 && (
-        <>
-          <h4 className="dv-h">Locked (prerequisites not yet reviewed)</h4>
-          <table className="dv-table">
-            <thead><tr><th>Topic</th><th>Needs</th></tr></thead>
-            <tbody>
-              {r.locked.map((l) => (
-                <tr key={l.path}>
-                  <td><NoteLink path={l.path} label={l.title} pending={l.pending} /></td>
-                  <td>
-                    {l.needs.map((n, i) => (
-                      <span key={n.path}>
-                        {i > 0 && ', '}
-                        <NoteLink path={n.path} label={n.title} />
-                      </span>
-                    ))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {r.review.length > 0 && (
-        <>
-          <h4 className="dv-h">Review</h4>
-          <ReviewTable rows={r.review} />
-        </>
       )}
     </div>
   )

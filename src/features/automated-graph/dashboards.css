@@ -142,3 +142,125 @@
 .dv-info-pop ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; }
 .dv-info-pop strong { color: var(--text-normal); font-weight: 600; }
 .dv-info-pop p { margin: 8px 0 0; color: var(--text-faint); }
+
+/* ── Next Up as a learning path ─────────────────────────────────────────
+   One column of round steps that sways left and right (--sway, set per
+   step), each with its title beside it. Raised buttons: the darker band
+   under each circle is a hard shadow, which is what makes them read as
+   something to press rather than a bullet. */
+.dv ol.lp {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.lp > .lp-step {
+  --node: 58px;
+  --fill: var(--accent);
+  --ink: var(--text-on-accent);
+  --edge: color-mix(in srgb, var(--accent) 68%, black);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: calc(50% - 120px + var(--sway, 0px));
+  min-width: 0;
+}
+.lp > .lp-step.is-current { --node: 70px; margin-top: 44px; }
+.lp-step.is-done {
+  --fill: hsl(42 92% 56%);
+  --ink: hsl(36 70% 26%);
+  --edge: hsl(36 80% 40%);
+}
+.lp-step.is-open {
+  --fill: var(--accent-soft);
+  --ink: var(--accent);
+  --edge: color-mix(in srgb, var(--accent) 35%, var(--bg-primary, white));
+}
+.lp-step.is-locked {
+  --fill: var(--bg-elevated);
+  --ink: var(--text-faint);
+  --edge: var(--border-strong);
+}
+.lp-node-wrap { position: relative; flex: none; }
+.lp-node {
+  width: var(--node);
+  height: var(--node);
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--fill);
+  color: var(--ink);
+  box-shadow: 0 6px 0 var(--edge);
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.lp-node:hover { filter: brightness(1.04); }
+.lp-node:active { transform: translateY(5px); box-shadow: 0 1px 0 var(--edge); }
+.lp-step.is-current .lp-node {
+  outline: 6px solid var(--accent-soft);
+  outline-offset: 5px;
+}
+.lp-bubble {
+  position: absolute;
+  bottom: calc(100% + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-modal, var(--bg-elevated));
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: lp-bob 1.6s ease-in-out infinite;
+}
+.lp-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  background: inherit;
+  border-right: 2px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  transform: rotate(45deg);
+}
+@keyframes lp-bob {
+  50% { transform: translate(-50%, -4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-bubble { animation: none; }
+}
+.lp-label { min-width: 0; flex: 1; }
+.lp-title {
+  font-weight: 650;
+  color: var(--text-normal);
+  cursor: pointer;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.lp-title:hover { text-decoration: underline; }
+.lp-step.is-current .lp-title { font-size: 1.12em; }
+.lp-step.is-locked .lp-title { color: var(--text-muted); }
+.lp-meta { margin-top: 2px; font-size: 12.5px; color: var(--text-faint); }
+.lp-more {
+  display: block;
+  margin: 4px auto 0;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.lp-more:hover { background: var(--bg-hover); }

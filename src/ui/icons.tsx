@@ -249,3 +249,9 @@ export const Flame = (p: P) => (
 export const Snowflake = (p: P) => (
   <svg {...base(p)}><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93 4.93 19.07" /><path d="m9 4 3 3 3-3M9 20l3-3 3 3M4 9l3 3-3 3M20 9l-3 3 3 3" /></svg>
 )
+export const Lock = (p: P) => (
+  <svg {...base(p)}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+)
+export const Star = (p: P) => (
+  <svg {...base(p)}><path d="m12 2.5 2.9 6.2 6.6.8-4.9 4.6 1.3 6.6L12 17.4l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8Z" /></svg>
+)
