@@ -176,6 +176,13 @@
       "when": 1792667714779,
       "tag": "0024_pixels",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794568800000,
+      "tag": "0025_strip_next_up_how_this_works",
+      "breakpoints": true
     }
   ]
 }

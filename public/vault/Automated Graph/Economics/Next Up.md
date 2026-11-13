@@ -103,15 +103,3 @@ if (review.length) {
   );
 }
 ```
-
-## How this works
-- **A prerequisite is met once you have reviewed it**, not once you have mastered it. Having read the groundwork is what earns you the right to read on; how well it stuck is what the review list is for. **Confidence** (0-5) still records that, and reaching `confidence_threshold` in [[_config]] is what flips a topic to `status: known`.
-- **New topics (ready now)** — topics you have never opened, whose prerequisites are met, ranked by `score = unlocks * weight_unlocks + interest * weight_interest`. Leverage (unlocks) is weighted highest by default.
-- **Locked** — new topics still waiting on a prerequisite to reach the confidence threshold.
-- **Review** — every topic you have opened at least once, whatever its confidence, ordered by interest first, then lowest confidence, then longest since last reviewed.
-
-Each topic appears in exactly one of the three, and the split is on one question: does it have a `last_reviewed` date? A topic can be reviewed once a day; the pick skips anything already done today.
-
-To progress a topic: study it, update its `confidence` and `last_reviewed` in frontmatter, and the rankings recalculate automatically.
-
-Thresholds and weights are tunable in [[_config]]. Exported to Obsidian, the block above needs the Dataview plugin with JavaScript queries enabled; here it is rendered natively. Both implement the same rules.
