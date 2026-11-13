@@ -8,7 +8,7 @@
 //
 // Rate limits are per API key, not per route, so the meter has to sit under
 // everything that spends the key.
-import { streamGeminiChat, GeminiHttpError } from './providers/gemini.js'
+import { streamGeminiChat, GeminiHttpError, GeminiCutOffError } from './providers/gemini.js'
 import { modelChain, isFallbackStatus, reportModelFailure, reportModelSuccess } from './models.js'
 import type { Usage } from './providers/anthropic.js'
 import { logUsageEvent } from '../usage/logEvent.js'
@@ -240,6 +240,32 @@ export async function meteredGeminiCall(
           usage = {}
           continue
         }
+        if (err instanceof GeminiCutOffError) {
+          // A model that is dropping streams drops most of them for a while,
+          // so it is benched like a 503 — retrying it is how one broken note
+          // used to cost three calls. Logged as its own row: the truncated
+          // reply still spent tokens, and the call that replaces it is logged
+          // below under the model that answered.
+          reportModelFailure(model, { status: 503 })
+          if (opts.userId) {
+            void logUsageEvent({
+              userId: opts.userId,
+              eventType: 'llm_call',
+              provider: 'gemini',
+              model,
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              metadata: { source: opts.source, cutOff: true, chars: err.chars, fellBackTo: candidates[i + 1] ?? null },
+            })
+          }
+          usage = {}
+          if (!last) {
+            skipped.push(model)
+            console.warn(`[model] ${model} cut off after ${err.chars} chars; trying ${candidates[i + 1]} (${opts.source})`)
+            continue
+          }
+          throw err
+        }
         if (err instanceof GeminiHttpError && isFallbackStatus(err.status)) {
           reportModelFailure(model, err)
           if (!last) {
@@ -326,11 +352,12 @@ export async function* streamGeminiWithFallback(
     try {
       first = await gen.next()
     } catch (err) {
-      if (err instanceof GeminiHttpError && isFallbackStatus(err.status)) {
-        reportModelFailure(model, err)
+      const cutOff = err instanceof GeminiCutOffError
+      if (cutOff || (err instanceof GeminiHttpError && isFallbackStatus(err.status))) {
+        reportModelFailure(model, cutOff ? { status: 503 } : err)
         if (i < candidates.length - 1) {
           skipped.push(model)
-          console.warn(`[model] ${model} answered ${err.status}; trying ${candidates[i + 1]} (ask-ai)`)
+          console.warn(`[model] ${model} ${cutOff ? 'cut off before answering' : `answered ${err.status}`}; trying ${candidates[i + 1]} (ask-ai)`)
           continue
         }
       }
@@ -340,7 +367,17 @@ export async function* streamGeminiWithFallback(
     reportModelSuccess(model)
     onModel(model, skipped)
     if (!first.done) yield first.value
-    yield* gen
+    try {
+      yield* gen
+    } catch (err) {
+      // Past the first chunk the reader already has words on screen, and a
+      // reply cannot be swapped for another model's mid-sentence. End it
+      // where it stopped, as before this was detected, and bench the model
+      // so the next question goes elsewhere.
+      if (!(err instanceof GeminiCutOffError)) throw err
+      reportModelFailure(model, { status: 503 })
+      console.warn(`[model] ${model} cut off mid-reply after ${err.chars} chars (ask-ai)`)
+    }
     return
   }
 }

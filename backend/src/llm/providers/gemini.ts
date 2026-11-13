@@ -8,7 +8,7 @@ import { readSSE } from '../sse.js'
 import type { Usage } from './anthropic.js'
 
 interface GeminiChunk {
-  candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]
+  candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[]
   usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number }
 }
 
@@ -50,6 +50,26 @@ export class GeminiHttpError extends Error {
   }
 }
 
+/** A 200 whose stream ended without a finishReason: Google closed the
+ *  connection part-way through the answer.
+ *
+ *  Seen in bursts (alongside 503s from the same models) where most replies
+ *  stopped mid-sentence at a few hundred characters. Nothing errored — the
+ *  HTTP status was 200 and every frame parsed — so the truncated text was
+ *  returned as a success, failed JSON.parse in the caller, and was retried
+ *  on the very model that had just cut out. Typed, so meter.ts can treat it
+ *  like a 503: bench the model and move to the next one. */
+export class GeminiCutOffError extends Error {
+  readonly model: string
+  readonly chars: number
+  constructor(model: string, chars: number) {
+    super(`Gemini stream cut off (${model}) after ${chars} chars with no finishReason`)
+    this.name = 'GeminiCutOffError'
+    this.model = model
+    this.chars = chars
+  }
+}
+
 export async function* streamGeminiChat(
   apiKey: string,
   system: string,
@@ -83,6 +103,11 @@ export async function* streamGeminiChat(
     throw new GeminiHttpError(model, res.status, text)
   }
   const usage: Usage = {}
+  // Any finishReason at all means Google ended the answer on purpose — STOP,
+  // or a SAFETY/MAX_TOKENS a different model would not fix. Only its absence
+  // is the cut-off this checks for.
+  let finished = false
+  let chars = 0
   for await (const data of readSSE(res.body)) {
     let obj: GeminiChunk
     try {
@@ -101,9 +126,14 @@ export async function* streamGeminiChat(
     // Every part, not the first: a chunk can carry the end of the thinking
     // and the start of the answer together, and reading only parts[0] threw
     // the answer away — the reply came back empty and failed to parse.
+    if (obj.candidates?.[0]?.finishReason) finished = true
     for (const part of obj.candidates?.[0]?.content?.parts ?? []) {
-      if (part.text && !part.thought) yield part.text
+      if (part.text && !part.thought) {
+        chars += part.text.length
+        yield part.text
+      }
     }
   }
   onUsage?.(usage)
+  if (!finished) throw new GeminiCutOffError(model, chars)
 }
