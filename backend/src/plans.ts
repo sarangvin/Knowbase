@@ -57,7 +57,7 @@ const PLANS: Record<string, PlanLimits> = {
   // account to free by itself (usage/streak.ts).
   new: {
     activeCollections: 5,
-    newCollectionsPerDay: 2,
+    newCollectionsPerDay: 5,
     flashcardsPerDay: 10,
     customQuestionsPerDay: 1,
     newNotesPerDay: 6,
