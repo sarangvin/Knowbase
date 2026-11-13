@@ -30,6 +30,14 @@ interface OAuthState {
   state: string
   codeVerifier: string
   returnTo: string
+  /** Acquisition tag from the landing link (`?ref=`), stored on a new account. */
+  ref?: string
+}
+
+/** A short lowercase tag or nothing. It goes into the database, so nothing
+ *  free-form gets through. */
+export function cleanRef(v: unknown): string | undefined {
+  return typeof v === 'string' && /^[a-z0-9_-]{1,32}$/.test(v) ? v : undefined
 }
 
 export function googleAuthStart(req: Request, res: Response): void {
@@ -41,7 +49,7 @@ export function googleAuthStart(req: Request, res: Response): void {
   const codeChallenge = base64url(createHash('sha256').update(codeVerifier).digest())
   const returnTo = typeof req.query.returnTo === 'string' ? req.query.returnTo : '/'
 
-  const payload: OAuthState = { state, codeVerifier, returnTo }
+  const payload: OAuthState = { state, codeVerifier, returnTo, ref: cleanRef(req.query.ref) }
   res.cookie(OAUTH_STATE_COOKIE, Buffer.from(JSON.stringify(payload)).toString('base64url'), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -164,6 +172,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
         avatarUrl: profile.picture,
         role,
         lastLoginAt: new Date(),
+        signupRef: cleanRef(expected.ref) ?? null,
       })
       .returning({ id: users.id })
     userId = row.id

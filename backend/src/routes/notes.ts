@@ -5,6 +5,7 @@
 // are rate-limited, and a limit the client enforces is not a limit — the same
 // reasoning the quiz and the flashcard deck are built on.
 import { Router } from 'express'
+import { waitUntil } from '@vercel/functions'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { customQuestions } from '../db/schema.js'
@@ -78,6 +79,14 @@ async function usedToday(userId: string, space: string, day: string): Promise<nu
  *  today's. The generated ones are not the reader's to remove, and the
  *  client needs to know which is which to say so.
  */
+/** A note was opened in the reader. Telemetry only: the reader already has
+ *  the note, so this answers 204 before writing anything. */
+notesRouter.post('/open', (req, res) => {
+  const path = noteParam(req.body?.path)
+  res.status(204).end()
+  if (path) waitUntil(logUsageEvent({ userId: req.user!.id, eventType: 'note_open', metadata: { path, space: spaceOf(path) } }))
+})
+
 notesRouter.get('/custom-questions', asyncHandler(async (req, res) => {
   const path = noteParam(req.query.path)
   if (!path) {

@@ -23,6 +23,7 @@ import { validateVaultPath, PathError } from '../vault/pathValidation.js'
 import { logUsageEvent } from '../usage/logEvent.js'
 import { firePixel } from '../usage/pixel.js'
 import { NOT_HIDDEN } from '../vault/hidden.js'
+import { topicPath } from '../vault/firstNote.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
 import { isSkippedNote } from '../vault/skipped.js'
 import { SPACE_ROOT, spaceOf, normalizeTopic, getOrCreatePersonalVaultId, getGlobalVaultId, adoptSpaceInto, contributeToLibrary, archivedSpaces, setSpaceArchived, deleteSpace } from '../vault/spaces.js'
@@ -33,6 +34,29 @@ export const vaultsRouter = Router()
 // yet. It is names and topic titles only, never note bodies — starting one
 // still goes through sign-in and the same start call as a typed topic.
 vaultsRouter.get('/library/spaces', (req, res, next) => listLibrarySpaces(req, res, next))
+// Also public: the first note of one library collection, so somebody who
+// arrives from a reel about it can read before being asked to sign up. One
+// note, already written and shared by everyone — nothing personal, no spend.
+vaultsRouter.get('/library/preview', asyncHandler(async (req, res) => {
+  const space = typeof req.query.space === 'string' ? req.query.space.trim() : ''
+  const globalVaultId = space && !space.includes('/') ? await getGlobalVaultId() : null
+  const path = globalVaultId ? await topicPath(globalVaultId, space) : []
+  const note = path[0]
+  if (!note) {
+    res.status(404).json({ error: 'no such collection in the library' })
+    return
+  }
+  res.set('Cache-Control', 'public, max-age=300')
+  res.json({
+    space,
+    title: note.title,
+    content: note.content,
+    topicCount: path.length,
+    // What comes after it, titles only: the preview draws the start of the
+    // learning path, and the bodies stay behind the sign-up.
+    next: path.slice(1, 4).map((t) => ({ title: t.title, needs: t.needs })),
+  })
+}))
 vaultsRouter.use(requireAuth)
 // Cloud vaults used to be behind owner approval, leaving an unapproved
 // account with only the demo vault. Every signed-in account gets its own now;

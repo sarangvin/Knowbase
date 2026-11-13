@@ -28,6 +28,8 @@ import {
   type OnboardingJob,
 } from './onboardingApi'
 import { Sparkles, ArrowRight, X } from '../../ui/icons'
+import { computeNextUp, lastReviewedDay } from '../automated-graph/engine'
+import { previewedTitle } from '../../deepLink'
 import './onboarding.css'
 
 /** Slow enough not to be a background load on a phone, fast enough that the
@@ -60,6 +62,25 @@ const IDLE_SYNC_MS = 60_000
  *  locked-down browser, and the cost of losing this is a banner the user has
  *  to close twice. */
 const DISMISS_KEY = 'kb:onboarding-dismissed'
+
+/** Has this reader finished any note, in any collection? */
+function hasFinishedAnything(): boolean {
+  const index = useVault.getState().index
+  if (!index) return false
+  for (const n of index.notes.values()) if (lastReviewedDay(n.frontmatter)) return true
+  return false
+}
+
+/** The note Next Up would open first: a drafted one, never a stub. */
+function firstNoteOf(space: string): string | null {
+  const index = useVault.getState().index
+  if (!index) return null
+  const { ranked } = computeNextUp(index, space)
+  // Already read in the signed-out preview: start them on the one after it.
+  const seen = previewedTitle()
+  const unread = ranked.filter((t) => t.title !== seen)
+  return (unread.find((t) => !t.pending) ?? unread[0] ?? ranked[0])?.path ?? null
+}
 
 function readDismissed(): string | null {
   try {
@@ -197,7 +218,21 @@ export function OnboardingBanner() {
   const homeShowsIt = !!job && job.status === 'ready' && !job.acknowledged && onHome && source != null
   useEffect(() => {
     if (!homeShowsIt || !job) return
-    void ackOnboarding(job.topic).then(() => setJob((j) => (j && j.topic === job.topic ? { ...j, acknowledged: true } : j)))
+    void (async () => {
+      // A first-time reader waiting on the home screen for their first
+      // collection goes straight into its first note: no card to find, no
+      // Next Up dashboard in between. Anyone who has finished a note before
+      // knows the way and stays where they are.
+      if (job.space && !hasFinishedAnything()) {
+        const alreadyPersonal = source instanceof RemoteVaultSource && source.mode === 'personal'
+        if (!alreadyPersonal) await loadRemote()
+        else await refreshVault()
+        const first = firstNoteOf(job.space)
+        if (first && useVault.getState().activeView()?.kind !== 'note') openNote(first, { replace: true })
+      }
+      await ackOnboarding(job.topic)
+      setJob((j) => (j && j.topic === job.topic ? { ...j, acknowledged: true } : j))
+    })()
   }, [homeShowsIt, job])
 
   const dismissKey = job ? `${job.topic}|${job.status}` : ''

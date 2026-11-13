@@ -222,6 +222,25 @@
 .home-logo { margin: 0 auto 20px; }
 .home-sub { color: var(--text-muted); font-size: 14.5px; margin: 0 0 22px; }
 
+.home-resume {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  margin: 0 0 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--accent-line);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--text-normal);
+  text-align: left;
+  cursor: pointer;
+}
+.home-resume:hover { background: var(--bg-hover); }
+.home-resume-label { font-size: 13px; color: var(--accent); font-weight: 600; }
+.home-resume-title { font-size: 17px; font-weight: 600; }
+
 .collection-grid {
   display: grid;
   /* auto-fit + minmax rather than fixed columns: one collection shouldn't
@@ -387,9 +406,11 @@
   overflow: hidden;
 }
 .suggestion-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-.suggestion-actions .ob-btn { min-width: 0; }
+.suggestion-actions .ob-btn { min-width: 0; justify-content: center; text-align: center; text-decoration: none; }
 @media (max-width: 560px) {
-  .suggestion-actions .ob-btn { flex: 1; }
+  .suggestion-actions .ob-btn { flex: 1; white-space: nowrap; }
+  /* The main action gets its own row; the two secondary ones share the next. */
+  .suggestion-actions .ob-btn.primary { flex: 1 1 100%; }
 }
 
 /* ── Topic launcher ──────────────────────────────────────────────────────── */

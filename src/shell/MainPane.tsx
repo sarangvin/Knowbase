@@ -106,6 +106,13 @@ function HomeView() {
     return { total: topics.length, studied, written, next, topics: live }
   }
 
+  const openNote = useVault((s) => s.openNote)
+  const resume = (() => {
+    if (!index || spaces.length === 0) return null
+    const pick = computeNextUp(index, spaces[0]).pick
+    return pick && !pick.pending ? { path: pick.path, title: pick.title, isReview: !!pick.isReview, space: spaces[0] } : null
+  })()
+
   const nextUpOf = (space: string) =>
     notes.find((n) => n.path === `Automated Graph/${space}/Next Up.md`)?.path ?? null
 
@@ -191,6 +198,15 @@ function HomeView() {
               {pending.length > 0 && `, ${pending.length} being built`}. Each one is its own
               subject, with its own order of study.
             </p>
+            {/* Coming back should be one tap: the next note in the collection
+                they used last, opened directly. Starting something new is
+                still the card grid below. */}
+            {resume && (
+              <button className="home-resume" onClick={() => openNote(resume.path)}>
+                <span className="home-resume-label">{resume.isReview ? 'Review' : 'Continue'} · {resume.space}</span>
+                <span className="home-resume-title">{resume.title}</span>
+              </button>
+            )}
             <div className="collection-grid">
               {buildingCards}
               {spaces.map((space) => {

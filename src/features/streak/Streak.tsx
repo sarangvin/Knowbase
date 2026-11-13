@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { useStreak, type Celebration } from './streakStore'
+import { computeToday } from '../automated-graph/engine'
 import { Flame, Snowflake, Check } from '../../ui/icons'
 import './streak.css'
 
@@ -67,6 +68,8 @@ function Card({ c, onClose }: { c: Celebration; onClose: () => void }) {
   }, [onClose])
 
   const today = streak.week[streak.week.length - 1]?.day
+  // Name the next note, so there is a concrete reason to come back.
+  const tomorrow = useVault((s) => (s.index ? computeToday(s.index).picks.find((p) => p.path)?.title ?? null : null))
   const rolled = shown === to
 
   let line: string
@@ -122,6 +125,11 @@ function Card({ c, onClose }: { c: Celebration; onClose: () => void }) {
         </div>
 
         <p className="streak-line">{line}</p>
+        {extending && tomorrow && (
+          <p className="streak-tomorrow">
+            Tomorrow: <strong>{tomorrow}</strong>
+          </p>
+        )}
 
         <div className="streak-freezes" title="A missed day uses a freeze instead of ending the streak. Every 7 days kept earns one, and your first lesson earns a bonus one.">
           {Array.from({ length: streak.maxFreezes }, (_, i) => (

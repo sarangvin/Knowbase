@@ -183,6 +183,13 @@
       "when": 1794568800000,
       "tag": "0025_strip_next_up_how_this_works",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794600000000,
+      "tag": "0026_signup_ref_and_emails",
+      "breakpoints": true
     }
   ]
 }

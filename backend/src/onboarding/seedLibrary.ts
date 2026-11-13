@@ -15,6 +15,7 @@
 //   cd backend
 //   npx tsx --env-file=.env src/onboarding/seedLibrary.ts --dry
 //   npx tsx --env-file=.env src/onboarding/seedLibrary.ts --limit 10
+//   npx tsx --env-file=.env src/onboarding/seedLibrary.ts --topics "Inflation,Tinnitus"
 //
 // Paced to at most 12 calls a minute, under Flash-Lite's 15. Calls are
 // metered to the owner (OWNER_EMAILS), so they show in admin and
@@ -36,7 +37,7 @@ import { readFileSync } from 'node:fs'
 // The list the box suggests from, read out of the frontend's own file so
 // there is one list. Read rather than imported: the backend build only
 // compiles backend/src.
-const TOPICS = [
+const EXAMPLE_TOPICS = [
   ...readFileSync(new URL('../../../src/features/onboarding/examples.ts', import.meta.url), 'utf8')
     .match(/export const TOPICS = \[([\s\S]*?)\]/)![1]
     .matchAll(/'([^']+)'/g),
@@ -48,6 +49,14 @@ const num = (name: string, fallback: number) => {
   return i >= 0 ? Number(args[i + 1]) || fallback : fallback
 }
 const dry = args.includes('--dry')
+// --topics "Inflation,Pink Salt": write these instead of the example list.
+// The video pipeline uses this: every reel links to its own collection, so
+// the collection has to be in the library before the reel goes out.
+const topicsArg = args.indexOf('--topics')
+const TOPICS =
+  topicsArg >= 0
+    ? (args[topicsArg + 1] ?? '').split(',').map((t) => t.trim()).filter(Boolean)
+    : EXAMPLE_TOPICS
 
 /** Flash-Lite allows 15 requests a minute per model. Seeding stays at 12 or
  *  fewer — one call at least every 5 seconds — so readers' own requests

@@ -16,6 +16,7 @@ import { notesRouter } from './routes/notes.js'
 import { cronRouter } from './routes/cron.js'
 import { demoRouter } from './routes/demo.js'
 import { pixelRouter } from './routes/pixel.js'
+import { emailRouter } from './routes/email.js'
 import { accountRouter } from './routes/account.js'
 import { notificationsRouter } from './routes/notifications.js'
 import { bootstrapRouter } from './routes/bootstrap.js'
@@ -90,6 +91,7 @@ export function createApp() {
   // Unauthenticated by design — see routes/demo.ts.
   app.use('/api/demo', demoRouter)
   app.use('/api/pixel', pixelRouter)
+  app.use('/api/email', emailRouter)
   app.use('/api/draft-notes', draftNotesRouter)
   app.use('/api/onboarding', onboardingRouter)
   app.use('/api/quiz', quizRouter)

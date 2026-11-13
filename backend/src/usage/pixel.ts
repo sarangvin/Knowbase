@@ -30,7 +30,17 @@ export const SERVER_PIXELS = [
 
 /** Fired by the browser through POST /api/pixel/:name — the only ones that
  *  endpoint accepts. Anything before sign-in has to be one of these. */
-export const CLIENT_PIXELS = ['landing_view', 'landing_view_signed_in', 'signup_click', 'login_click', 'note_swipe_left'] as const
+export const CLIENT_PIXELS = [
+  'landing_view',
+  'landing_view_signed_in',
+  'signup_click',
+  'login_click',
+  'note_swipe_left',
+  'email_click_ready',
+  'email_click_next',
+  'preview_view',
+  'preview_signup_click',
+] as const
 
 export type PixelName = (typeof SERVER_PIXELS)[number] | (typeof CLIENT_PIXELS)[number]
 

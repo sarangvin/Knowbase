@@ -74,6 +74,14 @@ export const users = pgTable('users', {
   /** When the app asked, once, whether they want reminders. Set whatever
    *  they answered, so the question is never asked again on any device. */
   notifyPromptedAt: timestamp('notify_prompted_at', { withTimezone: true }),
+  /** Where the account came from: the `?ref=` on the link they landed on
+   *  (yt, ig, …), carried through Google sign-in. Null = no tag. */
+  signupRef: text('signup_ref'),
+  /** Set by the unsubscribe link in any email. Nothing is emailed after it. */
+  emailOptedOutAt: timestamp('email_opted_out_at', { withTimezone: true }),
+  /** The two onboarding emails (email/run.ts). Each is sent at most once. */
+  emailReadySentAt: timestamp('email_ready_sent_at', { withTimezone: true }),
+  emailNextSentAt: timestamp('email_next_sent_at', { withTimezone: true }),
 })
 
 /** A browser's Web Push subscription. One account can have several devices;

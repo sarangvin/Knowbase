@@ -202,6 +202,13 @@ export function CollectionSuggestion({
                 {busy ? <span className="spinner" /> : <ArrowRight />} {busy ? 'Adding…' : 'Start this collection'}
                 {!busy && !onStart && !!allowance?.coinCost && <CoinCost n={allowance.coinCost} />}
               </button>
+              {/* Signed out (the landing page passes onStart): let them read
+                  before they are asked for an account. */}
+              {onStart && (
+                <a className="ob-btn" href={`/?read=${encodeURIComponent(current.name)}`}>
+                  Read the first note
+                </a>
+              )}
               {candidates.length > 1 && (
                 <button className="ob-btn" onClick={another} disabled={busy}>
                   <RotateCw width={14} height={14} /> Show another

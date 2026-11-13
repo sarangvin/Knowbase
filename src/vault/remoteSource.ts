@@ -128,8 +128,30 @@ export async function requestAccess(topic?: string): Promise<string | null> {
 // afterwards. The HTTP routes still exist under /api/vaults/library/* and
 // /api/vaults/mine/adopt; nothing in this app calls them any more.
 
+const REF_KEY = 'rabbithole.ref'
+
+/** Remember where this visitor came from (`?ref=yt` on the reel links) so a
+ *  sign-up later in the visit can be credited to it. First tag wins. */
+export function rememberRef(): void {
+  try {
+    const ref = new URLSearchParams(window.location.search).get('ref')
+    if (ref && /^[a-z0-9_-]{1,32}$/.test(ref) && !localStorage.getItem(REF_KEY)) localStorage.setItem(REF_KEY, ref)
+  } catch {
+    // Storage blocked: the visit just goes untagged.
+  }
+}
+
+function storedRef(): string | null {
+  try {
+    return localStorage.getItem(REF_KEY)
+  } catch {
+    return null
+  }
+}
+
 export function signInWithGoogle(returnTo = '/'): void {
-  window.location.href = `/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`
+  const ref = storedRef()
+  window.location.href = `/auth/google/start?returnTo=${encodeURIComponent(returnTo)}${ref ? `&ref=${encodeURIComponent(ref)}` : ''}`
 }
 
 export async function signOut(): Promise<void> {

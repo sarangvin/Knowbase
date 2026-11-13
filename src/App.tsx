@@ -16,6 +16,8 @@ import { BottomNav } from './shell/BottomNav'
 import { CommandPalette } from './features/palette/CommandPalette'
 import { QuickSwitcher } from './features/palette/QuickSwitcher'
 import { SwipeUndo } from './features/reader/SwipeUndo'
+import { openDeepLink, readLink } from './deepLink'
+import { LibraryPreview } from './features/onboarding/LibraryPreview'
 import './ui/controls.css'
 import './App.css'
 
@@ -41,6 +43,8 @@ export default function App() {
   // is then yanked away, which reads as a flash of "signed out" to someone who
   // never signed out.
   const [booting, setBooting] = useState(true)
+  const user = useVault((s) => s.user)
+  const [previewSpace, setPreviewSpace] = useState<string | null>(readLink)
   useKeybindings()
 
   // On boot: resume whatever the visitor already had. A previously-opened
@@ -138,6 +142,11 @@ export default function App() {
   // Hold the splash while auto-resume is still deciding. Onboarding draws its
   // own spinner once a vault is actually loading, so this only covers the gap
   // before that starts.
+  // Once the vault is in, an email link's note wins over wherever boot landed.
+  useEffect(() => {
+    if (!booting && status === 'ready') openDeepLink()
+  }, [booting, status])
+
   if (booting && status !== 'ready') {
     return (
       <div className="onboarding">
@@ -145,7 +154,10 @@ export default function App() {
       </div>
     )
   }
-  if (status !== 'ready') return <Onboarding />
+  if (status !== 'ready') {
+    if (previewSpace && !user) return <LibraryPreview space={previewSpace} onLeave={() => setPreviewSpace(null)} />
+    return <Onboarding />
+  }
 
   // There is no "brand-new empty vault" gate here any more. It used to catch a
   // user whose personal vault had no notes and ask them for a topic, because

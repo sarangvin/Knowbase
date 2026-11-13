@@ -36,6 +36,7 @@ import { logUsageEvent } from '../usage/logEvent.js'
 import { firePixel } from '../usage/pixel.js'
 import { enqueueDrafts } from './queue.js'
 import { growSpace } from './grow.js'
+import { sendReadyEmail } from '../email/run.js'
 
 type JobPatch = Partial<{
   status: string
@@ -126,6 +127,16 @@ async function joinExisting(userId: string, topic: string, vaultId: string, spac
  * 'running' forever and a user staring at a banner that never resolves.
  */
 export async function runOnboarding(userId: string, topic: string): Promise<void> {
+  try {
+    await buildCollection(userId, topic)
+  } finally {
+    // Email 1, "your collection is ready". Checks for itself that a
+    // collection is ready and that this account should get it; never throws.
+    await sendReadyEmail(userId)
+  }
+}
+
+async function buildCollection(userId: string, topic: string): Promise<void> {
   try {
     const vaultId = await getOrCreatePersonalVaultId(userId)
 

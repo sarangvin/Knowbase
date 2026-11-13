@@ -6,7 +6,7 @@ import { usageEvents } from '../db/schema.js'
 
 export interface UsageEvent {
   userId: string
-  eventType: 'login' | 'vault_sync' | 'note_write' | 'note_review' | 'note_skip' | 'llm_call'
+  eventType: 'login' | 'vault_sync' | 'note_write' | 'note_review' | 'note_skip' | 'note_open' | 'email_sent' | 'email_unsubscribe' | 'llm_call'
   provider?: string
   model?: string
   inputTokens?: number

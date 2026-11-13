@@ -167,7 +167,7 @@
   margin-left: calc(50% - 120px + var(--sway, 0px));
   min-width: 0;
 }
-.lp > .lp-step.is-current { --node: 70px; margin-top: 52px; margin-bottom: 8px; }
+.lp > .lp-step.is-current { --node: 70px; margin-top: 52px; margin-bottom: 8px; gap: 28px; } /* gap: the ring reaches 15px past the circle */
 .lp-step.is-done {
   --fill: hsl(42 92% 56%);
   --ink: hsl(36 70% 26%);

@@ -9,6 +9,7 @@
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { notifyEveryone } from '../notifications/run.js'
+import { emailEveryone } from '../email/run.js'
 import { topUpEveryone, findShortCollections, shelfReport, passDiagnostics } from '../onboarding/topUp.js'
 
 export const cronRouter = Router()
@@ -74,5 +75,6 @@ cronRouter.get('/notify', asyncHandler(async (req, res) => {
     res.status(404).json({ error: 'not found' })
     return
   }
-  res.json(await notifyEveryone())
+  // The two onboarding emails ride on the same hourly pass (email/run.ts).
+  res.json({ ...(await notifyEveryone()), email: await emailEveryone() })
 }))

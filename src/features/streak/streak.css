@@ -207,3 +207,9 @@
 .freeze-left { justify-content: center; font-size: 14px; margin-top: 4px; }
 .freeze-left .held { color: var(--streak-ice); }
 .freeze-hint { color: var(--text-faint); font-size: 13px; margin: 8px 0 16px; text-align: center; }
+
+.streak-tomorrow {
+  margin: 8px 0 0;
+  font: 400 14px/1.45 var(--font-ui);
+  color: var(--text-normal);
+}

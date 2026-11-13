@@ -17,7 +17,20 @@ import { FindSources } from './FindSources'
 import { HighlightBar } from '../highlight/HighlightBar'
 import { FinishHint } from './FinishHint'
 import { useHighlight } from '../highlight/highlightStore'
+import { RemoteVaultSource } from '../../vault/remoteSource'
 import './noteview.css'
+
+const openedThisVisit = new Set<string>()
+function logNoteOpen(path: string): void {
+  if (openedThisVisit.has(path)) return
+  openedThisVisit.add(path)
+  void fetch('/api/notes/open', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  }).catch(() => {})
+}
 
 /** Keep clear of the screen edges: a swipe that starts there is the
  *  browser's back/forward gesture, and taking it would break navigation. */
@@ -79,6 +92,13 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
     openedAt.current = Date.now()
     deepestScroll.current = 0
   }, [path])
+
+  // Record that this note was opened, so "never finished a note" can be told
+  // apart from "never read one". Own cloud vault only, once per note per visit.
+  const ownCloud = useVault((s) => s.source instanceof RemoteVaultSource && s.source.mode === 'personal')
+  useEffect(() => {
+    if (ownCloud && note) logNoteOpen(path)
+  }, [ownCloud, path, note != null])
 
   const finisher = useFinishNote(note, touch, () => {
     trackScroll()

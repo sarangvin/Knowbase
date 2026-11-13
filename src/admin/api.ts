@@ -265,6 +265,29 @@ export function fetchPixels(): Promise<AdminPixelsResponse> {
   return api('/api/admin/pixels')
 }
 
+export interface RetentionCohort {
+  week: string
+  users: number
+  d1: number
+  w1: number
+  returned: number
+  three_days: number
+  opened: number
+  finished: number
+  ready_sent: number
+  next_sent: number
+  unsubscribed: number
+}
+
+export interface AdminRetentionResponse {
+  cohorts: RetentionCohort[]
+  sources: { ref: string; users: number; returned: number; finished: number }[]
+}
+
+export function fetchRetention(): Promise<AdminRetentionResponse> {
+  return api('/api/admin/retention')
+}
+
 export function fetchInstances(): Promise<AdminInstancesResponse> {
   return api('/api/admin/instances')
 }

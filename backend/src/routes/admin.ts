@@ -357,6 +357,62 @@ adminRouter.get('/pixels', asyncHandler(async (_req, res) => {
 }))
 
 /**
+ * Retention by signup week. A "visit day" is any day (IST) with a login, an
+ * app load, a note opened or finished, a new collection, a quiz or a deck.
+ * Owners are left out: their own use would swamp everyone else's.
+ */
+adminRouter.get('/retention', asyncHandler(async (_req, res) => {
+  const presence = sql`
+    SELECT user_id, created_at FROM usage_events
+      WHERE event_type IN ('login', 'note_review', 'note_skip', 'note_open')
+         OR (event_type = 'vault_sync' AND metadata IS NULL)
+    UNION ALL SELECT user_id, created_at FROM collection_starts
+    UNION ALL SELECT user_id, created_at FROM quizzes
+    UNION ALL SELECT user_id, created_at FROM flashcard_decks
+    UNION ALL SELECT id, last_seen_at FROM users WHERE last_seen_at IS NOT NULL`
+  const perUser = sql`
+    WITH p AS (${presence}),
+    ud AS (
+      SELECT DISTINCT p.user_id, (p.created_at AT TIME ZONE 'Asia/Kolkata')::date AS d,
+             (u.created_at AT TIME ZONE 'Asia/Kolkata')::date AS sd
+      FROM p JOIN users u ON u.id = p.user_id WHERE u.role <> 'owner'
+    )
+    SELECT u.id, (u.created_at AT TIME ZONE 'Asia/Kolkata')::date AS sd, u.signup_ref,
+           u.email_opted_out_at IS NOT NULL AS unsub,
+           u.email_ready_sent_at IS NOT NULL AS ready_sent,
+           u.email_next_sent_at IS NOT NULL AS next_sent,
+           (SELECT count(DISTINCT d) FROM ud WHERE ud.user_id = u.id) AS days,
+           (SELECT min(d) FROM ud WHERE ud.user_id = u.id AND d > ud.sd) AS second_d,
+           EXISTS (SELECT 1 FROM usage_events e WHERE e.user_id = u.id AND e.event_type = 'note_open') AS opened,
+           EXISTS (SELECT 1 FROM usage_events e WHERE e.user_id = u.id AND e.event_type = 'note_review') AS finished
+    FROM users u WHERE u.role <> 'owner'`
+
+  const cohorts = (await db.execute(sql`
+    WITH x AS (${perUser})
+    SELECT to_char(date_trunc('week', sd), 'YYYY-MM-DD') AS week,
+           count(*)::int AS users,
+           count(*) FILTER (WHERE second_d = sd + 1)::int AS d1,
+           count(*) FILTER (WHERE second_d <= sd + 7)::int AS w1,
+           count(*) FILTER (WHERE second_d IS NOT NULL)::int AS returned,
+           count(*) FILTER (WHERE days >= 3)::int AS three_days,
+           count(*) FILTER (WHERE opened)::int AS opened,
+           count(*) FILTER (WHERE finished)::int AS finished,
+           count(*) FILTER (WHERE ready_sent)::int AS ready_sent,
+           count(*) FILTER (WHERE next_sent)::int AS next_sent,
+           count(*) FILTER (WHERE unsub)::int AS unsubscribed
+    FROM x GROUP BY 1 ORDER BY 1 DESC
+  `)).rows
+  const sources = (await db.execute(sql`
+    WITH x AS (${perUser})
+    SELECT coalesce(signup_ref, '(none)') AS ref, count(*)::int AS users,
+           count(*) FILTER (WHERE second_d IS NOT NULL)::int AS returned,
+           count(*) FILTER (WHERE finished)::int AS finished
+    FROM x GROUP BY 1 ORDER BY 2 DESC
+  `)).rows
+  res.json({ cohorts, sources })
+}))
+
+/**
  * Cold starts: one row per API function instance (usage/instances.ts).
  *
  * Boot CPU is what a cold start costs; total CPU is everything that instance

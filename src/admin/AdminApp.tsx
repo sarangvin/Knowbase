@@ -24,10 +24,12 @@ import {
   type AdminInstancesResponse,
   fetchPixels,
   type AdminPixelsResponse,
+  type AdminRetentionResponse,
+  fetchRetention,
 } from './api'
 import './admin.css'
 
-type Tab = 'users' | 'signins' | 'spaces' | 'usage' | 'queue' | 'completions' | 'instances' | 'funnel'
+type Tab = 'users' | 'signins' | 'spaces' | 'usage' | 'queue' | 'completions' | 'instances' | 'funnel' | 'retention'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -550,6 +552,92 @@ const OTHER: { name: string; label: string }[] = [
   { name: 'note_swipe_undo', label: 'Finish undone after a swipe' },
 ]
 
+function RetentionPanel() {
+  const [data, setData] = useState<AdminRetentionResponse | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    fetchRetention().then(setData).catch((e: unknown) => setErr(String(e)))
+  }, [])
+  if (err) return <div className="admin-error">{err}</div>
+  if (!data) return <div className="admin-dim">Loading…</div>
+  const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—')
+  const total = data.cohorts.reduce(
+    (t, c) => ({
+      users: t.users + c.users,
+      returned: t.returned + c.returned,
+      opened: t.opened + c.opened,
+      finished: t.finished + c.finished,
+      ready: t.ready + c.ready_sent,
+      next: t.next + c.next_sent,
+      unsub: t.unsub + c.unsubscribed,
+    }),
+    { users: 0, returned: 0, opened: 0, finished: 0, ready: 0, next: 0, unsub: 0 },
+  )
+  return (
+    <>
+      <p className="admin-dim">
+        Accounts by signup week (IST), owners left out. Returned = active on any later day. Opened a note
+        is only recorded from 13 Nov 2026 on.
+      </p>
+      <p>
+        <strong>{pct(total.returned, total.users)}</strong> of {total.users} came back at least once;{' '}
+        <strong>{pct(total.finished, total.users)}</strong> ever finished a note. Emails: {total.ready} ready,{' '}
+        {total.next} next-note, <strong>{total.unsub}</strong> unsubscribed.
+      </p>
+      <div className="admin-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Week of</th>
+              <th>Users</th>
+              <th>Next day</th>
+              <th>Within 7d</th>
+              <th>Ever back</th>
+              <th>3+ days</th>
+              <th>Opened a note</th>
+              <th>Finished a note</th>
+              <th>Emails (ready / next / unsub)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.cohorts.map((c) => (
+              <tr key={c.week}>
+                <td>{c.week}</td>
+                <td><strong>{c.users}</strong></td>
+                <td>{pct(c.d1, c.users)}</td>
+                <td>{pct(c.w1, c.users)}</td>
+                <td>{pct(c.returned, c.users)}</td>
+                <td>{pct(c.three_days, c.users)}</td>
+                <td>{pct(c.opened, c.users)}</td>
+                <td>{pct(c.finished, c.users)}</td>
+                <td className="admin-dim">{c.ready_sent} / {c.next_sent} / {c.unsubscribed}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <h3 className="admin-subhead">By source (?ref= on the landing link)</h3>
+      <div className="admin-scroll">
+        <table className="admin-table admin-table-compact">
+          <thead>
+            <tr><th>Source</th><th>Users</th><th>Ever back</th><th>Finished a note</th></tr>
+          </thead>
+          <tbody>
+            {data.sources.map((s) => (
+              <tr key={s.ref}>
+                <td>{s.ref}</td>
+                <td><strong>{s.users}</strong></td>
+                <td>{pct(s.returned, s.users)}</td>
+                <td>{pct(s.finished, s.users)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 function FunnelPanel({ data, loading }: { data: AdminPixelsResponse | null; loading: boolean }) {
   if (loading && !data) return <div className="admin-dim">Loading…</div>
   if (!data) return null
@@ -672,7 +760,9 @@ export function AdminApp() {
     setLoading(true)
     setError(null)
     const request =
-      tab === 'users'
+      tab === 'retention'
+        ? Promise.resolve() // RetentionPanel loads its own data
+        : tab === 'users'
         ? fetchUsers(page).then((data) => {
             setRows(data.users)
             setTotal(data.total)
@@ -908,11 +998,21 @@ export function AdminApp() {
         >
           Funnel
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'retention'}
+          className={`admin-tab${tab === 'retention' ? ' admin-tab-active' : ''}`}
+          onClick={() => setTab('retention')}
+        >
+          Retention
+        </button>
       </div>
 
       {error && <div className="admin-error">{error}</div>}
 
-      {tab === 'funnel' ? (
+      {tab === 'retention' ? (
+        <RetentionPanel />
+      ) : tab === 'funnel' ? (
         <FunnelPanel data={pixels} loading={loading} />
       ) : tab === 'instances' ? (
         <InstancesPanel data={instances} loading={loading} />
