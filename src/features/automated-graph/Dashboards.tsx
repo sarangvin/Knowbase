@@ -191,6 +191,25 @@ function PathNode({ step, index }: { step: PathStep; index: number }) {
 export function NextUp({ space }: { space: string }) {
   const index = useVault((s) => s.index)
   const [showAllDone, setShowAllDone] = useState(false)
+  const pathRef = useRef<HTMLOListElement>(null)
+  const hasIndex = !!index
+
+  // Open with the step to tap in the middle of the screen, the way a path
+  // should: what is behind you above it, what is ahead below. Once per
+  // collection, not on every re-render — a reader who has scrolled away to
+  // look at something should not be pulled back. A frame late, because the
+  // reader resets its scroll to the top when a note opens, and that runs
+  // after this component's own effects.
+  useEffect(() => {
+    if (!hasIndex) return
+    const raf = requestAnimationFrame(() => {
+      pathRef.current
+        ?.querySelector('.lp-step.is-current')
+        ?.scrollIntoView({ block: 'center', behavior: 'auto' })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [space, hasIndex])
+
   if (!index) return null
   const r = computeNextUp(index, space)
 
@@ -260,7 +279,7 @@ export function NextUp({ space }: { space: string }) {
         </button>
       )}
       {steps.length ? (
-        <ol className="lp">
+        <ol className="lp" ref={pathRef}>
           {steps.map((s, i) => <PathNode key={s.key} step={s} index={i + hidden} />)}
         </ol>
       ) : (
