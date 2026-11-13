@@ -167,7 +167,7 @@
   margin-left: calc(50% - 120px + var(--sway, 0px));
   min-width: 0;
 }
-.lp > .lp-step.is-current { --node: 70px; margin-top: 44px; }
+.lp > .lp-step.is-current { --node: 70px; margin-top: 52px; margin-bottom: 8px; }
 .lp-step.is-done {
   --fill: hsl(42 92% 56%);
   --ink: hsl(36 70% 26%);
@@ -200,13 +200,28 @@
 }
 .lp-node:hover { filter: brightness(1.04); }
 .lp-node:active { transform: translateY(5px); box-shadow: 0 1px 0 var(--edge); }
-.lp-step.is-current .lp-node {
-  outline: 6px solid var(--accent-soft);
-  outline-offset: 5px;
+/* The ring round the current step. Drawn on the wrapper rather than as the
+   button's outline: an outline hugs the circle face and ignores the 6px
+   base under it, so it sat high. This one is centred on face plus base. */
+.lp-step.is-current .lp-node-wrap::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 3px);
+  width: calc(var(--node) + 30px);
+  height: calc(var(--node) + 30px);
+  transform: translate(-50%, -50%);
+  /* Half-strength accent: --accent-soft all but vanished on the dark theme,
+     and this ring is the page's "you are here". */
+  border: 6px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 50%;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 .lp-bubble {
   position: absolute;
-  bottom: calc(100% + 16px);
+  /* Clear of the ring, which reaches 12px above the button. */
+  bottom: calc(100% + 24px);
   left: 50%;
   transform: translateX(-50%);
   padding: 5px 12px;
