@@ -147,7 +147,13 @@ export function Markdown({ content, depth = 0, notePath = '' }: MarkdownProps) {
           return <pre>{children}</pre>
         },
         h1: (p) => <h1 id={slugify(textOf(p.children))}>{p.children}</h1>,
-        h2: (p) => <h2 id={slugify(textOf(p.children))}>{p.children}</h2>,
+        // "AI Notes" stays the stored name (the backend finds and rewrites a
+        // note's body by it); readers see "Description". The id keeps the
+        // stored name so [[Note#AI Notes]] links still land here.
+        h2: (p) => {
+          const text = textOf(p.children)
+          return <h2 id={slugify(text)}>{text.trim() === 'AI Notes' ? 'Description' : p.children}</h2>
+        },
         h3: (p) => <h3 id={slugify(textOf(p.children))}>{p.children}</h3>,
         h4: (p) => <h4 id={slugify(textOf(p.children))}>{p.children}</h4>,
       }}
