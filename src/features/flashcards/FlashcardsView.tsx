@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { atLeastPro } from '../settings/plans'
 import { Layers, RotateCw, ArrowRight, ArrowLeft, Check, Bookmark, BookmarkFilled } from '../../ui/icons'
-import { fetchDeck, dealDeck, drawMore, turnCard, bookmarkCard, type Deck, type TurnResult } from './flashcardsApi'
+import { fetchDeck, dealDeck, drawMore, turnCard, bookmarkCard, type Deck, type Flashcard, type TurnResult } from './flashcardsApi'
 import './flashcards.css'
 
 /** The bookmark, rendered once per face.
@@ -52,6 +52,47 @@ function BookmarkButton({
     >
       {on ? <BookmarkFilled width={17} height={17} /> : <Bookmark width={17} height={17} />}
     </button>
+  )
+}
+
+/** One of today's cards on the Done page: tap to flip, as often as you like.
+ *  Purely local — every card here was turned already, so flipping it again
+ *  records nothing and moves no schedule. */
+function ReviewCard({ card, n }: { card: Flashcard; n: number }) {
+  const [flipped, setFlipped] = useState(false)
+  const front = card.front === 'term'
+  return (
+    <div className="fc-review-card">
+      <div
+        role="button"
+        tabIndex={0}
+        className={'fc-card' + (flipped ? ' is-flipped' : '')}
+        onClick={() => setFlipped((f) => !f)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setFlipped((f) => !f)
+          }
+        }}
+        aria-label={`Card ${n}: ${flipped ? 'show the front' : 'show the back'}`}
+      >
+        <span className="fc-card-inner">
+          <span className="fc-face fc-front" aria-hidden={flipped}>
+            <span className="fc-face-body">
+              <span className="fc-kind">{front ? 'Term' : 'Definition'}</span>
+              <span className={front ? 'fc-term' : 'fc-def'}>{front ? card.term : card.definition}</span>
+            </span>
+          </span>
+          <span className="fc-face fc-back" aria-hidden={!flipped}>
+            <span className="fc-face-body">
+              <span className="fc-kind">{front ? 'Definition' : 'Term'}</span>
+              <span className={front ? 'fc-def' : 'fc-term'}>{front ? card.definition : card.term}</span>
+              <span className="fc-hint">{card.noteTitle}</span>
+            </span>
+          </span>
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -305,6 +346,17 @@ export function FlashcardsView() {
             Back to your collections
           </button>
         </div>
+
+        {/* Every card dealt today, to look back over until the next set. */}
+        <section className="fc-review" aria-label="Today's cards">
+          <h2 className="fc-review-title">Today's cards</h2>
+          <p className="fc-note">Tap a card to flip it. They stay here until tomorrow's set.</p>
+          <div className="fc-review-grid">
+            {deck.cards.map((c, i) => (
+              <ReviewCard key={`${c.notePath}|${c.term}`} card={c} n={i + 1} />
+            ))}
+          </div>
+        </section>
       </Shell>
     )
   }

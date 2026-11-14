@@ -313,3 +313,19 @@
   color: var(--text-success);
   border: 1px solid color-mix(in srgb, var(--text-success) 45%, transparent);
 }
+
+/* Today's cards, under "Done for today": the same flip card, smaller, one
+   after another. Each holder gives the absolutely positioned card its box. */
+.fc-review { margin: 36px 0 24px; padding-top: 24px; border-top: 1px solid var(--divider); }
+.fc-review-title { margin: 0 0 4px; font-size: 17px; font-weight: 650; color: var(--text-normal); }
+.fc-review .fc-note { margin: 0 0 16px; }
+.fc-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.fc-review-card { position: relative; height: 190px; perspective: 1200px; }
+.fc-review-card .fc-face { box-shadow: 0 3px 10px hsl(0 0% 0% / 0.14); }
+.fc-review-card .fc-face-body { padding: 18px 16px; gap: 10px; }
+.fc-review-card .fc-term { font-size: 19px; }
+.fc-review-card .fc-def { font-size: 14px; }
