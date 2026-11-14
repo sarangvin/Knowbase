@@ -5,8 +5,9 @@
 // flashcard gave up being a button when the bookmark moved inside it.
 import { useEffect, useRef, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
-import { MoreVertical, Archive, Trash, Check } from '../../ui/icons'
+import { MoreVertical, Archive, Trash } from '../../ui/icons'
 import { setCollectionArchived, deleteCollection } from './collectionsApi'
+import { TopicIcon } from './topicIcons'
 
 export interface CollectionSummary {
   space: string
@@ -29,10 +30,6 @@ export interface CollectionSummary {
   topics?: { path: string; title: string; pending: boolean }[]
 }
 
-/** Past this many topics the list says "+N more" rather than growing the
- *  card past the others in its row. */
-const LIVE_LIST_MAX = 8
-
 export function CollectionCard({
   summary,
   onChanged,
@@ -42,7 +39,7 @@ export function CollectionCard({
    *  in memory has no idea until it is re-read. */
   onChanged: () => void
 }) {
-  const { space, total, studied, written, next, openPath, topics } = summary
+  const { space, total, studied, written, openPath } = summary
   const openNote = useVault((s) => s.openNote)
   const [menuOpen, setMenuOpen] = useState(false)
   const [busy, setBusy] = useState<null | 'archive' | 'delete'>(null)
@@ -111,74 +108,18 @@ export function CollectionCard({
           }
         }}
       >
-        <div className="collection-name">{space}</div>
-        {/* Directly under the name, because it is the answer to the
-            question you open a collection to ask. */}
-        {total > 0 && (
-          <div className="collection-next">
-            <span className="collection-next-label">{next?.isReview ? 'Review next:' : 'Next up:'}</span>{' '}
-            {next ? (
-              <span className="collection-next-title">
-                {next.title}
-                {next.pending && <span className="collection-next-soon"> · coming soon</span>}
-              </span>
-            ) : (
-              <span className="collection-next-none">nothing ready right now</span>
-            )}
-          </div>
-        )}
-        <div className="collection-meta">
-          {written < total ? (
-            // Still filling in. The honest number here is how much there is
-            // to read, not how many folders exist.
-            <>
-              {written} of {total} notes written
-              {studied > 0 && ` · ${studied} studied`}
-            </>
-          ) : (
-            <>
-              {total} topic{total === 1 ? '' : 's'} · {studied} studied
-            </>
-          )}
+        <div className="collection-head">
+          <TopicIcon space={space} />
+          <div className="collection-name">{space}</div>
         </div>
-        {/* The notes being written, ticking off as each one lands — the
-            build made visible, so a new collection is something to watch
-            rather than a spinner to wait out. A written note opens. */}
-        {topics && written < total && (
-          <ul className="collection-live" aria-live="polite">
-            {topics.slice(0, LIVE_LIST_MAX).map((t) => (
-              <li key={t.path} className={t.pending ? 'is-pending' : 'is-written'}>
-                {t.pending ? (
-                  <span className="spinner collection-live-spinner" aria-label="being written" />
-                ) : (
-                  <Check width={13} height={13} aria-label="written" />
-                )}
-                {t.pending ? (
-                  <span>{t.title}</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="collection-live-open"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openNote(t.path)
-                    }}
-                  >
-                    {t.title}
-                  </button>
-                )}
-              </li>
-            ))}
-            {topics.length > LIVE_LIST_MAX && (
-              <li className="collection-live-more">+{topics.length - LIVE_LIST_MAX} more</li>
-            )}
-          </ul>
-        )}
-        {total > 0 && (
-          <div className="collection-bar" aria-hidden="true">
-            <span style={{ width: `${pct}%` }} />
-          </div>
-        )}
+        {/* What to open next is the Continue button above the grid; the card
+            just says how far along this collection is. */}
+        <div className="collection-meta">
+          {written < total ? `${written} of ${total} written` : `${studied} of ${total} studied`}
+        </div>
+        <div className="collection-bar" aria-hidden="true">
+          <span style={{ width: `${pct}%` }} />
+        </div>
       </div>
 
       <button
@@ -266,9 +207,12 @@ export function BuildingCard({ topic, drafted, total, error, onRetry, busy, star
 
   return (
     <div className={'collection-card is-building' + (failed ? ' is-failed' : '')} aria-live="polite">
-      <div className="collection-name">
-        {!failed && <span className="spinner building-spinner" aria-hidden="true" />}
-        {topic}
+      <div className="collection-head">
+        <TopicIcon space={topic} />
+        <div className="collection-name">
+          {!failed && <span className="spinner building-spinner" aria-hidden="true" />}
+          {topic}
+        </div>
       </div>
       <div className="collection-meta">
         {failed

@@ -222,37 +222,72 @@
 .home-logo { margin: 0 auto 20px; }
 .home-sub { color: var(--text-muted); font-size: 14.5px; margin: 0 0 22px; }
 
+.home-title { margin-bottom: 14px; }
+
+/* The collection's logo: a monochrome icon on the orange tile. */
+.topic-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  position: relative;
+  overflow: hidden;
+}
+/* The low-poly facets fill the tile; the icon sits on top of them. */
+.topic-icon .lowpoly { position: absolute; inset: 0; width: 100%; height: 100%; }
+.topic-icon-glyph { position: relative; filter: drop-shadow(0 1px 0 hsl(40 100% 90% / 0.35)); }
+
 .home-resume {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  align-items: center;
+  gap: 14px;
   width: 100%;
-  margin: 0 0 22px;
-  padding: 16px 18px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
   border: 1px solid var(--accent-line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--accent-soft);
   color: var(--text-normal);
   text-align: left;
   cursor: pointer;
 }
+.home-resume .topic-icon { width: 52px; height: 52px; border-radius: 14px; }
 .home-resume:hover { background: var(--bg-hover); }
-.home-resume-label { font-size: 13px; color: var(--accent); font-weight: 600; }
-.home-resume-title { font-size: 17px; font-weight: 600; }
+.home-resume-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.home-resume-label { font-size: 12.5px; color: var(--accent); font-weight: 600; }
+.home-resume-title { font-size: 17px; font-weight: 650; }
+.home-resume-brief { font-size: 13.5px; line-height: 1.4; color: var(--text-muted); }
 
 .collection-grid {
   display: grid;
   /* auto-fit + minmax rather than fixed columns: one collection shouldn't
      render as a lonely card in a 4-up grid, and a phone gets one column
      without a breakpoint. */
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+/* Phones: two collections a row, the cards squared up around the logo. */
+@media (max-width: 560px) {
+  .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.collection-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; min-width: 0; }
+.collection-head .collection-name {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.25;
 }
 .collection-card {
   display: block;
   text-align: left;
-  padding: 14px 16px;
+  padding: 12px;
   border-radius: var(--radius-m);
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
@@ -261,7 +296,7 @@
 }
 .collection-card:hover:not(:disabled) { border-color: var(--accent); background: var(--bg-hover); }
 .collection-card:disabled { opacity: 0.6; cursor: default; }
-.collection-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.collection-name { font-size: 14.5px; font-weight: 600; margin-bottom: 4px; }
 .collection-meta { color: var(--text-faint); font-size: 12.5px; }
 /* The collection's next note, under its name. One line, cut with an ellipsis
    rather than wrapping, so every card in the grid keeps the same shape. */
@@ -278,7 +313,7 @@
 .collection-next-soon,
 .collection-next-none { color: var(--text-faint); }
 .collection-bar {
-  margin-top: 10px;
+  margin-top: 8px;
   height: 3px;
   border-radius: 2px;
   background: var(--border-strong);
@@ -445,17 +480,17 @@
 .collection-wrap { position: relative; }
 .collection-card.is-disabled { opacity: 0.6; cursor: default; }
 /* Room for the button so a long name never runs under it. */
-.collection-card { padding-right: 42px; }
+.collection-card { padding-right: 30px; }
 
 .collection-menu-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 4px;
+  right: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 8px;
   background: transparent;

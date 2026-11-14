@@ -13,7 +13,7 @@
 // restyle quoting and drop comments, turning "got a quiz question right"
 // into a diff touching every line of the block.
 
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/
+export const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/
 
 /** One top-level scalar, or null. Indented lines are skipped: they belong to
  *  a nested structure (a prerequisites list, say), not to the top level. */

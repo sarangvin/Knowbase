@@ -165,7 +165,9 @@ export function CollectionSuggestion({
 
   return (
     <div className="launcher suggestion">
-      <div className="launcher-title">{title}</div>
+      {/* At the limit both ways in are closed, so this one says it for both
+          (the brand-new launcher below hides itself). */}
+      <div className="launcher-title">{allowance?.blocked && !started ? 'Add a collection' : title}</div>
 
       {started ? (
         <div className="launcher-started">

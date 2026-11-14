@@ -190,6 +190,13 @@
       "when": 1794600000000,
       "tag": "0026_signup_ref_and_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794690000000,
+      "tag": "0027_collection_icons",
+      "breakpoints": true
     }
   ]
 }

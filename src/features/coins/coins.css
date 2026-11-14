@@ -218,3 +218,7 @@
   background: hsl(46 100% 76%);
   box-shadow: 0 0 6px hsl(40 100% 60%);
 }
+
+/* Gold text is unreadable on the light theme's paper: a deeper gold there. */
+:root[data-theme='light'] .coin-pop-total,
+:root[data-theme='light'] .coin-badge { color: hsl(36 85% 36%); }

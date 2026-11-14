@@ -32,6 +32,7 @@ import { draftOne } from './draftNote.js'
 import { buildTopicNote, buildNextUpNote, dedupeSegments } from './notePlan.js'
 import { SPACE_ROOT, contributeToLibrary, findLibrarySpaceFor, normalizeTopic } from '../vault/spaces.js'
 import { callsSinceQuotaReset } from '../usage/quotaWindow.js'
+import { saveIcon } from '../vault/topicIcons.js'
 import { readFileSync } from 'node:fs'
 
 // The list the box suggests from, read out of the frontend's own file so
@@ -133,6 +134,7 @@ for (const topic of missing.slice(0, limit)) {
     // for it. The library is found by name, so "Botany" planned as "Plant
     // Biology" was a collection nobody typing "Botany" would ever reach.
     const space = normalizeTopic(plan.space) === normalizeTopic(topic) ? plan.space : titleCase(topic)
+    await withRetry(() => saveIcon(space, plan.icon ?? null))
     const titles = plan.subtopics.map((s) => s.title)
     const segments = dedupeSegments(titles)
     const entries: { path: string; content: string }[] = []

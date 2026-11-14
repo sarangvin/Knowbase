@@ -170,3 +170,6 @@
 
 /* The reminders prompt borrows the dialog box, not its warning colour. */
 .notify-prompt-box { border-color: var(--border); }
+
+/* Theme picker: the text-size segmented control, with words instead of letters. */
+.theme-opt { width: auto; padding: 0 16px; font-size: 13.5px; }

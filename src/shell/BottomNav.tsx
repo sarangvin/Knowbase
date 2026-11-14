@@ -11,7 +11,7 @@
 // The account lives in Settings — a menu you open a handful of times does not
 // earn permanent space in the chrome.
 import { useVault } from '../vault/vaultStore'
-import { Rabbit, Folder, Layers, Carrot, Settings } from '../ui/icons'
+import { Rabbit, Network, Layers, Carrot, Settings } from '../ui/icons'
 
 type TabId = 'next' | 'files' | 'flashcards' | 'quiz' | 'settings'
 
@@ -56,7 +56,7 @@ export function BottomNav() {
       icon: <Rabbit />,
       onClick: () => openView({ kind: 'home' }),
     },
-    { id: 'files', label: 'Files', icon: <Folder />, onClick: () => openView({ kind: 'files' }) },
+    { id: 'files', label: 'Graph', icon: <Network />, onClick: () => openView({ kind: 'files' }) },
     // Was a link to the vault's Flashcards.md dashboard, and so was disabled
     // on any vault that happened not to have that file. It is a destination
     // now, like Quiz: the cards are dealt by the server from reviewed notes,

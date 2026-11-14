@@ -149,6 +149,13 @@ export function isNewlyRevealed(fm: Record<string, unknown>): boolean {
   return has && !lastReviewedDay(fm)
 }
 
+/** A topic's one-line brief (what you will learn), from its frontmatter.
+ *  Null for notes written before briefs, until the backfill reaches them. */
+export function briefOf(index: VaultIndex, path: string): string | null {
+  const b = index.notes.get(path)?.frontmatter.brief
+  return typeof b === 'string' && b.trim() ? b.trim() : null
+}
+
 export interface RankedTopic {
   path: string
   title: string

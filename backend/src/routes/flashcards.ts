@@ -18,7 +18,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { firePixel } from '../usage/pixel.js'
 import { getOrCreatePersonalVaultId } from '../vault/spaces.js'
 import { collectSources, pickSources, termPool, dealDeck, cardsPerDay, NOTES_PER_DECK } from '../flashcards/build.js'
-import { tierOf } from '../plans.js'
+import { tierOf, limitsFor } from '../plans.js'
 import { schedulesFor, recordTurn, setBookmark, scheduleKey } from '../flashcards/schedule.js'
 import { adjustConfidence, type ConfidenceChange } from '../vault/confidence.js'
 
@@ -71,9 +71,10 @@ flashcardsRouter.get('/today', asyncHandler(async (req, res) => {
   const userId = req.user!.id
   const limit = cardsPerDay(tierOf(req.user!))
 
+  const sets = limitsFor(tierOf(req.user!)).flashcardSetsPerDay
   const row = await todaysRow(userId, day)
   if (row) {
-    res.json({ deck: await view(userId, row), notes: null, limit })
+    res.json({ deck: await view(userId, row), notes: null, limit, moreSets: setsOf(row.cards, limit) < sets })
     return
   }
   const vaultId = await getOrCreatePersonalVaultId(userId)
@@ -136,6 +137,56 @@ flashcardsRouter.post('/today', asyncHandler(async (req, res) => {
     return
   }
   res.json({ deck: await view(userId, row) })
+}))
+
+/** How many sets today's deck holds: a deck grows by one set per draw. */
+function setsOf(cards: FlashcardRow[], size: number): number {
+  return Math.max(1, Math.ceil(cards.length / size))
+}
+
+/** Draw another set (Pro). Only once every card in the deck so far has been
+ *  turned, and only from cards that are due: what was turned today is held
+ *  back by its schedule, so a new set never repeats one. No model call — the
+ *  terms are stored on the notes. 409 when nothing due is left. */
+flashcardsRouter.post('/more', asyncHandler(async (req, res) => {
+  const day = dayOf(req.body?.day)
+  if (!day) {
+    res.status(400).json({ error: 'body.day (YYYY-MM-DD) required' })
+    return
+  }
+  const userId = req.user!.id
+  const tier = tierOf(req.user!)
+  const size = cardsPerDay(tier)
+  const row = await todaysRow(userId, day)
+  if (!row) {
+    res.status(404).json({ error: 'No deck for that day.' })
+    return
+  }
+  if (setsOf(row.cards, size) >= limitsFor(tier).flashcardSetsPerDay) {
+    res.status(403).json({ error: 'Another set of flashcards is part of Pro.' })
+    return
+  }
+  if (row.cards.some((c) => c.turnedAt == null)) {
+    res.status(409).json({ error: 'Finish this set first.' })
+    return
+  }
+  const vaultId = await getOrCreatePersonalVaultId(userId)
+  const inDeck = new Set(row.cards.map((c) => scheduleKey(c.notePath, c.term)))
+  const sets = setsOf(row.cards, size)
+  const rng = seededRng(`${userId}|${day}|flashcards|${sets}`)
+  const sources = await collectSources(vaultId)
+  const pool = termPool(pickSources(sources, Math.max(NOTES_PER_DECK, size * 2), rng)).filter(
+    (e) => !inDeck.has(scheduleKey(e.source.notePath, e.term)),
+  )
+  const seen = await schedulesFor(userId, pool.map((e) => ({ notePath: e.source.notePath, term: e.term })))
+  const extra = dealDeck(pool, size, seen, day, rng)
+  if (extra.length === 0) {
+    res.status(409).json({ error: 'Nothing else is due today. New cards tomorrow.' })
+    return
+  }
+  const cards = [...row.cards, ...extra]
+  await db.update(flashcardDecks).set({ cards }).where(eq(flashcardDecks.id, row.id))
+  res.json({ deck: await view(userId, { day, cards }), moreSets: setsOf(cards, size) < limitsFor(tier).flashcardSetsPerDay })
 }))
 
 /** Turn a card over.

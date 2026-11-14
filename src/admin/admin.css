@@ -170,8 +170,8 @@
   background:
     linear-gradient(to right, var(--bg-primary) 30%, transparent) left center,
     linear-gradient(to left, var(--bg-primary) 30%, transparent) right center,
-    radial-gradient(farthest-side at 0 50%, hsl(30 22% 90% / 0.17), transparent) left center,
-    radial-gradient(farthest-side at 100% 50%, hsl(30 22% 90% / 0.17), transparent) right center;
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--text-normal) 17%, transparent), transparent) left center,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text-normal) 17%, transparent), transparent) right center;
   background-repeat: no-repeat;
   background-size: 36px 100%, 36px 100%, 13px 100%, 13px 100%;
   background-attachment: local, local, scroll, scroll;

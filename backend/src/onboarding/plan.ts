@@ -1,3 +1,4 @@
+import { ICON_NAMES, validIcon } from '../vault/topicIcons.js'
 // Server-side generation of the starter learning plan for a topic.
 //
 // Moved out of the browser (src/features/onboarding/topicGeneration.ts) when
@@ -30,6 +31,7 @@ Rules:
 - The JSON object must exactly match this shape:
 {
   "space": string,                // short 1-4 word name for this topic, Title Case, e.g. "Linear Algebra"
+  "icon": string,                 // the ONE icon name from the ICONS list below that best pictures the topic
   "subtopics": [                  // exactly 5 entries
     {
       "title": string,            // short, specific subtopic name, Title Case
@@ -47,7 +49,9 @@ Rules:
 - Every string in "prerequisites" must exactly match the "title" of another subtopic in this
   same list. Never invent a reference to a topic outside this list of 5, and never list a
   subtopic as its own prerequisite.
-- Keep titles short (a few words) and free of colons, slashes, brackets, or quotation marks.`
+- Keep titles short (a few words) and free of colons, slashes, brackets, or quotation marks.
+
+ICONS: ${ICON_NAMES.join(', ')}`
 
 
 function buildUserPrompt(topic: string): string {
@@ -69,6 +73,7 @@ interface RawSubtopic {
 }
 interface RawPlan {
   space?: unknown
+  icon?: unknown
   subtopics?: unknown
 }
 
@@ -85,6 +90,8 @@ function clampInt(v: unknown, fallback: number, min: number, max: number): numbe
 
 export interface ValidatedPlan {
   space: string
+  /** A name from ICON_NAMES, or null when the model picked none it knows. */
+  icon?: string | null
   subtopics: Subtopic[]
 }
 
@@ -137,7 +144,7 @@ export function parseAndValidate(raw: string): ValidatedPlan | null {
   const repaired = ensureFoundational(breakCycles(cleaned))
   if (repaired.length !== 5 || !repaired.some((s) => s.prerequisites.length === 0)) return null
 
-  return { space, subtopics: repaired }
+  return { space, icon: validIcon(obj.icon), subtopics: repaired }
 }
 
 export async function generateLearningPlan(topic: string, userId?: string): Promise<ValidatedPlan> {

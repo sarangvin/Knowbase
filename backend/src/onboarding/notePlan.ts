@@ -1,3 +1,4 @@
+import { briefLine } from '../notes/brief.js'
 // Pure, network-free note-building for topic onboarding: sanitizing generated
 // titles into safe paths/wikilinks, disambiguating a new space name against
 // existing spaces, building topic-note and Next Up.md content, and repairing
@@ -210,6 +211,7 @@ ${hiddenLine}${pendingLine}${prereqLine}
 interest: ${s.interest}
 confidence: 0
 last_reviewed:
+${briefLine(s.summary)}
 ---
 
 # ${title}

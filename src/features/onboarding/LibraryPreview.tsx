@@ -21,7 +21,7 @@ interface Preview {
   content: string
   topicCount: number
   /** The topics after this one, in study order. */
-  next?: { title: string; needs: string[] }[]
+  next?: { title: string; needs: string[]; brief?: string | null }[]
 }
 
 /** Same sway as the Next Up path (Dashboards.tsx), so it reads as one route. */
@@ -82,7 +82,7 @@ export function LibraryPreview({ space, onLeave }: { space: string; onLeave: () 
     ...next.map((t, i) => ({
       title: t.title,
       state: i === 0 ? ('current' as const) : ('locked' as const),
-      meta: i === 0 ? 'Up next' : t.needs.length ? `After ${t.needs.join(', ')}` : 'Locked',
+      meta: i === 0 ? (t.brief ?? 'Up next') : t.needs.length ? `After ${t.needs.join(', ')}` : 'Locked',
     })),
   ]
 

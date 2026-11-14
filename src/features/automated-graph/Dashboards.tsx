@@ -5,6 +5,7 @@ import {
   computeNextUp,
   computeToday,
   computeFlashcards,
+  briefOf,
   type ReviewTopic,
 } from './engine'
 import './dashboards.css'
@@ -160,6 +161,11 @@ function StepIcon({ state }: { state: PathStep['state'] }) {
 
 function PathNode({ step, index }: { step: PathStep; index: number }) {
   const openNote = useVault((s) => s.openNote)
+  // What the next topics are about, so the path reads as a story rather than
+  // a list of titles. Finished and locked steps keep just their status line.
+  const brief = useVault((s) =>
+    s.index && (step.state === 'current' || step.state === 'open') ? briefOf(s.index, step.path) : null,
+  )
   return (
     <li className={`lp-step is-${step.state}`} style={{ '--sway': `${swayOf(index)}px` } as CSSProperties}>
       <div className="lp-node-wrap">
@@ -182,6 +188,7 @@ function PathNode({ step, index }: { step: PathStep; index: number }) {
             Coming soon
           </span>
         )}
+        {brief && <div className="lp-brief">{brief}</div>}
         <div className="lp-meta">{step.meta}</div>
       </div>
     </li>

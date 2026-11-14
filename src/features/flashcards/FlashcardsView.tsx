@@ -1,4 +1,4 @@
-// The Flashcards tab: a stack of ten cards a day, built from the terms in
+// The Flashcards tab: sets of ten cards (Pro can draw more in a day), built from the terms in
 // the notes you have reviewed.
 //
 // A stack rather than a list. The whole value of a flashcard is the moment
@@ -13,8 +13,9 @@
 import { useStreak } from '../streak/streakStore'
 import { useCallback, useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
+import { atLeastPro } from '../settings/plans'
 import { Layers, RotateCw, ArrowRight, ArrowLeft, Check, Bookmark, BookmarkFilled } from '../../ui/icons'
-import { fetchDeck, dealDeck, turnCard, bookmarkCard, type Deck, type TurnResult } from './flashcardsApi'
+import { fetchDeck, dealDeck, drawMore, turnCard, bookmarkCard, type Deck, type TurnResult } from './flashcardsApi'
 import './flashcards.css'
 
 /** The bookmark, rendered once per face.
@@ -65,10 +66,16 @@ function Shell({ children }: { children: React.ReactNode }) {
 export function FlashcardsView() {
   const user = useVault((s) => s.user)
   const openNote = useVault((s) => s.openNote)
+  const openView = useVault((s) => s.openView)
 
   const [deck, setDeck] = useState<Deck | null>(null)
   const [notes, setNotes] = useState<number | null>(null)
   const [limit, setLimit] = useState(10)
+  const [moreSets, setMoreSets] = useState(false)
+  // The set is over and they have said so (Finish), or came back to a deck
+  // already fully turned: show the day's landing page instead of the stack.
+  const [finished, setFinished] = useState(false)
+  const [drawing, setDrawing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [dealing, setDealing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,6 +99,13 @@ export function FlashcardsView() {
         setDeck(t.deck)
         setNotes(t.notes)
         setLimit(t.limit)
+        setMoreSets(!!t.moreSets)
+        if (t.deck) {
+          const cards = t.deck.cards
+          const first = cards.findIndex((c) => c.turnedAt == null)
+          if (first < 0) setFinished(true)
+          else setAt(Math.max(first, Math.floor(first / t.limit) * t.limit))
+        }
       })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)))
       .finally(() => !cancelled && setLoading(false))
@@ -101,11 +115,32 @@ export function FlashcardsView() {
   }, [])
 
   const total = deck?.cards.length ?? 0
+  // The deck grows by a set at a time; only the newest set is walked through.
+  const setStart = total > 0 ? (Math.ceil(total / limit) - 1) * limit : 0
+  const setTotal = total - setStart
 
   const go = useCallback(
-    (delta: number) => setAt((i) => Math.min(total - 1, Math.max(0, i + delta))),
-    [total],
+    (delta: number) => setAt((i) => Math.min(total - 1, Math.max(setStart, i + delta))),
+    [total, setStart],
   )
+
+  const more = async () => {
+    if (drawing) return
+    setDrawing(true)
+    setError(null)
+    try {
+      const r = await drawMore()
+      setDeck(r.deck)
+      setMoreSets(r.moreSets)
+      setAt(Math.ceil(r.deck.cards.length / limit - 1) * limit)
+      setFlipped({})
+      setFinished(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDrawing(false)
+    }
+  }
   // Flip is instant and local; recording the turn is a request. The card
   // must not wait for the network to move, and a failed record must not
   // leave the user looking at a card that refuses to turn — so the write is
@@ -224,7 +259,7 @@ export function FlashcardsView() {
                 {dealing ? 'Picking your cards…' : 'Deal'}
               </button>
               <p className="fc-note">
-                One deck a day. Tomorrow's draws again from whatever you have read by then.
+                One set of {limit} a day. Tomorrow's draws again from whatever you have read by then.
               </p>
             </>
           ) : (
@@ -241,6 +276,39 @@ export function FlashcardsView() {
     )
   }
 
+  // ── Done for the day ────────────────────────────────────────────────────
+  if (finished) {
+    const notesToday = new Set(deck.cards.map((c) => c.noteTitle))
+    return (
+      <Shell>
+        <div className="fc-empty fc-done">
+          <span className="fc-empty-icon"><Check width={28} height={28} /></span>
+          <h1>Done for today</h1>
+          <p>
+            {total} card{total === 1 ? '' : 's'} reviewed, from {notesToday.size} note
+            {notesToday.size === 1 ? '' : 's'}. Each one comes back when it is due, so what
+            has not stuck yet returns sooner.
+          </p>
+          {error && <div className="fc-error">{error}</div>}
+          {moreSets ? (
+            <button className="fc-btn primary" disabled={drawing} onClick={() => void more()}>
+              {drawing ? <span className="spinner" /> : <Layers width={15} height={15} />}
+              {drawing ? 'Drawing…' : `Draw ${limit} more`}
+            </button>
+          ) : (
+            <p className="fc-note">
+              <RotateCw width={13} height={13} /> A new set tomorrow.
+              {!atLeastPro(user.planTier) && ' Pro can draw another set straight away.'}
+            </p>
+          )}
+          <button className="fc-btn" onClick={() => openView({ kind: 'home' })}>
+            Back to your collections
+          </button>
+        </div>
+      </Shell>
+    )
+  }
+
   // ── The stack ───────────────────────────────────────────────────────────
   const card = deck.cards[at]
   const isFlipped = !!flipped[at]
@@ -250,17 +318,18 @@ export function FlashcardsView() {
   // vocabulary list read in one direction only.
   // Counted from the deck, not from `flipped`: turning a card back used to
   // decrement this, so a card looked at twice reported "0 turned".
-  const seen = deck.cards.filter((c) => c.turnedAt != null).length
+  const seen = deck.cards.slice(setStart).filter((c) => c.turnedAt != null).length
+  const setDone = seen === setTotal
 
   return (
     <Shell>
       <div className="fc-run">
         <div className="fc-progress">
           <span>
-            Card {at + 1} of {total}
+            Card {at - setStart + 1} of {setTotal}
           </span>
           <span className="fc-progress-bar" aria-hidden="true">
-            <span style={{ width: `${((at + 1) / total) * 100}%` }} />
+            <span style={{ width: `${((at - setStart + 1) / setTotal) * 100}%` }} />
           </span>
           <span className="fc-progress-seen">{seen} turned</span>
         </div>
@@ -324,12 +393,18 @@ export function FlashcardsView() {
         </div>
 
         <div className="fc-controls">
-          <button className="fc-btn" disabled={at === 0} onClick={() => go(-1)}>
+          <button className="fc-btn" disabled={at <= setStart} onClick={() => go(-1)}>
             <ArrowLeft width={15} height={15} /> Previous
           </button>
-          <button className="fc-btn" disabled={at >= total - 1} onClick={() => go(1)}>
-            Next <ArrowRight width={15} height={15} />
-          </button>
+          {at >= total - 1 && setDone ? (
+            <button className="fc-btn primary" onClick={() => setFinished(true)}>
+              Finish <Check width={15} height={15} />
+            </button>
+          ) : (
+            <button className="fc-btn" disabled={at >= total - 1} onClick={() => go(1)}>
+              Next <ArrowRight width={15} height={15} />
+            </button>
+          )}
         </div>
 
         <div className="fc-meta">
@@ -359,10 +434,8 @@ export function FlashcardsView() {
           </button>
         </div>
 
-        {at >= total - 1 && (
-          <p className="fc-note">
-            <RotateCw width={13} height={13} /> That's today's {total}. A new deck tomorrow.
-          </p>
+        {at >= total - 1 && !setDone && (
+          <p className="fc-note">Turn every card in this set to finish it.</p>
         )}
       </div>
     </Shell>

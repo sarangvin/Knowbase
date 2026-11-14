@@ -5,6 +5,7 @@ import { PAYMENTS_ENABLED, atLeastPro, planLabel } from './plans'
 import { User, LogOut, Cloud, Pencil, Trash, Archive } from '../../ui/icons'
 import { fetchArchivedCollections, setCollectionArchived, deleteCollection } from '../automated-graph/collectionsApi'
 import { TEXT_SIZES, readTextSize, setTextSize, type TextSizeId } from './textSize'
+import { THEMES, readTheme, setTheme, type ThemeId } from './theme'
 import {
   pushSupported, getNotificationStatus, enableNotifications, disableNotifications, sendTestNotification,
   type NotificationStatus,
@@ -23,6 +24,11 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
 
 
   const [textSize, setTextSizeState] = useState<TextSizeId>(readTextSize)
+  const [theme, setThemeState] = useState<ThemeId>(readTheme)
+  const chooseTheme = (id: ThemeId) => {
+    setTheme(id)
+    setThemeState(id)
+  }
   const chooseTextSize = (id: TextSizeId) => {
     setTextSize(id)
     setTextSizeState(id)
@@ -397,6 +403,24 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
             {notifyMsg && <p className="settings-dim">{notifyMsg}</p>}
           </div>
         )}
+
+        <div className="settings-section">
+          <div className="settings-label">Theme</div>
+          <div className="text-size" role="radiogroup" aria-label="Theme">
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                role="radio"
+                aria-checked={theme === t.id}
+                className={'text-size-opt theme-opt' + (theme === t.id ? ' is-on' : '')}
+                onClick={() => chooseTheme(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="settings-dim">Applies to this device only.</p>
+        </div>
 
         <div className="settings-section">
           <div className="settings-label">Text size</div>

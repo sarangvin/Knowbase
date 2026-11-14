@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { applyTextSize, readTextSize } from './features/settings/textSize'
+import { applyTheme, readTheme } from './features/settings/theme'
 import { installApiGate } from './apiGate'
 import { installUpdateCheck } from './appVersion'
 import { rememberRef } from './vault/remoteSource'
@@ -23,6 +24,7 @@ captureDeepLink()
 // Before the first render, so a reader who chose a larger size never sees
 // the app paint at the default and then jump.
 applyTextSize(readTextSize())
+applyTheme(readTheme())
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

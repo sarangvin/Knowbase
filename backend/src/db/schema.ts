@@ -538,3 +538,11 @@ export const pixels = pgTable(
   },
   (t) => [uniqueIndex('pixels_hour_name_unique').on(t.hour, t.name)],
 )
+
+/** A collection's logo on the home screen, by normalised collection name, so
+ *  every reader's copy of a library collection shares one (vault/topicIcons.ts). */
+export const collectionIcons = pgTable('collection_icons', {
+  key: text('key').primaryKey(),
+  icon: text('icon').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})

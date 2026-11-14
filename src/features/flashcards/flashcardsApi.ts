@@ -28,8 +28,10 @@ export interface DeckToday {
   /** Reviewed notes with enough prose to draw cards from. Null once a deck
    *  exists, because then it no longer matters. */
   notes: number | null
-  /** How many cards a day this account gets. */
+  /** Cards in one set. */
   limit: number
+  /** Whether another set can be drawn after this one (Pro). */
+  moreSets?: boolean
 }
 
 async function jsonOrThrow(res: Response): Promise<unknown> {
@@ -94,4 +96,15 @@ export async function bookmarkCard(index: number, bookmarked: boolean): Promise<
     body: JSON.stringify({ day: localDay(), index, bookmarked }),
   })
   return (await jsonOrThrow(res)) as BookmarkResult
+}
+
+/** Draw another set of cards onto today's deck (Pro). */
+export async function drawMore(): Promise<{ deck: Deck; moreSets: boolean }> {
+  const res = await fetch('/api/flashcards/more', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ day: localDay() }),
+  })
+  return (await jsonOrThrow(res)) as { deck: Deck; moreSets: boolean }
 }

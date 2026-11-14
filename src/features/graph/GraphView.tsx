@@ -60,7 +60,8 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
   // A pastel per collection. Worked out over all of the reader's collections,
   // not just the ones on screen, so a note's colour is the same in its own
   // small graph as in the full one.
-  const colors = useMemo(() => collectionColors(index ? listSpaces(index) : []), [index])
+  const light = document.documentElement.dataset.theme === 'light'
+  const colors = useMemo(() => collectionColors(index ? listSpaces(index) : [], light), [index, light])
   const colorOf = (id: string) => {
     const space = spaceOfPath(id)
     return (space && colors.get(space)) || null
@@ -163,7 +164,7 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
             const s = typeof l.source === 'string' ? l.source : (l.source as GNode).id
             const t = typeof l.target === 'string' ? l.target : (l.target as GNode).id
             if (hover && (s === hover || t === hover)) return colorOf(hover) ?? accent
-            return 'hsl(26 20% 70% / 0.1)'
+            return light ? 'hsl(24 20% 30% / 0.22)' : 'hsl(26 20% 70% / 0.1)'
           }}
           linkWidth={(l) => {
             const s = typeof l.source === 'string' ? l.source : (l.source as GNode).id
@@ -181,7 +182,7 @@ export function GraphView({ focusPath, compact }: { focusPath?: string; compact?
             ctx.beginPath()
             ctx.arc(n.x!, n.y!, r, 0, 2 * Math.PI)
             const own = colorOf(n.id) ?? accent
-            ctx.fillStyle = !n.resolved ? faint : isFocus ? '#fff5ec' : own
+            ctx.fillStyle = !n.resolved ? faint : isFocus ? (light ? '#ffffff' : '#fff5ec') : own
             ctx.fill()
             if (isFocus) {
               ctx.lineWidth = 1.5

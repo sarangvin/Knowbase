@@ -24,6 +24,7 @@ import { logUsageEvent } from '../usage/logEvent.js'
 import { firePixel } from '../usage/pixel.js'
 import { NOT_HIDDEN } from '../vault/hidden.js'
 import { topicPath } from '../vault/firstNote.js'
+import { allIcons } from '../vault/topicIcons.js'
 import { frontmatterValue } from '../vault/frontmatter.js'
 import { isSkippedNote } from '../vault/skipped.js'
 import { SPACE_ROOT, spaceOf, normalizeTopic, getOrCreatePersonalVaultId, getGlobalVaultId, adoptSpaceInto, contributeToLibrary, archivedSpaces, setSpaceArchived, deleteSpace } from '../vault/spaces.js'
@@ -34,6 +35,11 @@ export const vaultsRouter = Router()
 // yet. It is names and topic titles only, never note bodies — starting one
 // still goes through sign-in and the same start call as a typed topic.
 vaultsRouter.get('/library/spaces', (req, res, next) => listLibrarySpaces(req, res, next))
+// Public too: collection logos by name. Names and icon names only.
+vaultsRouter.get('/icons', asyncHandler(async (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=300')
+  res.json({ icons: await allIcons() })
+}))
 // Also public: the first note of one library collection, so somebody who
 // arrives from a reel about it can read before being asked to sign up. One
 // note, already written and shared by everyone — nothing personal, no spend.
@@ -54,7 +60,7 @@ vaultsRouter.get('/library/preview', asyncHandler(async (req, res) => {
     topicCount: path.length,
     // What comes after it, titles only: the preview draws the start of the
     // learning path, and the bodies stay behind the sign-up.
-    next: path.slice(1, 4).map((t) => ({ title: t.title, needs: t.needs })),
+    next: path.slice(1, 4).map((t) => ({ title: t.title, needs: t.needs, brief: frontmatterValue(t.content, 'brief')?.replace(/^"|"$/g, '') || null })),
   })
 }))
 vaultsRouter.use(requireAuth)

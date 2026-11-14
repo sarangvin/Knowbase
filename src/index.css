@@ -77,6 +77,48 @@
   --shadow-pop: 0 8px 28px hsl(var(--soil-h) 40% 2% / 0.5);
 }
 
+/* Light theme (Settings → Theme; features/settings/theme.ts sets
+   data-theme on <html>). Same hues, turned over: the burrow in daylight —
+   warm paper rather than white, ink-brown text, and a carrot one step
+   deeper so it still reads as "do this" on a light page. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --accent: hsl(var(--accent-h) 86% 52%);
+  --accent-hover: hsl(var(--accent-h) 88% 46%);
+  --accent-soft: hsl(var(--accent-h) 90% 52% / 0.12);
+  --accent-line: hsl(var(--accent-h) 75% 48% / 0.5);
+  --accent-glow: hsl(var(--accent-h) 90% 55% / 0.22);
+  --link: hsl(24 62% 36%);
+  --link-hover: hsl(22 75% 30%);
+
+  --bg-primary: hsl(36 33% 97%);
+  --bg-secondary: hsl(36 26% 94%);
+  --bg-sidebar: hsl(36 24% 92%);
+  --bg-elevated: hsl(40 45% 99.5%);
+  --bg-hover: hsl(34 26% 91%);
+  --bg-active: hsl(34 24% 87%);
+  --bg-modal: hsl(40 45% 99.5%);
+  --bg-deep: hsl(34 22% 89%);
+
+  --text-normal: hsl(24 28% 13%);
+  --text-muted: hsl(24 12% 36%);
+  --text-faint: hsl(24 8% 52%);
+  --text-on-accent: hsl(24 40% 10%);
+  --text-error: hsl(354 64% 44%);
+  --text-success: hsl(140 46% 30%);
+
+  --border: hsl(30 18% 86%);
+  --border-strong: hsl(30 16% 78%);
+  --divider: hsl(30 18% 90%);
+
+  --tag-bg: hsl(var(--blush-h) 60% 62% / 0.14);
+  --tag-text: hsl(var(--blush-h) 55% 40%);
+
+  --shadow-modal: 0 16px 48px hsl(var(--soil-h) 30% 20% / 0.18);
+  --shadow-pop: 0 8px 28px hsl(var(--soil-h) 30% 20% / 0.14);
+}
+:root:not([data-theme='light']) { color-scheme: dark; }
+
 * { box-sizing: border-box; }
 
 html, body, #root {

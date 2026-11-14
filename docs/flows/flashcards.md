@@ -1,6 +1,10 @@
 # Flashcards flow
 
-**Ten cards a day, term on one side and definition on the other.** Drawn from
+**Sets of ten cards, term on one side and definition on the other.** Free
+accounts get one set a day; Pro can draw another set once every card so far
+has been turned (`POST /api/flashcards/more`, which appends to the day's
+deck row and costs no model call). Finishing a set shows a "Done for today"
+page with the day's count, and the Draw button for Pro. Drawn from
 the notes you have reviewed and weighted towards the ones you rated least
 confident — the material that has not stuck is the material worth drilling.
 

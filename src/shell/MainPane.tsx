@@ -9,8 +9,9 @@ import { FlashcardsView } from '../features/flashcards/FlashcardsView'
 import { SearchPanel } from '../features/search/SearchPanel'
 import { TopicLauncher } from '../features/onboarding/TopicLauncher'
 import { CollectionSuggestion } from '../features/onboarding/CollectionSuggestion'
-import { listSpaces, isArchived, isPending, computeNextUp } from '../features/automated-graph/engine'
+import { listSpaces, isArchived, isPending, computeNextUp, briefOf } from '../features/automated-graph/engine'
 import { CollectionCard, BuildingCard } from '../features/automated-graph/CollectionCard'
+import { TopicIcon } from '../features/automated-graph/topicIcons'
 import { startOnboarding } from '../features/onboarding/onboardingApi'
 import { RabbitSolid } from '../ui/icons'
 
@@ -110,7 +111,9 @@ function HomeView() {
   const resume = (() => {
     if (!index || spaces.length === 0) return null
     const pick = computeNextUp(index, spaces[0]).pick
-    return pick && !pick.pending ? { path: pick.path, title: pick.title, isReview: !!pick.isReview, space: spaces[0] } : null
+    return pick && !pick.pending
+      ? { path: pick.path, title: pick.title, isReview: !!pick.isReview, space: spaces[0], brief: briefOf(index, pick.path) }
+      : null
   })()
 
   const nextUpOf = (space: string) =>
@@ -192,19 +195,18 @@ function HomeView() {
           </div>
         ) : (
           <>
-            <h1 className="note-title">Your collections</h1>
-            <p className="home-sub">
-              {spaces.length} collection{spaces.length === 1 ? '' : 's'}
-              {pending.length > 0 && `, ${pending.length} being built`}. Each one is its own
-              subject, with its own order of study.
-            </p>
+            <h1 className="note-title home-title">Your collections</h1>
             {/* Coming back should be one tap: the next note in the collection
                 they used last, opened directly. Starting something new is
                 still the card grid below. */}
             {resume && (
               <button className="home-resume" onClick={() => openNote(resume.path)}>
-                <span className="home-resume-label">{resume.isReview ? 'Review' : 'Continue'} · {resume.space}</span>
-                <span className="home-resume-title">{resume.title}</span>
+                <TopicIcon space={resume.space} size={26} />
+                <span className="home-resume-text">
+                  <span className="home-resume-label">{resume.isReview ? 'Review' : 'Continue'} · {resume.space}</span>
+                  <span className="home-resume-title">{resume.title}</span>
+                  {resume.brief && <span className="home-resume-brief">{resume.brief}</span>}
+                </span>
               </button>
             )}
             <div className="collection-grid">
@@ -237,6 +239,7 @@ function HomeView() {
                 building={pending.map((j) => j.space ?? j.topic)}
               />
               <TopicLauncher
+                hideWhenBlocked
                 title="Start a brand new collection"
                 hint="Name any subject and Rabbithole writes it for you — a separate collection, kept apart from the ones above."
               />

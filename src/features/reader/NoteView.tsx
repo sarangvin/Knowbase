@@ -69,6 +69,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
   const mode = useVault((s) => s.mode)
   const openView = useVault((s) => s.openView)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const isTopic = /^Automated Graph\/[^/]+\/Topics\//.test(path)
   const deckRef = useRef<HTMLDivElement>(null)
 
   // Finishing this note — shared by the review button, the swipe-up sheet,
@@ -294,7 +295,11 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
       <div className="note-container">
         <HighlightBar notePath={note.path} />
         <h1 className="note-title">{note.title}</h1>
-        {note.tags.length > 0 && (
+        {/* A collection topic opens straight onto its explanation: status,
+            interest, confidence and prerequisites are the machinery behind
+            Next Up, not something a reader needs above the first line. Other
+            notes keep their tags and properties. */}
+        {!isTopic && note.tags.length > 0 && (
           <div className="note-tags">
             {note.tags.map((t) => (
               <span key={t} className="tag" onClick={() => openView({ kind: 'search' })}>
@@ -303,7 +308,7 @@ export function NoteView({ path, heading }: { path: string; heading?: string }) 
             ))}
           </div>
         )}
-        <Properties frontmatter={note.frontmatter} notePath={note.path} />
+        {!isTopic && <Properties frontmatter={note.frontmatter} notePath={note.path} />}
         {blocks}
         {/* A note with no "AI Notes" section — a hand-written one, or one
             whose template has drifted — still needs a way to be reviewed, so

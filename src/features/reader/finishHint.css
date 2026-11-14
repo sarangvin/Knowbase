@@ -91,8 +91,8 @@
   height: 22px;
   margin: -11px 0 0 -11px;
   border-radius: 50%;
-  background: hsl(30 22% 90% / 0.85);
-  box-shadow: 0 0 0 6px hsl(30 22% 90% / 0.16);
+  background: color-mix(in srgb, var(--text-normal) 85%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--text-normal) 16%, transparent);
   animation: fh-finger 3.6s cubic-bezier(0.45, 0, 0.3, 1) 0.4s infinite;
   pointer-events: none;
 }

@@ -21,10 +21,13 @@ export function TopicLauncher({
   title,
   hint,
   placeholder,
+  hideWhenBlocked,
 }: {
   title: string
   hint?: string
   placeholder?: string
+  /** Render nothing at the limit, where another section already says so. */
+  hideWhenBlocked?: boolean
 }) {
   const user = useVault((s) => s.user)
   const [topic, setTopic] = useState('')
@@ -93,6 +96,7 @@ export function TopicLauncher({
   // Said before they type, not after. Being asked for a topic and then
   // refused is the shape of a form that wasted your time.
   if (allowance?.blocked) {
+    if (hideWhenBlocked) return null
     return (
       <div className="launcher">
         <div className="launcher-title">{title}</div>

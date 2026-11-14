@@ -37,6 +37,7 @@ import { firePixel } from '../usage/pixel.js'
 import { enqueueDrafts } from './queue.js'
 import { growSpace } from './grow.js'
 import { sendReadyEmail } from '../email/run.js'
+import { saveIcon } from '../vault/topicIcons.js'
 
 type JobPatch = Partial<{
   status: string
@@ -187,6 +188,8 @@ async function buildCollection(userId: string, topic: string): Promise<void> {
       return
     }
     const space = plan.space
+    // Its logo on the home screen, picked by the planner in the same call.
+    await saveIcon(space, plan.icon ?? null).catch((e) => console.error('[onboarding] icon not saved', e))
     const titles = plan.subtopics.map((s) => s.title)
     const segments = dedupeSegments(titles)
     const pathOf = (i: number) => `${SPACE_ROOT}${space}/Topics/${segments[i]}.md`

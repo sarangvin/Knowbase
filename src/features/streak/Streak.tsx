@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { useVault } from '../../vault/vaultStore'
 import { useStreak, type Celebration } from './streakStore'
-import { computeToday } from '../automated-graph/engine'
+import { computeToday, briefOf } from '../automated-graph/engine'
 import { Flame, Snowflake, Check } from '../../ui/icons'
 import './streak.css'
 
@@ -69,7 +69,12 @@ function Card({ c, onClose }: { c: Celebration; onClose: () => void }) {
 
   const today = streak.week[streak.week.length - 1]?.day
   // Name the next note, so there is a concrete reason to come back.
-  const tomorrow = useVault((s) => (s.index ? computeToday(s.index).picks.find((p) => p.path)?.title ?? null : null))
+  const tomorrow = useVault((s) => {
+    const p = s.index ? computeToday(s.index).picks.find((x) => x.path) : null
+    if (!p || !s.index) return null
+    const b = briefOf(s.index, p.path!)
+    return b ? `${p.title}: ${b.charAt(0).toLowerCase()}${b.slice(1)}` : p.title
+  })
   const rolled = shown === to
 
   let line: string

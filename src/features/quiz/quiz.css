@@ -287,3 +287,5 @@
   .quiz-btn, .quiz-option, .quiz-progress-bar span { transition: none; }
   .quiz-option.is-golden, .quiz-option.is-golden::after { animation: none; }
 }
+
+:root[data-theme='light'] .quiz-coins { color: hsl(36 85% 36%); }
