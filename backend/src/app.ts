@@ -13,6 +13,7 @@ import { onboardingRouter } from './routes/onboarding.js'
 import { quizRouter } from './routes/quiz.js'
 import { flashcardsRouter } from './routes/flashcards.js'
 import { notesRouter } from './routes/notes.js'
+import { linksRouter, redirectShortLink } from './routes/links.js'
 import { cronRouter } from './routes/cron.js'
 import { demoRouter } from './routes/demo.js'
 import { pixelRouter } from './routes/pixel.js'
@@ -79,6 +80,9 @@ export function createApp() {
   app.use(asyncHandler(attachUser))
 
   app.get('/health', (_req, res) => res.json({ ok: true }))
+  // Short links (routes/links.ts): the redirect, and creating one.
+  app.get('/r/:code', redirectShortLink)
+  app.use('/api/links', linksRouter)
   app.use('/auth', authRouter)
   app.use('/api/vaults', vaultsRouter)
   app.use('/api/llm', llmRouter)

@@ -12,6 +12,10 @@
       "destination": "/api"
     },
     {
+      "source": "/r/:code",
+      "destination": "/api"
+    },
+    {
       "source": "/health",
       "destination": "/api"
     },

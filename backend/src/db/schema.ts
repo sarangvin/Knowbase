@@ -546,3 +546,19 @@ export const collectionIcons = pgTable('collection_icons', {
   icon: text('icon').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/**
+ * Short links: `/r/<code>` redirects to `/?read=<space>&ref=<ref>` (or the
+ * front page). The code is derived from the space and ref, so asking for the
+ * same link twice gives the same code and the table holds at most one row per
+ * collection and channel. See routes/links.ts.
+ */
+export const shortLinks = pgTable('short_links', {
+  code: text('code').primaryKey(),
+  /** A library collection's name, or null for the front page. */
+  space: text('space'),
+  ref: text('ref'),
+  clicks: integer('clicks').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastClickAt: timestamp('last_click_at', { withTimezone: true }),
+})
