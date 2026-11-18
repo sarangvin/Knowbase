@@ -1,9 +1,9 @@
 // Destructive account operations, kept in their own file so they are easy to
 // find and hard to reach by accident.
 import { Router } from 'express'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../db/client.js'
-import { notes, assets, vaults, onboardingJobs, users, freezePurchases } from '../db/schema.js'
+import { notes, assets, vaults, onboardingJobs, users, freezePurchases, quizzes, collectionStarts } from '../db/schema.js'
 import { requireAuth } from '../auth/session.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { logUsageEvent } from '../usage/logEvent.js'
@@ -59,6 +59,14 @@ accountRouter.post('/reset', asyncHandler(async (req, res) => {
   // Without this the onboarding job stays 'ready' and points at a space that
   // no longer exists, so the user would never be offered a new one.
   await db.delete(onboardingJobs).where(eq(onboardingJobs.userId, userId))
+
+  // Coins are derived from these records (usage/coins.ts), so clearing them
+  // puts the balance back to STARTING_COINS (25). Streak is derived from
+  // note_review events too, so it starts over as well, which fits a reset.
+  await db.delete(quizzes).where(eq(quizzes.userId, userId))
+  await db.delete(collectionStarts).where(eq(collectionStarts.userId, userId))
+  await db.delete(freezePurchases).where(eq(freezePurchases.userId, userId))
+  await db.execute(sql`DELETE FROM usage_events WHERE user_id = ${userId} AND event_type = 'note_review'`)
 
   void logUsageEvent({ userId, eventType: 'vault_sync', metadata: { reset: true, deletedNotes } })
   res.json({ ok: true, deletedNotes })

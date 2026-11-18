@@ -8,12 +8,23 @@
   justify-content: center;
   gap: 14px;
   position: relative;
-  overflow: hidden;
+  /* Scrolls when the card is taller than the screen (Safari, small phones).
+     body is overflow:hidden, so this box is the only thing that can scroll;
+     with overflow hidden the content was clipped and the page felt frozen. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   /* Soil, lit from above: the surface you are standing on before you go down. */
   background:
     radial-gradient(900px 520px at 50% -18%, hsl(var(--accent-h) 45% 22% / 0.30), transparent 70%),
     var(--bg-primary);
 }
+
+/* Centre the card when it fits, but let it start at the top and scroll when
+   it doesn't: justify-content:center would push the top out of reach. */
+.onboarding { justify-content: flex-start; }
+.onboarding::before, .onboarding::after { content: ''; flex: 1 0 0; }
 
 /* The burrow rings, centred on the card and sized off the viewport so they
    stay a backdrop rather than a shape competing with the content. Square via
