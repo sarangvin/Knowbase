@@ -460,6 +460,10 @@ export function SettingsPanel({ onClose }: { onClose?: () => void }) {
           </div>
         )}
 
+        <p className="settings-dim">
+          <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>
+        </p>
+
         {onClose && (
           <div className="settings-foot">
             <button className="ask-btn" onClick={onClose}>Close</button>

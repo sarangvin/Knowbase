@@ -201,6 +201,9 @@ export function Onboarding() {
           <button className="ob-linklike" onClick={() => void loadSeed()}>
             <Eye /> Explore a finished warren
           </button>
+          <a className="ob-linklike" href="/privacy" target="_blank" rel="noopener">
+            Privacy policy
+          </a>
           {user != null && (
             <button className="ob-linklike" onClick={() => void loadRemote()}>
               <Cloud /> Open my cloud vault
