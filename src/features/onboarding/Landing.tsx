@@ -22,10 +22,10 @@
 // The sign-up mechanics (topic carried across Google sign-in, funnel pixels)
 // stay in Onboarding.tsx and come in as props.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { pickShowcase, type Showcase } from './showcase'
+import { pickShowcase, SHOWCASES, type Showcase } from './showcase'
 import { fetchLibrarySpaces, type LibrarySpace } from './onboardingApi'
 import { pixel } from '../../pixel'
-import { ArrowRight, Check, Flame, Highlighter, Lock, RabbitSolid, Snowflake, Sparkles, Star } from '../../ui/icons'
+import { ArrowRight, Check, Eye, FileText, Flame, Highlighter, RabbitSolid, RotateCw, Search, Snowflake, Sparkles, X } from '../../ui/icons'
 import './landing.css'
 
 interface Props {
@@ -114,28 +114,72 @@ function StartForm({ p, where }: { p: Props; where: 'hero' | 'end' }) {
 
 // ── the pictures: the real app's pieces, drawn small ───────────────────────
 
-function PathMock({ s }: { s: Showcase }) {
-  const states = ['done', 'done', 'now', 'locked', 'locked']
-  const nodes = s.path.map((t, i) => ({ t, s: states[i] }))
+const reducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+/** The hero picture: what the app does, in its own three steps. It types a
+ *  topic, shows the notes Rabbithole writes for it, then a quiz question, and
+ *  moves on to another topic, so "anything you are curious about" is shown
+ *  rather than claimed. */
+function HeroDemo({ start }: { start: Showcase }) {
+  const [idx, setIdx] = useState(() => Math.max(0, SHOWCASES.indexOf(start)))
+  const s = SHOWCASES[idx]
+  const still = reducedMotion()
+  const [typed, setTyped] = useState(still ? s.collection.length : 0)
+  const [phase, setPhase] = useState(still ? 2 : 0) // 0 typing, 1 notes, 2 quiz
+
+  useEffect(() => {
+    if (still) return
+    setTyped(0)
+    setPhase(0)
+    const timers: number[] = []
+    const name = s.collection
+    for (let k = 1; k <= name.length; k++) timers.push(window.setTimeout(() => setTyped(k), 350 + k * 70))
+    const typedAt = 350 + name.length * 70
+    timers.push(window.setTimeout(() => setPhase(1), typedAt + 350))
+    timers.push(window.setTimeout(() => setPhase(2), typedAt + 1500))
+    timers.push(window.setTimeout(() => setIdx((n) => (n + 1) % SHOWCASES.length), typedAt + 6500))
+    return () => timers.forEach(clearTimeout)
+  }, [idx, still, s.collection])
+
+  const right = s.quiz.options[s.quiz.right]
   return (
-    <div className="hp-phone" aria-hidden="true">
-      <div className="hp-phone-bar">
-        <span className="hp-phone-title">{s.collection}</span>
-        <span className="hp-chip-streak">
-          <Flame width={13} height={13} /> 12
-        </span>
+    <div className="hp-phone hp-demo" aria-label={`Example: ${s.collection} turned into short notes and a quiz`}>
+      <div className="hp-demo-step"><span className="hp-demo-n">1</span> You name a topic</div>
+      <div className="hp-demo-input">
+        <Search width={15} height={15} />
+        <span>{s.collection.slice(0, typed)}</span>
+        {phase === 0 && <span className="hp-caret" />}
       </div>
-      <div className="hp-path">
-        {nodes.map((n, i) => (
-          <div key={n.t} className={`hp-node is-${n.s}`} style={{ marginLeft: `${Math.round(Math.sin(i * 0.95) * 24) + 50}%` }}>
-            <span className="hp-node-dot">
-              {n.s === 'done' ? <Check width={18} height={18} /> : n.s === 'locked' ? <Lock width={15} height={15} /> : <Star width={18} height={18} />}
-            </span>
-            <span className="hp-node-label">{n.t}</span>
-            {n.s === 'now' && <span className="hp-node-cta">Read next · 4 min</span>}
+
+      <div className={`hp-demo-step ${phase >= 1 ? 'is-on' : ''}`}><span className="hp-demo-n">2</span> Rabbithole writes short notes</div>
+      <div className={`hp-demo-notes ${phase >= 1 ? 'is-on' : ''}`}>
+        {s.path.slice(0, 3).map((t, i) => (
+          <div key={t} className={`hp-demo-row ${i === 0 ? 'is-done' : i === 1 ? 'is-next' : ''}`} style={{ transitionDelay: `${i * 120}ms` }}>
+            <span className="hp-demo-ico">{i === 0 ? <Check width={13} height={13} /> : <FileText width={13} height={13} />}</span>
+            <span className="hp-demo-title">{t}</span>
+            <span className="hp-demo-min">{i === 1 ? 'Read next' : '4 min'}</span>
           </div>
         ))}
+        <div className="hp-demo-more" style={{ transitionDelay: '360ms' }}>+ {s.path.length - 3} more, in order</div>
       </div>
+
+      <div className={`hp-demo-step ${phase >= 2 ? 'is-on' : ''}`}><span className="hp-demo-n">3</span> A quick quiz makes it stick</div>
+      <div className={`hp-demo-quiz ${phase >= 2 ? 'is-on' : ''}`}>
+        <div className="hp-demo-q">{s.quiz.q}</div>
+        <div className="hp-demo-a"><Check width={13} height={13} /> {right}</div>
+      </div>
+    </div>
+  )
+}
+
+/** "Example" above each picture, so it reads as a sample of the app rather
+ *  than as more text to read. */
+function Example({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="hp-example">
+      <span className="hp-example-tag"><Eye width={13} height={13} /> {label}</span>
+      {children}
     </div>
   )
 }
@@ -156,32 +200,60 @@ function NoteMock({ s }: { s: Showcase }) {
 }
 
 function RecallMock({ s }: { s: Showcase }) {
+  const [flipped, setFlipped] = useState(false)
+  const [picked, setPicked] = useState<number | null>(null)
+  useEffect(() => {
+    setFlipped(false)
+    setPicked(null)
+  }, [s])
+  const answered = picked !== null
   return (
-    <div className="hp-recall" aria-hidden="true">
-      <div className="hp-flip">
-        <div className="hp-flip-inner">
-          <div className="hp-card hp-flip-face">
+    <div className="hp-recall">
+      <button
+        type="button"
+        className={`hp-flip ${flipped ? 'is-flipped' : ''}`}
+        onClick={() => setFlipped((f) => !f)}
+        aria-label={flipped ? `Answer: ${s.card.back}. Tap to flip back.` : `Flashcard: ${s.card.front}. Tap to flip.`}
+      >
+        <span className="hp-flip-inner">
+          <span className="hp-card hp-flip-face">
             <span className="hp-flip-tag">Flashcard</span>
             <strong>{s.card.front}</strong>
-            <span className="hp-flip-hint">tap to flip</span>
-          </div>
-          <div className="hp-card hp-flip-face hp-flip-back">
+            <span className="hp-flip-hint">Tap to flip</span>
+          </span>
+          <span className="hp-card hp-flip-face hp-flip-back">
             <span className="hp-flip-tag">Answer</span>
             {s.card.back}
-          </div>
-        </div>
-      </div>
+            <span className="hp-flip-hint">Tap to flip back</span>
+          </span>
+        </span>
+      </button>
       <div className="hp-card hp-quiz">
         <div className="hp-quiz-q">{s.quiz.q}</div>
-        {s.quiz.options.map((o, i) =>
-          i === s.quiz.right ? (
-            <div key={o} className="hp-quiz-opt is-right">
-              {o} <Check width={14} height={14} />
-            </div>
+        {s.quiz.options.map((o, i) => {
+          const state = !answered ? '' : i === s.quiz.right ? 'is-right' : i === picked ? 'is-wrong' : 'is-dim'
+          return (
+            <button key={o} type="button" className={`hp-quiz-opt ${state}`} disabled={answered} onClick={() => setPicked(i)}>
+              {o}
+              {answered && i === s.quiz.right && <Check width={14} height={14} />}
+              {answered && i === picked && i !== s.quiz.right && <X width={14} height={14} />}
+            </button>
+          )
+        })}
+        <div className="hp-quiz-foot" aria-live="polite">
+          {!answered ? (
+            <span className="hp-muted">Pick an answer</span>
           ) : (
-            <div key={o} className="hp-quiz-opt">{o}</div>
-          ),
-        )}
+            <>
+              <span className={picked === s.quiz.right ? 'hp-good' : 'hp-bad'}>
+                {picked === s.quiz.right ? 'Correct!' : `Not quite: it’s “${s.quiz.options[s.quiz.right]}”.`}
+              </span>
+              <button type="button" className="hp-textbtn" onClick={() => setPicked(null)}>
+                <RotateCw width={13} height={13} /> Try again
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -215,25 +287,58 @@ function StreakMock() {
 }
 
 function DigMock({ s }: { s: Showcase }) {
+  // idle: the word waits to be tapped; writing: the note is being made; done.
+  const [step, setStep] = useState<'idle' | 'writing' | 'done'>('idle')
+  useEffect(() => setStep('idle'), [s])
+  useEffect(() => {
+    if (step !== 'writing') return
+    const t = window.setTimeout(() => setStep('done'), 1300)
+    return () => clearTimeout(t)
+  }, [step])
+  const lit = step !== 'idle'
   return (
-    <div className="hp-dig" aria-hidden="true">
+    <div className="hp-dig">
       <div className="hp-card hp-note hp-note-sm">
         <p>
-          {s.dig.before}<mark>{s.dig.mark}</mark>{s.dig.after}
+          {s.dig.before}
+          <button
+            type="button"
+            className={`hp-dig-word ${lit ? 'is-lit' : ''}`}
+            disabled={lit}
+            onClick={() => setStep('writing')}
+          >
+            {s.dig.mark}
+          </button>
+          {s.dig.after}
         </p>
-        <span className="hp-dig-tool">
+        <span className={`hp-dig-tool ${lit ? 'is-on' : ''}`} aria-hidden="true">
           <Highlighter width={15} height={15} />
         </span>
       </div>
-      <div className="hp-dig-arrow">
-        <ArrowRight />
-      </div>
-      <div className="hp-card hp-dig-new">
-        <span className="hp-flip-tag">
-          <Sparkles width={12} height={12} /> New note
-        </span>
-        <strong>{s.dig.newNote}</strong>
-        <span className="hp-dig-sub">Linked to the note you were reading</span>
+      {step === 'idle' ? (
+        <div className="hp-dig-hint">Tap “{s.dig.mark}” to highlight it</div>
+      ) : (
+        <div className="hp-dig-arrow" aria-hidden="true"><ArrowRight /></div>
+      )}
+      <div className={`hp-card hp-dig-new ${step === 'idle' ? 'is-empty' : ''}`} aria-live="polite">
+        {step === 'idle' && <span className="hp-dig-sub">Your new note appears here</span>}
+        {step === 'writing' && (
+          <>
+            <span className="hp-flip-tag"><Sparkles width={12} height={12} /> Writing a note…</span>
+            <span className="hp-shimmer" />
+            <span className="hp-shimmer short" />
+          </>
+        )}
+        {step === 'done' && (
+          <>
+            <span className="hp-flip-tag"><Sparkles width={12} height={12} /> New note</span>
+            <strong>{s.dig.newNote}</strong>
+            <span className="hp-dig-sub">
+              Linked to the note you were reading ·{' '}
+              <button type="button" className="hp-textbtn" onClick={() => setStep('idle')}>Try again</button>
+            </span>
+          </>
+        )}
       </div>
     </div>
   )
@@ -381,13 +486,7 @@ export function Landing(p: Props) {
               </div>
             </div>
             <div className="hp-hero-art">
-              <PathMock s={show} />
-              <div className="hp-float hp-float-a">
-                <Flame width={16} height={16} /> 17-day streak
-              </div>
-              <div className="hp-float hp-float-b">
-                <Check width={15} height={15} /> 3 of 5 cards right
-              </div>
+              <HeroDemo start={show} />
             </div>
           </div>
         </section>
@@ -446,7 +545,9 @@ export function Landing(p: Props) {
               </p>
             </div>
             <div className="hp-feature-art hp-reveal">
-              <NoteMock s={show} />
+              <Example label="Example note">
+                <NoteMock s={show} />
+              </Example>
             </div>
           </div>
         </section>
@@ -462,7 +563,9 @@ export function Landing(p: Props) {
               </p>
             </div>
             <div className="hp-feature-art hp-reveal">
-              <RecallMock s={show} />
+              <Example label="Try it: flashcard and quiz">
+                <RecallMock s={show} />
+              </Example>
             </div>
           </div>
         </section>
@@ -478,7 +581,9 @@ export function Landing(p: Props) {
               </p>
             </div>
             <div className="hp-feature-art hp-reveal">
-              <StreakMock />
+              <Example label="Example streak">
+                <StreakMock />
+              </Example>
             </div>
           </div>
         </section>
@@ -494,7 +599,9 @@ export function Landing(p: Props) {
               </p>
             </div>
             <div className="hp-feature-art hp-reveal">
-              <DigMock s={show} />
+              <Example label="Try it: highlight a word">
+                <DigMock s={show} />
+              </Example>
             </div>
           </div>
         </section>
