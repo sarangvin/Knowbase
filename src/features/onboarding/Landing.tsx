@@ -287,28 +287,64 @@ function StreakMock() {
 }
 
 function DigMock({ s }: { s: Showcase }) {
-  // idle: the word waits to be tapped; writing: the note is being made; done.
+  // idle: the word waits to be highlighted; writing: the note is being made; done.
   const [step, setStep] = useState<'idle' | 'writing' | 'done'>('idle')
+  const wordRef = useRef<HTMLSpanElement>(null)
   useEffect(() => setStep('idle'), [s])
   useEffect(() => {
     if (step !== 'writing') return
     const t = window.setTimeout(() => setStep('done'), 1300)
     return () => clearTimeout(t)
   }, [step])
+
+  // "Highlight a word" invites people to drag across it like real text, not
+  // only to tap it. A selection that touches the phrase counts as the
+  // highlight; the browser's own selection is then cleared so it does not sit
+  // on top of ours.
+  useEffect(() => {
+    let timer = 0
+    const onChange = () => {
+      clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        const sel = window.getSelection()
+        const word = wordRef.current
+        if (!sel || sel.isCollapsed || !word || sel.rangeCount === 0) return
+        if (!sel.getRangeAt(0).intersectsNode(word)) return
+        sel.removeAllRanges()
+        // Already lit (a double-click selects it after the first click lit
+        // it): only clear the selection.
+        if (step === 'idle') setStep('writing')
+      }, step === 'idle' ? 350 : 0)
+    }
+    document.addEventListener('selectionchange', onChange)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('selectionchange', onChange)
+    }
+  }, [step])
+
+  const start = () => {
+    if (step !== 'idle') return
+    window.getSelection()?.removeAllRanges()
+    setStep('writing')
+  }
   const lit = step !== 'idle'
   return (
     <div className="hp-dig">
       <div className="hp-card hp-note hp-note-sm">
         <p>
           {s.dig.before}
-          <button
-            type="button"
+          <span
+            ref={wordRef}
+            role="button"
+            tabIndex={lit ? -1 : 0}
+            aria-disabled={lit}
             className={`hp-dig-word ${lit ? 'is-lit' : ''}`}
-            disabled={lit}
-            onClick={() => setStep('writing')}
+            onClick={start}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), start())}
           >
             {s.dig.mark}
-          </button>
+          </span>
           {s.dig.after}
         </p>
         <span className={`hp-dig-tool ${lit ? 'is-on' : ''}`} aria-hidden="true">
@@ -316,7 +352,7 @@ function DigMock({ s }: { s: Showcase }) {
         </span>
       </div>
       {step === 'idle' ? (
-        <div className="hp-dig-hint">Tap “{s.dig.mark}” to highlight it</div>
+        <div className="hp-dig-hint">Tap or select “{s.dig.mark}” to highlight it</div>
       ) : (
         <div className="hp-dig-arrow" aria-hidden="true"><ArrowRight /></div>
       )}
@@ -325,6 +361,7 @@ function DigMock({ s }: { s: Showcase }) {
         {step === 'writing' && (
           <>
             <span className="hp-flip-tag"><Sparkles width={12} height={12} /> Writing a note…</span>
+            <span className="hp-shimmer title" />
             <span className="hp-shimmer" />
             <span className="hp-shimmer short" />
           </>
@@ -333,10 +370,10 @@ function DigMock({ s }: { s: Showcase }) {
           <>
             <span className="hp-flip-tag"><Sparkles width={12} height={12} /> New note</span>
             <strong>{s.dig.newNote}</strong>
-            <span className="hp-dig-sub">
-              Linked to the note you were reading ·{' '}
-              <button type="button" className="hp-textbtn" onClick={() => setStep('idle')}>Try again</button>
-            </span>
+            <p className="hp-dig-blurb">{s.dig.blurb}</p>
+            <button type="button" className="hp-textbtn hp-dig-again" onClick={() => setStep('idle')}>
+              <RotateCw width={13} height={13} /> Try again
+            </button>
           </>
         )}
       </div>

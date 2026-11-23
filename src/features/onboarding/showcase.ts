@@ -13,7 +13,7 @@ export interface Showcase {
   note: { title: string; body: string; points: [string, string] }
   card: { front: string; back: string }
   quiz: { q: string; options: [string, string, string]; right: 0 | 1 | 2 }
-  dig: { before: string; mark: string; after: string; newNote: string }
+  dig: { before: string; mark: string; after: string; newNote: string; blurb: string }
 }
 
 export const SHOWCASES: Showcase[] = [
@@ -27,7 +27,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'Mímisbrunnr', back: 'The well of wisdom under Yggdrasil, where Odin gave an eye for a drink.' },
     quiz: { q: 'Who carries insults up and down the World Tree?', options: ['An eagle', 'A squirrel', 'A raven'], right: 1 },
-    dig: { before: 'Odin hung on the tree for nine nights to win the ', mark: 'runes', after: ', the letters the Norse carved into stone and wood.', newNote: 'The Runic Alphabet' },
+    dig: { before: 'Odin hung on the tree for nine nights to win the ', mark: 'runes', after: ', the letters the Norse carved into stone and wood.', newNote: 'The Runic Alphabet', blurb: 'The oldest runic alphabet, the Elder Futhark, had 24 letters. It is named after its first six: f, u, th, a, r, k.' },
   },
   {
     collection: 'Black Holes',
@@ -39,7 +39,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'Schwarzschild radius', back: 'The radius of a non-rotating black hole’s event horizon. About 3 km for one with the mass of the Sun.' },
     quiz: { q: 'What can escape from inside an event horizon?', options: ['Light', 'Nothing', 'Radio waves'], right: 1 },
-    dig: { before: 'Fall in feet first and tidal forces stretch you thin, a process physicists call ', mark: 'spaghettification', after: '.', newNote: 'Spaghettification' },
+    dig: { before: 'Fall in feet first and tidal forces stretch you thin, a process physicists call ', mark: 'spaghettification', after: '.', newNote: 'Spaghettification', blurb: 'Gravity pulls harder on your feet than on your head. Near a small black hole that difference stretches anything falling in into a long, thin strand.' },
   },
   {
     collection: 'Ancient Egypt',
@@ -51,7 +51,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'Natron', back: 'A natural salt the Egyptians used to dry out a body before it was wrapped.' },
     quiz: { q: 'Which organ was usually left inside a mummy?', options: ['The brain', 'The heart', 'The liver'], right: 1 },
-    dig: { before: 'Hieroglyphs were finally read again in 1822, thanks to the ', mark: 'Rosetta Stone', after: ' and its text in three scripts.', newNote: 'The Rosetta Stone' },
+    dig: { before: 'Hieroglyphs were finally read again in 1822, thanks to the ', mark: 'Rosetta Stone', after: ' and its text in three scripts.', newNote: 'The Rosetta Stone', blurb: 'Carved in 196 BC, it repeats one decree in hieroglyphs, Demotic and Greek. Scholars used the Greek to crack the other two.' },
   },
   {
     collection: 'Game Theory',
@@ -63,7 +63,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'Dominant strategy', back: 'A move that is your best choice no matter what the other player does.' },
     quiz: { q: 'In a one-off Prisoner’s Dilemma, what does a purely self-interested player choose?', options: ['Stay silent', 'Betray', 'Flip a coin'], right: 1 },
-    dig: { before: 'The simple strategy ', mark: 'tit for tat', after: ' won Robert Axelrod’s famous computer tournaments of repeated games.', newNote: 'Tit for Tat' },
+    dig: { before: 'The simple strategy ', mark: 'tit for tat', after: ' won Robert Axelrod’s famous computer tournaments of repeated games.', newNote: 'Tit for Tat', blurb: 'Cooperate on the first move, then copy whatever the other player did last time. Simple, forgiving and hard to exploit.' },
   },
   {
     collection: 'Coffee',
@@ -75,7 +75,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'First crack', back: 'The popping sound beans make as steam breaks out of them, the sign a light roast is ready.' },
     quiz: { q: 'Which species makes up most of the world’s coffee?', options: ['Arabica', 'Robusta', 'Liberica'], right: 0 },
-    dig: { before: 'Legend credits an Ethiopian goat herder named ', mark: 'Kaldi', after: ' with noticing his goats dancing after eating coffee cherries.', newNote: 'The Legend of Kaldi' },
+    dig: { before: 'Legend credits an Ethiopian goat herder named ', mark: 'Kaldi', after: ' with noticing his goats dancing after eating coffee cherries.', newNote: 'The Legend of Kaldi', blurb: 'The story first appears in writing in 1671, long after coffee was already being drunk in Yemen. Historians treat it as legend, not history.' },
   },
   {
     collection: 'Sleep',
@@ -87,7 +87,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'REM atonia', back: 'The temporary paralysis of most muscles during REM sleep.' },
     quiz: { q: 'Roughly how long is one sleep cycle?', options: ['30 minutes', '90 minutes', '3 hours'], right: 1 },
-    dig: { before: 'The longer you are awake, the more ', mark: 'adenosine', after: ' builds up in the brain, and caffeine works by blocking it.', newNote: 'Adenosine and Sleep Pressure' },
+    dig: { before: 'The longer you are awake, the more ', mark: 'adenosine', after: ' builds up in the brain, and caffeine works by blocking it.', newNote: 'Adenosine and Sleep Pressure', blurb: 'Adenosine builds up with every waking hour and makes you sleepier. Caffeine blocks its receptors, so you feel alert while the pressure keeps building.' },
   },
   {
     collection: 'The Roman Empire',
@@ -99,7 +99,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'Via Appia', back: 'Rome’s first great road, begun in 312 BC and running south from the city.' },
     quiz: { q: 'What helped Roman concrete set even under seawater?', options: ['Sea salt', 'Volcanic ash', 'Crushed shells'], right: 1 },
-    dig: { before: 'Roman harbour walls still stand because their concrete was made with ', mark: 'pozzolana', after: ', a volcanic ash.', newNote: 'Roman Concrete' },
+    dig: { before: 'Roman harbour walls still stand because their concrete was made with ', mark: 'pozzolana', after: ', a volcanic ash.', newNote: 'Roman Concrete', blurb: 'Lime and volcanic ash react with seawater to grow new minerals inside the concrete, so Roman harbour walls got stronger over the centuries.' },
   },
   {
     collection: 'Octopuses',
@@ -111,7 +111,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'Chromatophore', back: 'A sac of pigment in the skin that muscles stretch or squeeze to change colour.' },
     quiz: { q: 'How many hearts does an octopus have?', options: ['One', 'Two', 'Three'], right: 2 },
-    dig: { before: 'Octopus blood is blue because it carries oxygen with ', mark: 'hemocyanin', after: ', a protein built around copper.', newNote: 'Blue Blood' },
+    dig: { before: 'Octopus blood is blue because it carries oxygen with ', mark: 'hemocyanin', after: ', a protein built around copper.', newNote: 'Blue Blood', blurb: 'Hemocyanin carries oxygen with copper instead of iron. It is almost colourless on its own and turns blue when it picks up oxygen.' },
   },
   {
     collection: 'Bread Baking',
@@ -123,7 +123,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'Levain', back: 'A portion of starter built up to raise one batch of dough.' },
     quiz: { q: 'What gives sourdough its sour taste?', options: ['The yeast', 'Lactic acid bacteria', 'Added vinegar'], right: 1 },
-    dig: { before: 'A loaf rises fast in its first minutes in a hot oven, a burst bakers call ', mark: 'oven spring', after: '.', newNote: 'Oven Spring' },
+    dig: { before: 'A loaf rises fast in its first minutes in a hot oven, a burst bakers call ', mark: 'oven spring', after: '.', newNote: 'Oven Spring', blurb: 'Heat makes the gas in the dough expand and the yeast work faster for a few minutes, until the crust sets. Steam keeps the crust soft so the loaf can rise further.' },
   },
   {
     collection: 'How Planes Fly',
@@ -135,7 +135,7 @@ export const SHOWCASES: Showcase[] = [
     },
     card: { front: 'Angle of attack', back: 'The angle between the wing and the oncoming air. Too steep and the wing stalls.' },
     quiz: { q: 'What happens when a wing’s angle of attack gets too steep?', options: ['It keeps gaining lift', 'It stalls', 'The engines stop'], right: 1 },
-    dig: { before: 'The small upturned ', mark: 'winglets', after: ' on an airliner’s wing tips cut the drag from swirling tip vortices.', newNote: 'Winglets' },
+    dig: { before: 'The small upturned ', mark: 'winglets', after: ' on an airliner’s wing tips cut the drag from swirling tip vortices.', newNote: 'Winglets', blurb: 'Air spills around a wing tip from the high-pressure underside to the top, forming a drag-causing vortex. Winglets weaken it and save a few percent of fuel.' },
   },
 ]
 
