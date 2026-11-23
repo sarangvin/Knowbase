@@ -22,6 +22,7 @@
 // The sign-up mechanics (topic carried across Google sign-in, funnel pixels)
 // stay in Onboarding.tsx and come in as props.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { pickShowcase, type Showcase } from './showcase'
 import { fetchLibrarySpaces, type LibrarySpace } from './onboardingApi'
 import { pixel } from '../../pixel'
 import { ArrowRight, Check, Flame, Highlighter, Lock, RabbitSolid, Snowflake, Sparkles, Star } from '../../ui/icons'
@@ -113,18 +114,13 @@ function StartForm({ p, where }: { p: Props; where: 'hero' | 'end' }) {
 
 // ── the pictures: the real app's pieces, drawn small ───────────────────────
 
-function PathMock() {
-  const nodes = [
-    { t: 'The Nine Worlds', s: 'done' },
-    { t: 'Odin and the Æsir', s: 'done' },
-    { t: 'Yggdrasil', s: 'now' },
-    { t: 'Loki the Trickster', s: 'locked' },
-    { t: 'Ragnarök', s: 'locked' },
-  ]
+function PathMock({ s }: { s: Showcase }) {
+  const states = ['done', 'done', 'now', 'locked', 'locked']
+  const nodes = s.path.map((t, i) => ({ t, s: states[i] }))
   return (
     <div className="hp-phone" aria-hidden="true">
       <div className="hp-phone-bar">
-        <span className="hp-phone-title">Norse Mythology</span>
+        <span className="hp-phone-title">{s.collection}</span>
         <span className="hp-chip-streak">
           <Flame width={13} height={13} /> 12
         </span>
@@ -144,46 +140,48 @@ function PathMock() {
   )
 }
 
-function NoteMock() {
+function NoteMock({ s }: { s: Showcase }) {
   return (
     <div className="hp-card hp-note" aria-hidden="true">
-      <div className="hp-note-eyebrow">Norse Mythology · 4 min read</div>
-      <div className="hp-note-title">Yggdrasil, the World Tree</div>
-      <p>
-        In Norse myth, nine worlds hang from the branches and roots of one enormous ash tree. An eagle sits at
-        the top, a dragon gnaws at the roots, and a squirrel carries insults between them.
-      </p>
+      <div className="hp-note-eyebrow">{s.collection} · 4 min read</div>
+      <div className="hp-note-title">{s.note.title}</div>
+      <p>{s.note.body}</p>
       <div className="hp-note-points">
-        <div><Check width={14} height={14} /> Why the gods meet at its roots every day</div>
-        <div><Check width={14} height={14} /> The three wells that water it</div>
+        {s.note.points.map((pt) => (
+          <div key={pt}><Check width={14} height={14} /> {pt}</div>
+        ))}
       </div>
     </div>
   )
 }
 
-function RecallMock() {
+function RecallMock({ s }: { s: Showcase }) {
   return (
     <div className="hp-recall" aria-hidden="true">
       <div className="hp-flip">
         <div className="hp-flip-inner">
           <div className="hp-card hp-flip-face">
             <span className="hp-flip-tag">Flashcard</span>
-            <strong>Mímisbrunnr</strong>
+            <strong>{s.card.front}</strong>
             <span className="hp-flip-hint">tap to flip</span>
           </div>
           <div className="hp-card hp-flip-face hp-flip-back">
             <span className="hp-flip-tag">Answer</span>
-            The well of wisdom under Yggdrasil, where Odin gave an eye for a drink.
+            {s.card.back}
           </div>
         </div>
       </div>
       <div className="hp-card hp-quiz">
-        <div className="hp-quiz-q">Who carries insults up and down the World Tree?</div>
-        <div className="hp-quiz-opt">An eagle</div>
-        <div className="hp-quiz-opt is-right">
-          A squirrel <Check width={14} height={14} />
-        </div>
-        <div className="hp-quiz-opt">A raven</div>
+        <div className="hp-quiz-q">{s.quiz.q}</div>
+        {s.quiz.options.map((o, i) =>
+          i === s.quiz.right ? (
+            <div key={o} className="hp-quiz-opt is-right">
+              {o} <Check width={14} height={14} />
+            </div>
+          ) : (
+            <div key={o} className="hp-quiz-opt">{o}</div>
+          ),
+        )}
       </div>
     </div>
   )
@@ -216,13 +214,12 @@ function StreakMock() {
   )
 }
 
-function DigMock() {
+function DigMock({ s }: { s: Showcase }) {
   return (
     <div className="hp-dig" aria-hidden="true">
       <div className="hp-card hp-note hp-note-sm">
         <p>
-          Odin hung on the tree for nine nights to win the <mark>runes</mark>, the letters the Norse carved into
-          stone and wood.
+          {s.dig.before}<mark>{s.dig.mark}</mark>{s.dig.after}
         </p>
         <span className="hp-dig-tool">
           <Highlighter width={15} height={15} />
@@ -235,7 +232,7 @@ function DigMock() {
         <span className="hp-flip-tag">
           <Sparkles width={12} height={12} /> New note
         </span>
-        <strong>The Runic Alphabet</strong>
+        <strong>{s.dig.newNote}</strong>
         <span className="hp-dig-sub">Linked to the note you were reading</span>
       </div>
     </div>
@@ -296,6 +293,8 @@ export function Landing(p: Props) {
   const heroCtaRef = useRef<HTMLDivElement>(null)
   const [library, setLibrary] = useState<LibrarySpace[]>([])
   const [showBar, setShowBar] = useState(false)
+  // One example topic per visit, shared by every picture (showcase.ts).
+  const [show] = useState(pickShowcase)
   useReveal(rootRef)
 
   useEffect(() => {
@@ -361,9 +360,6 @@ export function Landing(p: Props) {
         <section className="hp-hero">
           <div className="hp-wrap hp-hero-grid">
             <div className="hp-hero-copy">
-              <span className="hp-eyebrow">
-                <Sparkles width={14} height={14} /> Free · five minutes a day
-              </span>
               <h1 className="hp-h1">
                 Fall down the <span className="hp-accent">right</span> rabbit holes.
               </h1>
@@ -385,7 +381,7 @@ export function Landing(p: Props) {
               </div>
             </div>
             <div className="hp-hero-art">
-              <PathMock />
+              <PathMock s={show} />
               <div className="hp-float hp-float-a">
                 <Flame width={16} height={16} /> 17-day streak
               </div>
@@ -450,7 +446,7 @@ export function Landing(p: Props) {
               </p>
             </div>
             <div className="hp-feature-art hp-reveal">
-              <NoteMock />
+              <NoteMock s={show} />
             </div>
           </div>
         </section>
@@ -466,7 +462,7 @@ export function Landing(p: Props) {
               </p>
             </div>
             <div className="hp-feature-art hp-reveal">
-              <RecallMock />
+              <RecallMock s={show} />
             </div>
           </div>
         </section>
@@ -498,7 +494,7 @@ export function Landing(p: Props) {
               </p>
             </div>
             <div className="hp-feature-art hp-reveal">
-              <DigMock />
+              <DigMock s={show} />
             </div>
           </div>
         </section>

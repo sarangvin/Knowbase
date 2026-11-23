@@ -176,8 +176,8 @@
   transform: translateX(-27px);
 }
 .hp-node-label {
-  position: absolute; top: 58px; left: -54px;
-  width: 108px; text-align: center; font-size: 10.5px; color: var(--text-faint); font-weight: 600;
+  position: absolute; top: 58px; left: 0; transform: translateX(-50%);
+  white-space: nowrap; text-align: center; font-size: 10.5px; color: var(--text-faint); font-weight: 600;
 }
 .hp-node.is-done .hp-node-dot { background: var(--accent); color: var(--text-on-accent); box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 55%, #000); }
 .hp-node.is-now .hp-node-dot {
