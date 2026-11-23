@@ -13,6 +13,11 @@ export type ClientPixel =
   | 'email_click_next'
   | 'preview_view'
   | 'preview_signup_click'
+  | 'landing_cta_header'
+  | 'landing_cta_bar'
+  | 'landing_cta_end'
+  | 'landing_preview_click'
+  | 'landing_chip_click'
 
 export function pixel(name: ClientPixel): void {
   try {

@@ -40,6 +40,11 @@ export const CLIENT_PIXELS = [
   'email_click_next',
   'preview_view',
   'preview_signup_click',
+  'landing_cta_header',
+  'landing_cta_bar',
+  'landing_cta_end',
+  'landing_preview_click',
+  'landing_chip_click',
 ] as const
 
 export type PixelName = (typeof SERVER_PIXELS)[number] | (typeof CLIENT_PIXELS)[number]

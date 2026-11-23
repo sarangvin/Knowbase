@@ -16,6 +16,7 @@ import { randomTopicPlaceholder } from './examples'
 import { CollectionSuggestion } from './CollectionSuggestion'
 import { RabbitSolid, Eye, Cloud, Pencil, ArrowRight, Sparkles, User } from '../../ui/icons'
 import { pixel } from '../../pixel'
+import { Landing } from './Landing'
 import './onboarding.css'
 
 export function Onboarding() {
@@ -130,6 +131,23 @@ export function Onboarding() {
     pixel('login_click')
     clearPendingTopic()
     loginWithGoogle()
+  }
+
+  // Someone who has not signed up gets the full homepage: why, how, and the
+  // way in (Landing.tsx). The card below is for a signed-in account that
+  // lands here without a vault open.
+  if (user == null) {
+    return (
+      <Landing
+        topic={topic}
+        setTopic={setTopic}
+        examples={examples}
+        busy={busy}
+        error={localError ?? error}
+        onStart={(t) => void start(t)}
+        onLogIn={logIn}
+      />
+    )
   }
 
   return (
