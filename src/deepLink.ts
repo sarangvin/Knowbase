@@ -7,22 +7,22 @@ import { pixel } from './pixel'
 import { useVault } from './vault/vaultStore'
 
 const KEY = 'rabbithole.deepLink'
-const READ_KEY = 'rabbithole.read'
 
 export function captureDeepLink(): void {
   try {
     const q = new URLSearchParams(location.search)
     const note = q.get('note')
     const from = q.get('from')
-    const read = q.get('read')
-    if (read) sessionStorage.setItem(READ_KEY, read)
     if (from === 'email_ready') pixel('email_click_ready')
     if (from === 'email_next') pixel('email_click_next')
     if (note) sessionStorage.setItem(KEY, note)
-    if (note || from || read) {
+    // `read` stays in the address bar: the preview is a page of its own, so
+    // Back returns to wherever they came from (the homepage, usually) and a
+    // reload of a bare `/` is the homepage. Keeping it in sessionStorage
+    // instead used to lock the tab on the preview until it was closed.
+    if (note || from) {
       q.delete('note')
       q.delete('from')
-      q.delete('read')
       const rest = q.toString()
       history.replaceState(history.state, '', location.pathname + (rest ? `?${rest}` : ''))
     }
@@ -49,19 +49,15 @@ export function openDeepLink(): boolean {
 
 /** `/?read=<Collection>`: a library collection to preview signed out. */
 export function readLink(): string | null {
-  try {
-    return sessionStorage.getItem(READ_KEY)
-  } catch {
-    return null
-  }
+  return new URLSearchParams(location.search).get('read')
 }
 
 export function clearReadLink(): void {
-  try {
-    sessionStorage.removeItem(READ_KEY)
-  } catch {
-    // nothing to clear
-  }
+  const q = new URLSearchParams(location.search)
+  if (!q.has('read')) return
+  q.delete('read')
+  const rest = q.toString()
+  history.replaceState(history.state, '', location.pathname + (rest ? `?${rest}` : ''))
 }
 
 const PREVIEWED_KEY = 'rabbithole.previewed'
