@@ -582,6 +582,9 @@ export function Landing(p: Props) {
             <a className="lp-link-plain" href="/privacy" target="_blank" rel="noopener">
               Privacy
             </a>
+            <a className="lp-link-plain" href="/terms" target="_blank" rel="noopener">
+              Terms
+            </a>
           </nav>
         </div>
       </footer>
