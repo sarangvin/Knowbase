@@ -11,7 +11,7 @@
 set -u
 cd "$(dirname "$0")/.."
 SHA="${1:-$(git rev-parse --short HEAD)}"
-PROD="${PROD_URL:-https://rabbithole-topaz.vercel.app}"
+PROD="${PROD_URL:-https://rabbitholelearn.app}"
 REPO="sarangvin/Knowbase"
 fail=0; skip=0
 pass() { echo "PASS  $1"; }

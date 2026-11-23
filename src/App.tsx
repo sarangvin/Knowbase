@@ -26,7 +26,7 @@ registerAutomatedGraph()
 
 
 /** Path-based rather than a query flag so the URL is something you can hand
- *  to someone: rabbithole-topaz.vercel.app/demo. Trailing slash tolerated
+ *  to someone: rabbitholelearn.app/demo. Trailing slash tolerated
  *  because that is how people type and how some hosts normalise. */
 function isDemoRoute(): boolean {
   return /^\/demo\/?$/.test(location.pathname)

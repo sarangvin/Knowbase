@@ -32,7 +32,7 @@ export function validUnsubToken(userId: string, token: string): boolean {
 }
 
 export function appUrl(): string {
-  return (process.env.APP_URL ?? 'https://rabbithole-topaz.vercel.app').replace(/\/$/, '')
+  return (process.env.APP_URL ?? 'https://rabbitholelearn.app').replace(/\/$/, '')
 }
 
 export function unsubUrl(userId: string): string {

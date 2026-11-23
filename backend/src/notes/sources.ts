@@ -46,7 +46,7 @@ export interface SourcesResult {
   candidates: number
 }
 
-const UA = 'RabbitholeSources/1.0 (+https://rabbithole-topaz.vercel.app)'
+const UA = 'RabbitholeSources/1.0 (+https://rabbitholelearn.app)'
 const MAX_SOURCES = 5
 const MAX_CLAIMS = 5
 

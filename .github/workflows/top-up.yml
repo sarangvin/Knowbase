@@ -7,7 +7,7 @@
 # ten-minute cadence lives here instead.
 #
 # Needs two repository secrets:
-#   RABBITHOLE_URL    e.g. https://rabbithole-topaz.vercel.app
+#   RABBITHOLE_URL    e.g. https://rabbitholelearn.app
 #   CRON_SECRET       the same value set on the Vercel project
 #
 # GitHub's scheduler is best-effort and often runs minutes late, which is
