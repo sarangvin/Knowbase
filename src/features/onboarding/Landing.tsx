@@ -506,8 +506,8 @@ export function Landing(p: Props) {
                 Fall down the <span className="hp-accent">right</span> rabbit holes.
               </h1>
               <p className="hp-lede">
-                Name anything you are curious about. Rabbithole turns it into a short path of five-minute notes,
-                then makes it stick with daily flashcards, quizzes and a streak.
+                Rabbithole turns anything you are curious about into a short path of five-minute notes, then makes it
+                stick with daily flashcards, quizzes and a streak.
               </p>
               {p.error && <div className="hp-error">{p.error}</div>}
               <div ref={heroCtaRef}>

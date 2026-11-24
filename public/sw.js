@@ -11,8 +11,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'Rabbithole', {
       body: data.body || '',
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
       // One reminder at a time: a new one replaces yesterday's if it is still there.
       tag: 'rabbithole-daily',
       data: { url: data.url || '/' },

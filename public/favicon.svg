@@ -1,15 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-  <!-- Rabbithole mark: a rabbit head against the burrow. Deliberately just
-       ears + head — a favicon is read at 16px, where a face is noise. -->
-  <rect width="48" height="48" rx="11" fill="#1C1917"/>
-  <!-- the burrow mouth behind it, so the mark reads as "coming up out of" -->
-  <ellipse cx="24" cy="41" rx="15" ry="5.5" fill="#F28136" opacity="0.18"/>
-  <g fill="#F28136">
+  <!-- The rabbit alone, no tile: browsers and Google put a favicon on a
+       background of their own, and a dark tile inside it reads as a box with
+       a white frame. The tile version is icon.svg (home screen, push). -->
+  <g fill="#F28136" transform="translate(24 24) scale(1.25) translate(-24 -23.6)">
     <ellipse cx="17.4" cy="15.2" rx="3.9" ry="9.4" transform="rotate(-15 17.4 15.2)"/>
     <ellipse cx="30.6" cy="15.2" rx="3.9" ry="9.4" transform="rotate(15 30.6 15.2)"/>
     <circle cx="24" cy="31" r="10"/>
+    <path d="M21.4 31.4h5.2" stroke="#1C1917" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
   </g>
-  <!-- nose: knocked out of the head rather than drawn on top, so it stays
-       crisp at every size instead of anti-aliasing into the fill -->
-  <path d="M21.4 31.4h5.2" stroke="#1C1917" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
 </svg>
